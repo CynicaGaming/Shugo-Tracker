@@ -157,23 +157,59 @@ class SingleInstance:
 
 
 # ───── tray icon ─────
+# Lightning bolt, in 0..1 coordinates of the icon square.
+BOLT = [(0.585, 0.08), (0.215, 0.565), (0.465, 0.565), (0.405, 0.92), (0.785, 0.425), (0.535, 0.425), (0.655, 0.08)]
+GOLD_TOP, GOLD_BOTTOM, INK = (246, 205, 98), (210, 154, 42), (26, 19, 6)
+
+
+def _bolt(draw, box, fill, ss):
+    x0, y0, x1, y1 = box
+    pts = [(x0 + x * (x1 - x0), y0 + y * (y1 - y0)) for x, y in BOLT]
+    draw.polygon(pts, fill=fill)
+    draw.line(pts + pts[:1], fill=fill, width=max(1, int((x1 - x0) * 0.035)), joint="curve")  # soften the tips
+
+
 def make_icon_image(size: int = 64):
-    """The Shugo Tracker mark: a gold disc with an 'S'."""
-    from PIL import Image, ImageDraw, ImageFont
-    im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    """App icon: a gold rounded square with a dark lightning bolt."""
+    from PIL import Image, ImageDraw
+    ss = 8
+    S = size * ss
+    grad = Image.new("RGBA", (S, S))
+    g = ImageDraw.Draw(grad)
+    for y in range(S):
+        t = y / (S - 1)
+        g.line([(0, y), (S, y)], fill=tuple(int(a + (b - a) * t) for a, b in zip(GOLD_TOP, GOLD_BOTTOM)) + (255,))
+    mask = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, S - 1, S - 1), radius=int(S * 0.24), fill=255)
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    im.paste(grad, (0, 0), mask)
+    _bolt(ImageDraw.Draw(im), (0, 0, S, S), INK + (255,), ss)
+    return im.resize((size, size), Image.LANCZOS)
+
+
+def make_bubble_image(size: int = 46):
+    """Collapsed-window bubble: the app icon as a gold disc with a dark bolt."""
+    from PIL import Image, ImageDraw
+    ss = 8
+    S = size * ss
+    grad = Image.new("RGBA", (S, S))
+    g = ImageDraw.Draw(grad)
+    for y in range(S):
+        t = y / (S - 1)
+        g.line([(0, y), (S, y)], fill=tuple(int(a + (b - a) * t) for a, b in zip(GOLD_TOP, GOLD_BOTTOM)) + (255,))
+    mask = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(mask).ellipse((ss, ss, S - ss, S - ss), fill=255)
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    im.paste(grad, (0, 0), mask)
     d = ImageDraw.Draw(im)
-    d.ellipse((2, 2, size - 3, size - 3), fill=(217, 169, 58, 255), outline=(26, 19, 6, 255), width=max(1, size // 32))
-    try:
-        font = ImageFont.truetype("seguisb.ttf", int(size * 0.58))
-    except OSError:
-        try:
-            font = ImageFont.truetype("arialbd.ttf", int(size * 0.58))
-        except OSError:
-            font = ImageFont.load_default()
-    box = d.textbbox((0, 0), "S", font=font)
-    w, h = box[2] - box[0], box[3] - box[1]
-    d.text(((size - w) / 2 - box[0], (size - h) / 2 - box[1]), "S", fill=(26, 19, 6, 255), font=font)
-    return im
+    d.ellipse((ss, ss, S - ss, S - ss), outline=INK + (255,), width=int(S * 0.03))
+    pad = S * 0.17
+    _bolt(d, (pad, pad, S - pad, S - pad), INK + (255,), ss)
+    return im.resize((size, size), Image.LANCZOS)
+
+
+def save_ico(path: str) -> None:
+    make_icon_image(256).save(path, sizes=[(s, s) for s in (16, 20, 24, 32, 40, 48, 64, 128, 256)])
 
 
 class Tray:

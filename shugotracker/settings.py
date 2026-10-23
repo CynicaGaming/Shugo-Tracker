@@ -4,14 +4,13 @@ from __future__ import annotations
 SETTING_DEFAULTS = {
     "always_on_top": True,
     "close_to_tray": False,         # ✕ hides to the tray instead of quitting
-    "overlay": True,                # frameless overlay window (False = normal Windows title bar)
     "hotkey": "ctrl+shift+s",
     "auto_update": True,
     "start_with_windows": False,
 }
 
 # Keys older versions wrote that no longer mean anything (removed on load).
-RETIRED = ("idle_opacity", "opacity", "opacity_focused", "opacity_unfocused", "opacity_full_on_hover",
+RETIRED = ("overlay", "idle_opacity", "opacity", "opacity_focused", "opacity_unfocused", "opacity_full_on_hover",
            "requests_per_second", "detail_workers", "region", "faction", "max_level_only", "stat_details")
 
 

@@ -229,7 +229,7 @@ class SearchWindow:
 
         self.root = tk.Tk()
         self.root.title("Shugo Tracker")
-        self.overlay = bool(cfg.get("overlay", True))
+        self.overlay = True                      # frameless window with our own title bar (always)
         self.root.configure(bg=BG)
         self.root.minsize(460, 420)
         w, h = cfg.get("window_size", [560, 760])
@@ -280,8 +280,16 @@ class SearchWindow:
         head = self.titlebar = tk.Frame(self.root, bg=BG)
         head.pack(fill="x", padx=(PAD, 6), pady=(8, 0))
         logo = tk.Canvas(head, width=20, height=20, bg=BG, highlightthickness=0)
-        logo.create_oval(1, 1, 19, 19, fill=ACCENT, outline="")
-        logo.create_text(10, 10, text="S", fill=ACCENT_FG, font=self.f_bold)
+        self._icons = {}
+        try:
+            from PIL import ImageTk
+            from .desktop import make_icon_image
+            self._icons["logo"] = ImageTk.PhotoImage(make_icon_image(20))
+            logo.create_image(10, 10, image=self._icons["logo"])
+            self._icons["app"] = [ImageTk.PhotoImage(make_icon_image(s)) for s in (64, 32, 16)]
+            self.root.iconphoto(True, *self._icons["app"])
+        except Exception:  # noqa: BLE001  (no Pillow: plain gold disc)
+            logo.create_oval(1, 1, 19, 19, fill=ACCENT, outline="")
         logo.pack(side="left", padx=(0, 7))
         title = tk.Label(head, text="Shugo Tracker", bg=BG, fg=FG, font=self.f_title)
         title.pack(side="left")
@@ -1005,9 +1013,13 @@ class SearchWindow:
             cv = tk.Canvas(self.pill, width=size, height=size, bg=self.pill["bg"], highlightthickness=0,
                            cursor="hand2")
             cv.pack()
-            cv.create_oval(2, 2, size - 2, size - 2, fill=SURFACE, outline=ACCENT, width=2)
-            cv.create_oval(9, 9, size - 9, size - 9, fill=ACCENT, outline="")
-            cv.create_text(size / 2, size / 2, text="S", fill=ACCENT_FG, font=self.f_title)
+            try:
+                from PIL import ImageTk
+                from .desktop import make_bubble_image
+                self._icons["bubble"] = ImageTk.PhotoImage(make_bubble_image(size))
+                cv.create_image(size / 2, size / 2, image=self._icons["bubble"])
+            except Exception:  # noqa: BLE001
+                cv.create_oval(2, 2, size - 2, size - 2, fill=ACCENT, outline="")
             cv.bind("<ButtonPress-1>", self._pill_press)
             cv.bind("<B1-Motion>", self._pill_drag)
             cv.bind("<ButtonRelease-1>", self._pill_release)

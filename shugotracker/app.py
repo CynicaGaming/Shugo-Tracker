@@ -35,7 +35,6 @@ DEFAULT_CONFIG = {
     "factions": [],
     "always_on_top": True,
     "window_size": [560, 760],
-    "overlay": True,
     "hotkey": "ctrl+shift+s",
     "window_pos": [80, 80],
     "opcodes": {},

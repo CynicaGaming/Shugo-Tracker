@@ -25,5 +25,5 @@ exe = EXE(
     console=False,      # windowed: logs go to shugo-tracker.log next to the exe
     uac_admin=False,    # search needs no admin; the experimental --nearby mode must be run as administrator
     upx=False,
-    icon=None,
+    icon='assets/ShugoTracker.ico',
 )

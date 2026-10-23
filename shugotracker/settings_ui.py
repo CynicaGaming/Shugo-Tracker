@@ -142,9 +142,6 @@ class SettingsView:
         r, _ = self._row(card, "Close to tray", None if a.tray_ok else "Tray icon unavailable")
         Switch(r, bool(cfg["close_to_tray"]) and a.tray_ok, lambda on: self._set("close_to_tray", on),
                enabled=a.tray_ok).pack()
-        r, self._overlay_sub = self._row(card, "Overlay style (no Windows title bar)")
-        self._overlay_initial = bool(cfg["overlay"])
-        Switch(r, bool(cfg["overlay"]), self._overlay).pack()
 
         card = self._section("Shortcut")
         r, self._hotkey_sub = self._row(card, "Show / hide")
@@ -190,15 +187,6 @@ class SettingsView:
         self._set("always_on_top", on)
         self.app.root.attributes("-topmost", on)
         self.app._paint_pin()
-
-    def _overlay(self, on: bool):
-        self._set("overlay", on)
-        changed = on != self._overlay_initial
-        self._overlay_sub.config(text="Applies next time you start Shugo Tracker" if changed else "")
-        if changed:
-            self._overlay_sub.pack(fill="x")
-        else:
-            self._overlay_sub.pack_forget()
 
     def _autostart(self, on: bool):
         ok = desktop.set_autostart(on)

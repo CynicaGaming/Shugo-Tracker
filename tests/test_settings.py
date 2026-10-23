@@ -11,9 +11,9 @@ from shugotracker.settings import SETTING_DEFAULTS, migrate
 class MigrateTests(unittest.TestCase):
     def test_old_configs(self):
         cfg = migrate({"opacity": 0.97, "idle_opacity": 0.45, "opacity_unfocused": 0.6, "requests_per_second": 50,
-                       "hotkey": "alt+f9", "region": "nae"})
+                       "hotkey": "alt+f9", "region": "nae", "overlay": False})
         self.assertEqual(cfg["hotkey"], "alt+f9")
-        for gone in ("opacity", "idle_opacity", "opacity_unfocused", "requests_per_second", "region"):
+        for gone in ("overlay", "opacity", "idle_opacity", "opacity_unfocused", "requests_per_second", "region"):
             self.assertNotIn(gone, cfg)
         for k in SETTING_DEFAULTS:
             self.assertIn(k, cfg)

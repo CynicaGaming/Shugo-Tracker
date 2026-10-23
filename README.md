@@ -48,7 +48,7 @@ waiting, the ⚙ turns gold.
 
 | | |
 |---|---|
-| Window | always on top; overlay style or a normal Windows title bar (next start) |
+| Window | always on top; close to tray |
 | Shortcut | click it and press a new key combination |
 | Startup & updates | start with Windows; check for updates automatically; check now |
 | Data | cache size and Clear; open the folder with settings, favorites and cache |

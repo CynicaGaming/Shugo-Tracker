@@ -25,7 +25,6 @@
   ],
   "regions": [],
   "factions": [],
-  "overlay": true,
   "hotkey": "ctrl+shift+s",
   "opcodes": {
     "damage": [

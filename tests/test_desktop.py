@@ -39,6 +39,17 @@ class SingleInstanceTests(unittest.TestCase):
 
 
 class IconTests(unittest.TestCase):
+    def test_bolt_icons(self):
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("no Pillow")
+        im = d.make_icon_image(32)
+        self.assertEqual((im.size, im.getpixel((0, 0))[3]), ((32, 32), 0))     # rounded corner is clear
+        self.assertGreater(im.getpixel((16, 2))[0], 200)                      # gold edge
+        b = d.make_bubble_image(46)
+        self.assertEqual((b.size, b.getpixel((0, 0))[3]), ((46, 46), 0))
+
     def test_icon(self):
         try:
             import PIL  # noqa: F401
