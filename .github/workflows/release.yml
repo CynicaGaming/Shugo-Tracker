@@ -53,6 +53,16 @@ jobs:
       - name: Build exe
         run: python -m PyInstaller --noconfirm --clean ShugoTracker.spec
 
+      - name: Check that Restart-after-update relaunches the exe
+        shell: pwsh
+        run: |
+          $marker = Join-Path $env:RUNNER_TEMP "relaunch-ok.txt"
+          Remove-Item $marker -ErrorAction SilentlyContinue
+          $p = Start-Process dist\ShugoTracker.exe -ArgumentList "--selftest-relaunch", "`"$marker`"" -PassThru -Wait
+          for ($i = 0; $i -lt 40 -and -not (Test-Path $marker); $i++) { Start-Sleep -Milliseconds 500 }
+          if (-not (Test-Path $marker)) { Write-Error "the relaunched exe did not start"; exit 1 }
+          Write-Output "relaunched copy started: $(Get-Content $marker)"
+
       - name: Package
         shell: pwsh
         run: |

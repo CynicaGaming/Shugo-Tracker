@@ -478,6 +478,26 @@ def _file_logger():
     return log
 
 
+def _selftest_relaunch(path: str, child: bool) -> int:
+    """
+    Release-build check of the updater's Restart: the exe starts a new copy of itself exactly like the updater
+    does and exits at once; the new copy must still be able to start Tk after the old one is gone.
+    """
+    from .updater import Updater
+    if child:
+        time.sleep(3)                       # the parent (and its unpacked runtime folder) is gone by now
+        import tkinter
+        root = tkinter.Tk()
+        root.withdraw()
+        root.update()
+        root.destroy()
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("OK")
+        return 0
+    Updater.relaunch(["--selftest-relaunch", path, "--selftest-child"])
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Shugo Tracker: AION 2 character search with gear score & combat power")
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
@@ -495,7 +515,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--demo", action="store_true", help="show the overlay with made-up players (no game, no network)")
     ap.add_argument("--version", action="version", version=f"Shugo Tracker {__version__}")
     ap.add_argument("--after-update", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--selftest-relaunch", metavar="FILE", help=argparse.SUPPRESS)
+    ap.add_argument("--selftest-child", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
+    if args.selftest_relaunch:
+        return _selftest_relaunch(args.selftest_relaunch, child=args.selftest_child)
 
     cfg = load_config(args.config)
     if not os.path.exists(args.config):
