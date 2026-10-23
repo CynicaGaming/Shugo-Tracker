@@ -32,11 +32,10 @@ DEFAULT_CONFIG = {
     "position": [40, 200],
     "auto_update": True,
     "update_repo": "CynicaGaming/Shugo-Tracker",
-    "region": "all",
-    "faction": "all",
-    "max_level_only": False,
+    "regions": [],
+    "factions": [],
     "always_on_top": True,
-    "window_size": [520, 720],
+    "window_size": [560, 760],
     "window_pos": [80, 80],
     "detail_workers": 4,
     "requests_per_second": 6.0,
@@ -264,9 +263,13 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         updater.relaunch(sys.argv[1:])
         return True
 
+    from .favorites import Favorites
+    favorites = Favorites(None if (demo or screenshot) else os.path.join(HERE, "favorites.json"))
     if screenshot:
-        cfg = {**cfg, "window_pos": [40, 40]}
-    SearchWindow(api, cfg, on_close=on_close, update_banner=updater.banner, on_update=on_update,
+        cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 900], "regions": [], "factions": []}
+    for old in ("region", "faction", "max_level_only"):
+        cfg.pop(old, None)
+    SearchWindow(api, cfg, on_close=on_close, favorites=favorites, update_banner=updater.banner, on_update=on_update,
                  version=__version__, initial_query=query, screenshot=screenshot).run()
     return 0
 

@@ -44,6 +44,10 @@ class DemoSession:
         if url == a.INFO_URL:
             time.sleep(random.uniform(0.15, 0.9) * self.slow)
             return _Resp(self._info(p["characterId"]))
+        from .profile import EQUIPMENT_URL
+        if url == EQUIPMENT_URL:
+            time.sleep(random.uniform(0.2, 0.8) * self.slow)
+            return _Resp(self._equipment(p["characterId"]))
         raise ValueError(url)
 
     def _search(self, kw, region, page, size):
@@ -67,5 +71,34 @@ class DemoSession:
 
     def _info(self, char_id):
         r = self._rnd(char_id)
-        return {"profile": {"combatPower": r.randint(20_000, 230_000), "titleName": None},
-                "stat": {"statList": [{"type": "ItemLevel", "value": r.randint(600, 2900)}]}}
+        stats = [{"type": t, "name": n, "value": r.randint(0, 80), "statSecondList": [f"{n} bonus +{r.randint(1, 8)}%"]}
+                 for t, n in [("STR", "Might"), ("DEX", "Dexterity"), ("INT", "Intelligence"), ("CON", "Constitution"),
+                              ("AGI", "Precision"), ("WIS", "Willpower"), ("Justice", "Justice [Nezekan]"),
+                              ("Freedom", "Freedom [Vaizel]"), ("Time", "Time [Siel]"), ("Space", "Space [Israphel]")]]
+        stats.append({"type": "ItemLevel", "name": "Item level", "value": r.randint(600, 2900)})
+        return {"profile": {"combatPower": r.randint(20_000, 230_000), "titleName": "Saint of Verteron",
+                            "regionName": r.choice(["Power", "Valor", "Ember"])},
+                "stat": {"statList": stats},
+                "title": {"ownedCount": r.randint(20, 290), "totalCount": 297,
+                          "titleList": [{"name": "Golden Glow", "equipCategory": "Attack", "grade": "Unique",
+                                         "ownedPercent": 70, "equipStatList": [{"desc": "Critical Attack +45"}],
+                                         "statList": [{"desc": "Critical Attack +3"}]}]},
+                "daevanion": {"boardList": [{"name": n, "openNodeCount": r.randint(0, tot), "totalNodeCount": tot}
+                                            for n, tot in [("Nezekan", 88), ("Zikel", 88), ("Vaizel", 88),
+                                                           ("Triniel", 116), ("Azphel", 152)]]}}
+
+    def _equipment(self, char_id):
+        r = self._rnd(char_id, "eq")
+        from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN
+        grades = ["Unique", "Unique", "Legend", "Epic", "Special"]
+        gear = [{"slotPosName": s, "name": f"Demo {s}", "grade": r.choice(grades), "enchantLevel": r.randint(0, 15),
+                 "exceedLevel": r.choice([0, 0, 1])} for s in GEAR_MAIN + GEAR_ACCESSORIES + GEAR_ARCANA]
+        skills = [{"name": f"{cat} skill {i + 1}", "category": cat, "skillLevel": r.randint(0, 20),
+                   "equip": int(r.random() < .5), "acquired": int(r.random() < .85), "needLevel": i}
+                  for cat in ("Active", "Passive", "Dp") for i in range(6)]
+        return {"equipment": {"equipmentList": gear,
+                              "skinList": [{"slotPosName": s, "name": f"Demo outfit ({s})", "grade": "Legend"}
+                                           for s in ("Helmet", "Torso", "Gloves", "Boots")]},
+                "petwing": {"pet": {"name": "Crasaur", "level": 3}, "wing": {"name": "Forest Spirit Wings",
+                                                                             "grade": "Unique"}},
+                "skill": {"skillList": skills}}

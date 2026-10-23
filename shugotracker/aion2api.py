@@ -177,6 +177,8 @@ class Api:
         self._cache: dict[str, dict] = self._load_cache()
         self._cache_lock = threading.Lock()
         self._search_pool = ThreadPoolExecutor(max_workers=len(SUB_REGIONS), thread_name_prefix="search")
+        self._profile_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="profile")
+        self._profiles: dict[str, tuple[float, object]] = {}
         # details: newest request first, stale generations dropped
         self._dq: queue.PriorityQueue = queue.PriorityQueue()
         self._seq = itertools.count()
@@ -194,6 +196,7 @@ class Api:
         for _ in self._workers:
             self._dq.put((0, 0, None, None))
         self._search_pool.shutdown(wait=False, cancel_futures=True)
+        self._profile_pool.shutdown(wait=False, cancel_futures=True)
         self.save_cache()
 
     # ───── HTTP ─────
@@ -283,7 +286,44 @@ class Api:
             c.portrait = info["portrait"]
         c.status = "ok"
 
+    # ───── full profile ─────
+    def fetch_profile(self, c: Character, on_done: Callable[[Character, object, str | None], None],
+                      max_age_s: float = 300) -> None:
+        """Fetch info + equipment in parallel; on_done(character, Profile | None, error)."""
+        from .profile import EQUIPMENT_URL, parse_profile
+        hit = self._profiles.get(c.key)
+        if hit and time.time() - hit[0] < max_age_s:
+            on_done(c, hit[1], None)
+            return
+        params = {"lang": "en-US", "characterId": c.char_id, "serverId": c.server_id, "region": c.region}
+
+        def run():
+            f_info = self._profile_pool.submit(self._get_json, INFO_URL, params)
+            f_eq = self._profile_pool.submit(self._get_json, EQUIPMENT_URL, params)
+            try:
+                info = f_info.result()
+            except Exception as e:  # noqa: BLE001
+                on_done(c, None, f"{e.__class__.__name__}: {e}")
+                return
+            eq, eq_err = None, None
+            try:
+                eq = f_eq.result()
+            except Exception as e:  # noqa: BLE001
+                eq_err = f"{e.__class__.__name__}: {e}"
+            prof = parse_profile(info, eq)
+            prof.equipment_error = eq_err
+            # the info call also refreshes the card's numbers
+            details = parse_info(info)
+            self._store(c, details)
+            self._fill(c, details)
+            if eq_err is None:
+                self._profiles[c.key] = (time.time(), prof)
+            on_done(c, prof, None)
+
+        threading.Thread(target=run, name="profile", daemon=True).start()
+
     def forget(self, c: Character) -> None:
+        self._profiles.pop(c.key, None)
         with self._cache_lock:
             self._cache.pop(c.key, None)
 

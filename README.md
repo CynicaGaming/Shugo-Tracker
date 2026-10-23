@@ -7,7 +7,9 @@ open their [Shugo.GG](https://shugo.gg) profile.
 - Searches NA East, NA West, Europe, Latin America and Asia at the same time.
 - Results appear instantly as skeleton cards; gear score and combat power fill in for the cards you can see,
   and more results load as you scroll — so even a common name with thousands of matches stays smooth.
-- Filter by region, faction, or max-level characters. Pin the window on top of the game.
+- Click any character for a full profile: gear, skills, Daevanion boards, stats, cosmetics and titles.
+- Star characters to keep them in **★ Favorites**.
+- Toggle region and faction filters on and off instantly. Pin the window on top of the game.
 - Updates itself from this repo's releases.
 
 *Shugo Tracker is an independent fan tool. It reads the same public NCSOFT character endpoints Shugo.GG uses
@@ -20,7 +22,7 @@ and links to Shugo.GG profiles, but it is not made by or affiliated with Shugo.G
 2. Run it. SmartScreen may warn the first time because the exe isn't code-signed: *More info → Run anyway*.
    No administrator rights or extra installs are needed.
 
-`config.json`, `character_cache.json` and `shugo-tracker.log` are kept next to the exe.
+`config.json`, `favorites.json`, `character_cache.json` and `shugo-tracker.log` are kept next to the exe.
 `ShugoTracker.exe --demo` shows the window with made-up characters (no network).
 
 ## Using it
@@ -28,10 +30,17 @@ and links to Shugo.GG profiles, but it is not made by or affiliated with Shugo.G
 | | |
 |---|---|
 | type a name, press Enter | search (it also searches by itself after you pause typing) |
-| region / faction / *Max level only* chips | narrow the results |
-| click a card | open the character on Shugo.GG |
-| right-click a card | open on Shugo.GG / copy name / refresh details |
+| region / faction chips | click to filter, click again to remove; nothing selected = everything |
+| click a card | open the character's profile |
+| ☆ on a card or in a profile | add / remove a favorite (see the **★ Favorites** tab) |
+| right-click a card | profile / favorite / open on Shugo.GG / copy name / refresh |
 | 📌 | keep the window above the game (play in borderless windowed) |
+
+The profile has tabs for **Gear** (equipment, accessories and Arcana with grade and enchant level),
+**Skills** (Active, Passive and DP, equipped first), **Daevanion** (board progress), **Stats** (primary and
+deity stats with their effects), **Cosmetics** (wings, wing appearance, pet, outfit) and **Titles**, plus the
+character's legion and a link to their Shugo.GG page. Per-item stat rolls aren't part of NCSOFT's public
+data, so items show name, grade and enchant level.
 
 Search matches anywhere in the name (“luna” also finds “Aluna”); exact matches and higher levels come first.
 
@@ -40,7 +49,10 @@ Search matches anywhere in the name (“luna” also finds “Aluna”); exact m
 Shugo.GG's own search and profile pages read two public NCSOFT endpoints; Shugo Tracker calls them directly:
 
 - **Search:** `api-search.plaync.com/aion2global/search/v2/character` — one request per region, 30 results a page.
-- **Details:** `aion2.plaync.com/api/character/info` — combat power and item level (gear score).
+- **Details:** `aion2.plaync.com/api/character/info` — combat power, item level (gear score), stats, titles,
+  Daevanion boards, legion.
+- **Gear:** `aion2.plaync.com/api/character/equipment` — equipment, cosmetics, wings, pet and skills
+  (only requested when you open a profile).
 
 Details are only requested for cards on screen, newest scroll position first, by 4 parallel workers sharing a
 rate limit (6 requests/s, halved automatically if the server says to slow down). Starting a new search
@@ -82,7 +94,7 @@ Working locally:
 
 | key | default | meaning |
 |---|---|---|
-| `region` / `faction` / `max_level_only` | `all` / `all` / `false` | last filters used |
+| `regions` / `factions` | `[]` / `[]` | last filters used (empty = all) |
 | `always_on_top` | `true` | pin the window above other windows |
 | `detail_workers` | `4` | parallel detail requests |
 | `requests_per_second` | `6.0` | starting request rate (adapts down automatically) |
