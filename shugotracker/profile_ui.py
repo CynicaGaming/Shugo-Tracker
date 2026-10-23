@@ -368,28 +368,18 @@ class ProfileView:
             round_rect(cv, 0, 0, max(8, width * pct / 100), 8, 4, fill=ACCENT, outline="")
 
     def _tab_stats(self, p: Profile):
-        details = bool(self.app.cfg.get("stat_details", False))
-        bar = tk.Frame(self.body, bg=BG)
-        bar.pack(fill="x", pady=(6, 0))
-        tk.Label(bar, text="Hover a stat to see what it does" if not details else "", bg=BG, fg=FG_FAINT,
-                 font=self.app.f_tiny).pack(side="left")
-        toggle = tk.Label(bar, text=("☑" if details else "☐") + "  Show details", bg=BG,
-                          fg=ACCENT if details else FG_DIM, font=self.app.f_small, cursor="hand2")
-        toggle.pack(side="right")
-        toggle.bind("<Button-1>", lambda e: self._toggle_stat_details())
-
         for title, stats in (("Primary stats", p.primary_stats), ("Deity stats", p.deity_stats)):
             if not stats:
                 continue
             self._section(self.body, title)
             grid = tk.Frame(self.body, bg=BG)
             grid.pack(fill="x")
-            cols = 2 if details else 3
+            cols = 3
             for c in range(cols):
                 grid.columnconfigure(c, weight=1, uniform="t")
             for i, s in enumerate(stats):
                 col = i % cols
-                cell = tk.Frame(grid, bg=SURFACE, padx=10, pady=6 if details else 5)
+                cell = tk.Frame(grid, bg=SURFACE, padx=10, pady=5)
                 cell.grid(row=i // cols, column=col, sticky="nsew",
                           padx=(0 if col == 0 else 3, 0 if col == cols - 1 else 3), pady=2)
                 top = tk.Frame(cell, bg=SURFACE)
@@ -399,11 +389,7 @@ class ProfileView:
                 val = tk.Label(top, text=str(s.value), bg=SURFACE, fg=ACCENT if s.value else FG_FAINT,
                                font=self.app.f_bold)
                 val.pack(side="right")
-                if details:
-                    for eff in s.effects:
-                        tk.Label(cell, text=eff, bg=SURFACE, fg=FG_FAINT, font=self.app.f_tiny,
-                                 anchor="w").pack(fill="x")
-                elif s.effects:
+                if s.effects:
                     self._hover_tip([cell, top, name, val], s.name, s.effects)
                     if getattr(self, "_first_tip", None) is None:
                         self._first_tip = (cell, s.name, s.effects)
@@ -413,10 +399,6 @@ class ProfileView:
         if getattr(self, "_first_tip", None):
             cell, title, lines = self._first_tip
             self._show_tip(cell, title, lines)
-
-    def _toggle_stat_details(self):
-        self.app.cfg["stat_details"] = not bool(self.app.cfg.get("stat_details", False))
-        self.render()
 
     # ───── tooltips ─────
     def _hover_tip(self, widgets, title: str, lines: list[str]):

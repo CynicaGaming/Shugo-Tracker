@@ -795,9 +795,6 @@ class SearchWindow:
             (t, lambda: pv() and pv().show_tab("Stats")),
             (t + 800, lambda: pv() and pv().demo_hover_first_stat()),
             (t + 1300, lambda: self._grab(f"{base}-profile-stats-hover.png")),
-            (t + 1500, lambda: pv() and pv()._toggle_stat_details()),
-            (t + 2400, lambda: self._grab(f"{base}-profile-stats-details.png")),
-            (t + 2600, lambda: pv() and pv()._toggle_stat_details()),
         ]
         t += 3000
         steps += [
