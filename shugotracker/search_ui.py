@@ -790,6 +790,16 @@ class SearchWindow:
             steps.append((t, lambda tb=tab: self.profile_view and self.profile_view.show_tab(tb)))
             steps.append((t + 900, lambda tb=tab: self._grab(f"{base}-profile-{tb.lower()}.png")))
             t += 1400
+        pv = lambda: self.profile_view  # noqa: E731
+        steps += [
+            (t, lambda: pv() and pv().show_tab("Stats")),
+            (t + 800, lambda: pv() and pv().demo_hover_first_stat()),
+            (t + 1300, lambda: self._grab(f"{base}-profile-stats-hover.png")),
+            (t + 1500, lambda: pv() and pv()._toggle_stat_details()),
+            (t + 2400, lambda: self._grab(f"{base}-profile-stats-details.png")),
+            (t + 2600, lambda: pv() and pv()._toggle_stat_details()),
+        ]
+        t += 3000
         steps += [
             (t, lambda: self._set_mode("favorites")),
             (t + 600, lambda: self._toggle_faction("2")),

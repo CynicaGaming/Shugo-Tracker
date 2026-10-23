@@ -122,6 +122,7 @@ class ProfileView:
             pass
 
     def destroy(self):
+        self._hide_tip()
         self.app.root.unbind_all("<MouseWheel>")
         self.frame.destroy()
 
@@ -199,6 +200,8 @@ class ProfileView:
 
     # ───── content ─────
     def render(self):
+        self._hide_tip()
+        self._first_tip = None
         for name, lb in self.tab_labels.items():
             lb.config(fg=ACCENT if name == self.tab else FG_DIM)
         for w in self.body.winfo_children():
@@ -365,25 +368,110 @@ class ProfileView:
             round_rect(cv, 0, 0, max(8, width * pct / 100), 8, 4, fill=ACCENT, outline="")
 
     def _tab_stats(self, p: Profile):
+        details = bool(self.app.cfg.get("stat_details", False))
+        bar = tk.Frame(self.body, bg=BG)
+        bar.pack(fill="x", pady=(6, 0))
+        tk.Label(bar, text="Hover a stat to see what it does" if not details else "", bg=BG, fg=FG_FAINT,
+                 font=self.app.f_tiny).pack(side="left")
+        toggle = tk.Label(bar, text=("☑" if details else "☐") + "  Show details", bg=BG,
+                          fg=ACCENT if details else FG_DIM, font=self.app.f_small, cursor="hand2")
+        toggle.pack(side="right")
+        toggle.bind("<Button-1>", lambda e: self._toggle_stat_details())
+
         for title, stats in (("Primary stats", p.primary_stats), ("Deity stats", p.deity_stats)):
             if not stats:
                 continue
             self._section(self.body, title)
             grid = tk.Frame(self.body, bg=BG)
             grid.pack(fill="x")
-            grid.columnconfigure(0, weight=1, uniform="t")
-            grid.columnconfigure(1, weight=1, uniform="t")
+            cols = 2 if details else 3
+            for c in range(cols):
+                grid.columnconfigure(c, weight=1, uniform="t")
             for i, s in enumerate(stats):
-                cell = tk.Frame(grid, bg=SURFACE, padx=10, pady=6)
-                cell.grid(row=i // 2, column=i % 2, sticky="nsew", padx=(0 if i % 2 == 0 else 4, 0 if i % 2 else 4),
-                          pady=2)
+                col = i % cols
+                cell = tk.Frame(grid, bg=SURFACE, padx=10, pady=6 if details else 5)
+                cell.grid(row=i // cols, column=col, sticky="nsew",
+                          padx=(0 if col == 0 else 3, 0 if col == cols - 1 else 3), pady=2)
                 top = tk.Frame(cell, bg=SURFACE)
                 top.pack(fill="x")
-                tk.Label(top, text=s.name, bg=SURFACE, fg=FG, font=self.app.f_small, anchor="w").pack(side="left")
-                tk.Label(top, text=str(s.value), bg=SURFACE, fg=ACCENT if s.value else FG_FAINT,
-                         font=self.app.f_bold).pack(side="right")
-                for eff in s.effects:
-                    tk.Label(cell, text=eff, bg=SURFACE, fg=FG_FAINT, font=self.app.f_tiny, anchor="w").pack(fill="x")
+                name = tk.Label(top, text=s.name, bg=SURFACE, fg=FG, font=self.app.f_small, anchor="w")
+                name.pack(side="left")
+                val = tk.Label(top, text=str(s.value), bg=SURFACE, fg=ACCENT if s.value else FG_FAINT,
+                               font=self.app.f_bold)
+                val.pack(side="right")
+                if details:
+                    for eff in s.effects:
+                        tk.Label(cell, text=eff, bg=SURFACE, fg=FG_FAINT, font=self.app.f_tiny,
+                                 anchor="w").pack(fill="x")
+                elif s.effects:
+                    self._hover_tip([cell, top, name, val], s.name, s.effects)
+                    if getattr(self, "_first_tip", None) is None:
+                        self._first_tip = (cell, s.name, s.effects)
+
+    def demo_hover_first_stat(self):
+        """Used by the screenshot run: show the first stat's tooltip as if hovered."""
+        if getattr(self, "_first_tip", None):
+            cell, title, lines = self._first_tip
+            self._show_tip(cell, title, lines)
+
+    def _toggle_stat_details(self):
+        self.app.cfg["stat_details"] = not bool(self.app.cfg.get("stat_details", False))
+        self.render()
+
+    # ───── tooltips ─────
+    def _hover_tip(self, widgets, title: str, lines: list[str]):
+        """Highlight the cell and show its effects in a small popup while the mouse is over it."""
+        cell = widgets[0]
+
+        def enter(_e):
+            for w in widgets:
+                w.config(bg=HOVER)
+            self._show_tip(cell, title, lines)
+
+        def leave(e):
+            # moving between the cell's own children isn't leaving the cell
+            x, y = cell.winfo_pointerxy()
+            inside = cell.winfo_rootx() <= x < cell.winfo_rootx() + cell.winfo_width() and \
+                cell.winfo_rooty() <= y < cell.winfo_rooty() + cell.winfo_height()
+            if inside:
+                return
+            for w in widgets:
+                w.config(bg=SURFACE)
+            self._hide_tip()
+
+        for w in widgets:
+            w.bind("<Enter>", enter, add="+")
+            w.bind("<Leave>", leave, add="+")
+
+    def _show_tip(self, anchor: tk.Widget, title: str, lines: list[str]):
+        self._hide_tip()
+        tip = tk.Toplevel(self.frame)
+        tip.overrideredirect(True)
+        tip.attributes("-topmost", True)
+        tip.configure(bg=BORDER)
+        box = tk.Frame(tip, bg=SURFACE_2, padx=10, pady=7)
+        box.pack(padx=1, pady=1)
+        tk.Label(box, text=title, bg=SURFACE_2, fg=FG, font=self.app.f_bold, anchor="w").pack(fill="x")
+        for ln in lines:
+            tk.Label(box, text=ln, bg=SURFACE_2, fg=FG_DIM, font=self.app.f_small, anchor="w").pack(fill="x")
+        tip.update_idletasks()
+        x = anchor.winfo_rootx()
+        y = anchor.winfo_rooty() + anchor.winfo_height() + 4
+        # keep it on screen: flip above the cell near the bottom edge
+        if y + tip.winfo_reqheight() > anchor.winfo_screenheight() - 8:
+            y = anchor.winfo_rooty() - tip.winfo_reqheight() - 4
+        x = min(x, anchor.winfo_screenwidth() - tip.winfo_reqwidth() - 8)
+        tip.geometry(f"+{x}+{y}")
+        self._tip = tip
+
+    def _hide_tip(self):
+        tip = getattr(self, "_tip", None)
+        if tip is not None:
+            try:
+                tip.destroy()
+            except tk.TclError:
+                pass
+            self._tip = None
 
     def _tab_cosmetics(self, p: Profile):
         if p.equipment_error:
