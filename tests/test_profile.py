@@ -152,3 +152,30 @@ class FavoritesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LegionTests(unittest.TestCase):
+    def test_parse(self):
+        self.assertEqual(a.parse_info(SAMPLE["info"])["legion"], "Power")
+        no_legion = {"profile": {**SAMPLE["info"]["profile"], "regionName": ""}}
+        self.assertIsNone(a.parse_info(no_legion)["legion"])
+
+    def test_card_details_include_legion(self):
+        api = a.Api(session=FakeSession(), rate=1000)
+        self.addCleanup(api.close)
+        c, done = char(), threading.Event()
+        api.want(c, lambda ch: done.set())
+        self.assertTrue(done.wait(5))
+        self.assertEqual(c.legion, "Power")
+
+    def test_old_cache_entries_are_refetched(self):
+        sess = FakeSession()
+        api = a.Api(session=sess, rate=1000)
+        self.addCleanup(api.close)
+        c = char()
+        api._cache[c.key] = {"combat_power": 1, "gear_score": 2, "ts": 9e18}   # saved before legions existed
+        done = threading.Event()
+        api.want(c, lambda ch: done.set())
+        self.assertTrue(done.wait(5))
+        self.assertEqual((c.legion, c.combat_power), ("Power", 119296))
+        self.assertIn(a.INFO_URL, sess.calls)

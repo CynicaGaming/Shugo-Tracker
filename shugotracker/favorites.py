@@ -6,7 +6,7 @@ import os
 
 from .aion2api import Character
 
-_KEEP = ("char_id", "name", "race", "pc_id", "level", "server_id", "server_name", "region", "portrait")
+_KEEP = ("char_id", "name", "race", "pc_id", "level", "server_id", "server_name", "region", "portrait", "legion")
 
 
 class Favorites:

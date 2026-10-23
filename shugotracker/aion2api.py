@@ -69,6 +69,7 @@ class Character:
     combat_power: int | None = None
     gear_score: int | None = None
     title: str | None = None
+    legion: str | None = None
     error: str | None = None
 
     @property
@@ -121,6 +122,7 @@ def parse_info(data: dict) -> dict:
         "gear_score": gs,
         "level": prof.get("characterLevel"),
         "title": prof.get("titleName") or None,
+        "legion": (prof.get("regionName") or "").strip() or None,   # the API calls the legion "regionName"
         "portrait": prof.get("profileImage") or None,
     }
 
@@ -280,6 +282,7 @@ class Api:
         c.combat_power = info.get("combat_power")
         c.gear_score = info.get("gear_score")
         c.title = info.get("title")
+        c.legion = info.get("legion")
         if info.get("level"):
             c.level = int(info["level"])
         if info.get("portrait"):
@@ -331,7 +334,8 @@ class Api:
     def _apply_cached(self, c: Character) -> bool:
         with self._cache_lock:
             hit = self._cache.get(c.key)
-        if hit and time.time() - hit.get("ts", 0) < self.cache_ttl_s:
+        # entries saved by versions before legions were shown lack the key: refetch those
+        if hit and "legion" in hit and time.time() - hit.get("ts", 0) < self.cache_ttl_s:
             self._fill(c, hit)
             return True
         return False

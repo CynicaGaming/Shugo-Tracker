@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from .aion2api import REGION_LABELS, Character
 from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile
 from .search_ui import (ACCENT, ASMO, BG, BORDER, CLASS_COLORS, ELYOS, FG, FG_DIM, FG_FAINT, GRADE_COLORS, HOVER,
-                        PAD, RED, SKEL_A, SKEL_B, SURFACE, SURFACE_2, fmt_int, round_rect)
+                        LEGION, PAD, RED, SKEL_A, SKEL_B, SURFACE, SURFACE_2, fmt_int, round_rect)
 
 if TYPE_CHECKING:
     from .search_ui import SearchWindow
@@ -71,6 +71,8 @@ class ProfileView:
         top.pack(fill="x", anchor="w")
         self.h_name = tk.Label(top, bg=SURFACE, fg=FG, font=f.f_big, anchor="w")
         self.h_name.pack(side="left")
+        self.h_legion = tk.Label(top, bg=SURFACE, fg=LEGION, font=f.f_title, anchor="w")
+        self.h_legion.pack(side="left", padx=(6, 0), pady=(4, 0))
         self.h_faction = tk.Label(top, bg=SURFACE, font=f.f_tiny, padx=6, pady=1, highlightthickness=1)
         self.h_faction.pack(side="left", padx=(8, 0), pady=(6, 0))
         self.h_line = tk.Label(mid, bg=SURFACE, fg=FG_DIM, font=f.f_small, anchor="w")
@@ -158,9 +160,9 @@ class ProfileView:
                               highlightbackground=col)
         self.h_line.config(text=f"{cls}  ·  Lv {level}  ·  {server} ({REGION_LABELS.get(c.region, c.region)})",
                            fg=CLASS_COLORS.get(cls, FG_DIM))
+        legion = (p.legion if p else None) or c.legion
+        self.h_legion.config(text=f"<{legion}>" if legion else "")
         bits = []
-        if p and p.legion:
-            bits.append(f"Legion: {p.legion}")
         if p and p.title:
             bits.append(f"“{p.title}”")
         self.h_line2.config(text="   ".join(bits))

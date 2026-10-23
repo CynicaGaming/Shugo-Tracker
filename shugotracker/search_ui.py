@@ -35,6 +35,7 @@ ACCENT_FG = "#1a1306"
 ELYOS = "#6aa8ff"
 ASMO = "#b98cff"
 RED = "#ff6b6b"
+LEGION = "#9fd0a8"
 SKEL_A = "#22262f"
 SKEL_B = "#2c313c"
 
@@ -598,6 +599,10 @@ class SearchWindow:
         tx = 72
         name_id = cv.create_text(tx, y + 23, text=c.name, fill=FG, font=self.f_name, anchor="w", tags="card")
         bx = cv.bbox(name_id)[2] + 8
+        if c.legion:
+            leg_id = cv.create_text(bx - 2, y + 24, text=f"<{c.legion}>", fill=LEGION, font=self.f_body, anchor="w",
+                                    tags="card")
+            bx = cv.bbox(leg_id)[2] + 8
         fac_col = ELYOS if c.race == 1 else ASMO if c.race == 2 else FG_DIM
         pill_w = self.f_tiny.measure(c.faction) + 12
         round_rect(cv, bx, y + 15, bx + pill_w, y + 31, 8, fill=SURFACE_2, outline=fac_col, tags="card")

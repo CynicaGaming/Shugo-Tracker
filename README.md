@@ -7,6 +7,7 @@ open their [Shugo.GG](https://shugo.gg) profile.
 - Searches NA East, NA West, Europe, Latin America and Asia at the same time.
 - Results appear instantly as skeleton cards; gear score and combat power fill in for the cards you can see,
   and more results load as you scroll — so even a common name with thousands of matches stays smooth.
+- Each character's **<Legion>** is shown next to their name.
 - Click any character for a full profile: gear, skills, Daevanion boards, stats, cosmetics and titles.
 - Star characters to keep them in **★ Favorites**.
 - Toggle region and faction filters on and off instantly. Pin the window on top of the game.
