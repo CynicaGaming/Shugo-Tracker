@@ -4,7 +4,7 @@ from PyInstaller.utils.hooks import collect_submodules
 hidden = (
     collect_submodules("scapy.layers")
     + collect_submodules("scapy.arch")
-    + ["scapy.all", "scapy.sendrecv", "scapy.utils", "lz4.block", "PIL.ImageTk"]
+    + ["scapy.all", "scapy.sendrecv", "scapy.utils", "lz4.block", "PIL.ImageTk", "pystray._win32"]
 )
 
 a = Analysis(

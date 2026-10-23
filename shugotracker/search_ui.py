@@ -227,14 +227,27 @@ class SearchWindow:
 
         self.root = tk.Tk()
         self.root.title("Shugo Tracker")
-        self.root.configure(bg=BG)
+        self.overlay = bool(cfg.get("overlay", True))
+        self.root.configure(bg=BORDER if self.overlay else BG, padx=1 if self.overlay else 0,
+                            pady=1 if self.overlay else 0)
         self.root.minsize(460, 420)
         w, h = cfg.get("window_size", [560, 760])
         x, y = cfg.get("window_pos", [80, 80])
         self.root.geometry(f"{int(w)}x{int(h)}+{int(x)}+{int(y)}")
         self.root.attributes("-topmost", bool(cfg.get("always_on_top", True)))
         self.root.protocol("WM_DELETE_WINDOW", self.close)
-        self._dark_titlebar()
+        if self.overlay:
+            self.root.overrideredirect(True)   # our own title bar replaces the Windows frame
+        else:
+            self._dark_titlebar()
+        self.opacity = float(cfg.get("opacity", 0.97))
+        self.idle_opacity = float(cfg.get("idle_opacity", 0.6))
+        self.hotkey_text = cfg.get("hotkey", "ctrl+shift+s")
+        self.hotkey_ok = False                  # set by the app once the global hotkey is registered
+        self._pointer_left_at: float | None = None
+        self._current_alpha = None
+        self._hidden_state: str | None = None   # "window" or "pill" while hidden by hotkey / tray
+        self.pill: tk.Toplevel | None = None
 
         fams = set(tkfont.families())
         base = "Segoe UI Variable Text" if "Segoe UI Variable Text" in fams else "Segoe UI"
@@ -263,15 +276,28 @@ class SearchWindow:
 
     # ═════ layout ═════
     def _build(self, version: str):
-        self.top = tk.Frame(self.root, bg=BG)
-        self.top.pack(fill="x", padx=PAD, pady=(PAD, 4))
-
-        head = tk.Frame(self.top, bg=BG)
-        head.pack(fill="x")
-        tk.Label(head, text="Shugo Tracker", bg=BG, fg=FG, font=self.f_title).pack(side="left")
-        tk.Label(head, text=f"v{version}", bg=BG, fg=FG_FAINT, font=self.f_tiny).pack(side="left", padx=(6, 0), pady=(3, 0))
+        head = self.titlebar = tk.Frame(self.root, bg=BG)
+        head.pack(fill="x", padx=(PAD, 6), pady=(8, 0))
+        logo = tk.Canvas(head, width=20, height=20, bg=BG, highlightthickness=0)
+        logo.create_oval(1, 1, 19, 19, fill=ACCENT, outline="")
+        logo.create_text(10, 10, text="S", fill=ACCENT_FG, font=self.f_bold)
+        logo.pack(side="left", padx=(0, 7))
+        title = tk.Label(head, text="Shugo Tracker", bg=BG, fg=FG, font=self.f_title)
+        title.pack(side="left")
+        ver = tk.Label(head, text=f"v{version}", bg=BG, fg=FG_FAINT, font=self.f_tiny)
+        ver.pack(side="left", padx=(6, 0), pady=(3, 0))
+        if self.overlay:
+            for w in (head, logo, title, ver):
+                w.bind("<ButtonPress-1>", self._drag_start)
+                w.bind("<B1-Motion>", self._drag_move)
+                w.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
+            close = self._title_button(head, "✕", self.close, hover=RED)
+            close.pack(side="right")
+            collapse = self._title_button(head, "—", self.collapse)
+            collapse.pack(side="right")
+            self.hotkey_cap = tk.Label(head, text="", bg=SURFACE, fg=FG_FAINT, font=self.f_tiny, padx=5)
         self.pin = tk.Label(head, bg=BG, font=self.f_small, cursor="hand2", padx=4)
-        self.pin.pack(side="right")
+        self.pin.pack(side="right", padx=(0, 4))
         self.pin.bind("<Button-1>", lambda e: self._toggle_pin())
         self._paint_pin()
         self.update_btn = tk.Label(head, font=self.f_small, padx=10, pady=2, cursor="hand2")
@@ -280,9 +306,12 @@ class SearchWindow:
             self.update_btn.bind("<Button-1>", lambda e: self._update_click())
         self._sync_update_button()
 
+        self.top = tk.Frame(self.root, bg=BG)
+        self.top.pack(fill="x", padx=PAD, pady=(6, 4))
+
         # Search / Favorites tabs
         tabs = tk.Frame(self.top, bg=BG)
-        tabs.pack(fill="x", pady=(10, 0))
+        tabs.pack(fill="x", pady=(4, 0))
         self.tab_search = tk.Label(tabs, text="Search", font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
         self.tab_search.pack(side="left")
         self.tab_fav = tk.Label(tabs, font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
@@ -351,6 +380,15 @@ class SearchWindow:
         self.canvas.bind("<Leave>", lambda e: self._set_hover(-1, False))
         self.canvas.bind("<Button-1>", self._click)
         self.canvas.bind("<Button-3>", self._right_click)
+
+        if self.overlay:
+            self.grip = tk.Label(self.root, text="◢", bg=BG, fg=FG_FAINT, font=self.f_tiny, cursor="size_nw_se")
+            self.grip.place(relx=1.0, rely=1.0, anchor="se")
+            self.grip.bind("<ButtonPress-1>", self._resize_start)
+            self.grip.bind("<B1-Motion>", self._resize_move)
+            self.grip.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
+            self.search_entry.bind("<Button-1>", lambda e: self.root.focus_force(), add="+")
+            self.root.after(50, self._style_window)
 
         self.menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
                             activeforeground=FG, bd=0)
@@ -529,6 +567,16 @@ class SearchWindow:
                 changed = True
             elif kind == "detail":
                 changed = True
+            elif kind == "toggle":
+                self.toggle_visible()
+            elif kind == "show":
+                if not self.is_visible():
+                    self.show()
+                else:
+                    self.expand()
+            elif kind == "quit":
+                self.close()
+                return
             elif kind == "profile":
                 _, c, prof, err = msg
                 if self.profile_view and self.profile_view.char.key == c.key:
@@ -562,6 +610,9 @@ class SearchWindow:
             self._drain()
             self._sync_update_button()
             now = time.monotonic()
+            if now - getattr(self, "_last_fade_check", 0) > 0.2:
+                self._last_fade_check = now
+                self._idle_fade(now)
             if self.profile_view is None:
                 if self._dirty:
                     self._render()
@@ -573,7 +624,8 @@ class SearchWindow:
                 self.profile_view.shimmer()
                 self._last_frame = now
         finally:
-            self.root.after(30, self._tick)
+            if not getattr(self, "_closed", False):
+                self.root.after(30, self._tick)
 
     def _render(self, shimmer_only: bool = False) -> bool:
         cv = self.canvas
@@ -806,6 +858,8 @@ class SearchWindow:
         self.list_wrap.pack_forget()
         self.profile_view = ProfileView(self, c)
         self.profile_view.frame.pack(fill="both", expand=True)
+        if self.overlay:
+            self.grip.lift()
         self.api.fetch_profile(c, lambda ch, prof, err: self.inbox.put(("profile", ch, prof, err)))
 
     def close_profile(self):
@@ -817,6 +871,170 @@ class SearchWindow:
         self.status.pack(fill="x", pady=(4, 4))
         self.list_wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(0, PAD))
         self._mark()
+
+    # ═════ overlay window ═════
+    def _title_button(self, parent, text, cmd, hover=FG):
+        b = tk.Label(parent, text=text, bg=BG, fg=FG_DIM, font=self.f_body, padx=9, pady=1, cursor="hand2")
+        b.bind("<Button-1>", lambda e: cmd())
+        b.bind("<Enter>", lambda e: b.config(fg=hover, bg=SURFACE_2))
+        b.bind("<Leave>", lambda e: b.config(fg=FG_DIM, bg=BG))
+        return b
+
+    def set_hotkey_ok(self, ok: bool):
+        """Show the hotkey on the title bar once it is actually registered."""
+        self.hotkey_ok = ok
+        if self.overlay and ok:
+            from .desktop import hotkey_label
+            self.hotkey_cap.config(text=hotkey_label(self.hotkey_text))
+            self.hotkey_cap.pack(side="right", padx=(0, 8), pady=(1, 0), before=self.pin)
+
+    def _style_window(self):
+        from .desktop import round_corners, window_handle
+        hwnd = window_handle(self.root)
+        if hwnd:
+            round_corners(hwnd)
+        self._set_alpha(self.opacity)
+
+    def _drag_start(self, e):
+        self._drag = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
+
+    def _drag_move(self, e):
+        dx, dy = self._drag
+        self.root.geometry(f"+{e.x_root - dx}+{e.y_root - dy}")
+
+    def _resize_start(self, e):
+        self._resize = (e.x_root, e.y_root, self.root.winfo_width(), self.root.winfo_height())
+
+    def _resize_move(self, e):
+        x0, y0, w0, h0 = self._resize
+        w = max(460, w0 + e.x_root - x0)
+        h = max(420, h0 + e.y_root - y0)
+        self.root.geometry(f"{w}x{h}")
+        self._mark()
+
+    def _set_alpha(self, a: float):
+        if a != self._current_alpha:
+            self._current_alpha = a
+            try:
+                self.root.attributes("-alpha", a)
+            except tk.TclError:
+                pass
+
+    def _idle_fade(self, now: float):
+        """Fade the overlay while the pointer is elsewhere (e.g. playing), back to full on hover."""
+        if not self.overlay or self.root.state() == "withdrawn":
+            return
+        x, y = self.root.winfo_pointerxy()
+        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
+        inside = rx <= x < rx + self.root.winfo_width() and ry <= y < ry + self.root.winfo_height()
+        if inside:
+            self._pointer_left_at = None
+            self._set_alpha(self.opacity)
+            return
+        if self._pointer_left_at is None:
+            self._pointer_left_at = now
+        typing_here = self.root.focus_get() is not None    # our window still has the keyboard
+        if now - self._pointer_left_at > 1.5 and not typing_here:
+            self._set_alpha(self.idle_opacity)
+
+    # collapse to a small bubble
+    def collapse(self):
+        if not self.overlay:
+            self.root.iconify()
+            return
+        self._save_geometry()
+        self._hide_tooltips()
+        self.root.withdraw()
+        self._show_pill()
+
+    def expand(self):
+        if self.pill is not None:
+            self.cfg["pill_pos"] = [self.pill.winfo_x(), self.pill.winfo_y()]
+            self.pill.withdraw()
+        self.root.deiconify()
+        self.root.attributes("-topmost", bool(self.cfg.get("always_on_top", True)))
+        self.root.lift()
+        self._set_alpha(self.opacity)
+        self._pointer_left_at = None
+        self._mark()
+
+    def _show_pill(self):
+        if self.pill is None:
+            size = 46
+            self.pill = tk.Toplevel(self.root)
+            self.pill.overrideredirect(True)
+            self.pill.configure(bg=BG)
+            try:
+                self.pill.attributes("-transparentcolor", "#010203")
+                self.pill.configure(bg="#010203")
+            except tk.TclError:
+                pass
+            cv = tk.Canvas(self.pill, width=size, height=size, bg=self.pill["bg"], highlightthickness=0,
+                           cursor="hand2")
+            cv.pack()
+            cv.create_oval(2, 2, size - 2, size - 2, fill=SURFACE, outline=ACCENT, width=2)
+            cv.create_oval(9, 9, size - 9, size - 9, fill=ACCENT, outline="")
+            cv.create_text(size / 2, size / 2, text="S", fill=ACCENT_FG, font=self.f_title)
+            cv.bind("<ButtonPress-1>", self._pill_press)
+            cv.bind("<B1-Motion>", self._pill_drag)
+            cv.bind("<ButtonRelease-1>", self._pill_release)
+            self._pill_canvas = cv
+        x, y = self.cfg.get("pill_pos") or [self.root.winfo_x() + self.root.winfo_width() - 60, self.root.winfo_y()]
+        self.pill.geometry(f"+{int(x)}+{int(y)}")
+        self.pill.deiconify()
+        self.pill.attributes("-topmost", True)
+        self.pill.lift()
+
+    def _pill_press(self, e):
+        self._pill_drag_from = (e.x_root, e.y_root, self.pill.winfo_x(), self.pill.winfo_y())
+        self._pill_moved = False
+
+    def _pill_drag(self, e):
+        x0, y0, px, py = self._pill_drag_from
+        if abs(e.x_root - x0) + abs(e.y_root - y0) > 3:
+            self._pill_moved = True
+        self.pill.geometry(f"+{px + e.x_root - x0}+{py + e.y_root - y0}")
+
+    def _pill_release(self, e):
+        self.cfg["pill_pos"] = [self.pill.winfo_x(), self.pill.winfo_y()]
+        if not self._pill_moved:
+            self.expand()
+
+    # hide / show everything (hotkey, tray, second launch)
+    def is_visible(self) -> bool:
+        if self.root.state() != "withdrawn":
+            return True
+        return self.pill is not None and self.pill.state() != "withdrawn"
+
+    def toggle_visible(self):
+        if self.is_visible():
+            self.hide()
+        else:
+            self.show()
+
+    def hide(self):
+        self._hidden_state = "pill" if (self.pill is not None and self.pill.state() != "withdrawn") else "window"
+        self._save_geometry()
+        self._hide_tooltips()
+        if self.pill is not None:
+            self.pill.withdraw()
+        self.root.withdraw()
+
+    def show(self, focus: bool = True):
+        if self._hidden_state == "pill":
+            self._show_pill()
+        else:
+            self.expand()
+            if focus:
+                self.root.focus_force()
+                if self.profile_view is None and self.mode == "search":
+                    self.search_entry.focus_set()
+                    self.search_entry.select_range(0, "end")
+        self._hidden_state = None
+
+    def _hide_tooltips(self):
+        if self.profile_view:
+            self.profile_view._hide_tip()
 
     # ═════ update button ═════
     UPDATE_STYLES = {
@@ -873,7 +1091,11 @@ class SearchWindow:
             (t, lambda: self._set_mode("favorites")),
             (t + 600, lambda: self._toggle_faction("2")),
             (t + 2500, lambda: self._grab(f"{base}-favorites.png")),
-            (t + 3000, self.close),
+            (t + 2800, self.collapse),
+            (t + 3600, lambda: self._grab_area(f"{base}-pill.png", self.pill, pad=30)),
+            (t + 3800, self.expand),
+            (t + 4400, lambda: self._grab(f"{base}-expanded.png")),
+            (t + 5000, self.close),
         ]
         for delay, fn in steps:
             self.root.after(delay, fn)
@@ -897,6 +1119,16 @@ class SearchWindow:
         with open(path, "w", encoding="utf-8") as f:
             f.write("FAIL: " + "; ".join(problems) if problems else "OK")
 
+    def _grab_area(self, path: str, widget, pad: int = 0):
+        try:
+            from PIL import ImageGrab
+            widget.update()
+            x, y = widget.winfo_rootx() - pad, widget.winfo_rooty() - pad
+            ImageGrab.grab(bbox=(max(0, x), max(0, y), x + widget.winfo_width() + 2 * pad,
+                                 y + widget.winfo_height() + 2 * pad)).save(path)
+        except Exception as e:  # noqa: BLE001
+            print(f"screenshot failed: {e}")
+
     def _grab(self, path: str):
         try:
             from PIL import ImageGrab
@@ -908,6 +1140,8 @@ class SearchWindow:
 
     # ═════ lifecycle ═════
     def _save_geometry(self):
+        if self.root.state() == "withdrawn":
+            return
         try:
             self.cfg["window_size"] = [self.root.winfo_width(), self.root.winfo_height()]
             self.cfg["window_pos"] = [self.root.winfo_x(), self.root.winfo_y()]
@@ -915,6 +1149,11 @@ class SearchWindow:
             pass
 
     def close(self):
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
+        if self.pill is not None and self.pill.state() != "withdrawn":
+            self.cfg["pill_pos"] = [self.pill.winfo_x(), self.pill.winfo_y()]
         self._save_geometry()
         self.favorites.save()
         self.images.close()

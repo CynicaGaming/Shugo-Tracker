@@ -36,6 +36,10 @@ DEFAULT_CONFIG = {
     "factions": [],
     "always_on_top": True,
     "window_size": [560, 760],
+    "overlay": True,
+    "hotkey": "ctrl+shift+s",
+    "opacity": 0.97,
+    "idle_opacity": 0.6,
     "window_pos": [80, 80],
     "detail_workers": 4,
     "requests_per_second": 6.0,
@@ -234,6 +238,17 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     from .search_ui import SearchWindow
     from .updater import Updater
 
+    from .desktop import GlobalHotkey, SingleInstance, Tray
+
+    instance = None
+    if not (demo or screenshot):
+        instance = SingleInstance()
+        if not instance.acquire():
+            # Already running (maybe hidden): bring that copy forward instead of opening a second one.
+            if instance.notify_running():
+                return 0
+            instance = None
+
     log = _file_logger()
     log(f"Shugo Tracker v{__version__}" + (" (demo data)" if demo else ""))
     session = None
@@ -248,7 +263,14 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
                       enabled=bool(cfg.get("auto_update", True)) and not demo and not screenshot, log=log)
     updater.start()
 
+    extras: dict = {}
+
     def on_close():
+        for k in ("hotkey", "tray"):
+            if extras.get(k):
+                extras[k].stop()
+        if instance:
+            instance.release()
         updater.stop()
         api.close()
         if not screenshot:
@@ -268,12 +290,29 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     from .favorites import Favorites
     favorites = Favorites(None if (demo or screenshot) else os.path.join(HERE, "favorites.json"))
     if screenshot:
-        cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 900], "regions": [], "factions": []}
+        cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 900], "regions": [], "factions": [],
+               "idle_opacity": 1.0, "opacity": 1.0, "pill_pos": [560, 60]}
     for old in ("region", "faction", "max_level_only"):
         cfg.pop(old, None)
-    SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
-                 on_update=on_update,
-                 version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir).run()
+    win = SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
+                       on_update=on_update,
+                       version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir)
+    post = win.inbox.put
+    if instance:
+        instance.on_show = lambda: post(("show",))
+    if not screenshot:
+        hk = GlobalHotkey(cfg.get("hotkey", "ctrl+shift+s"), lambda: post(("toggle",)))
+        if hk.start():
+            extras["hotkey"] = hk
+            win.set_hotkey_ok(True)
+        elif hk.error and hk.error != "unsupported":
+            log(f"hotkey {cfg.get('hotkey')!r}: {hk.error}")
+        tray = Tray(on_toggle=lambda: post(("toggle",)), on_quit=lambda: post(("quit",)))
+        if tray.start():
+            extras["tray"] = tray
+    else:
+        win.set_hotkey_ok(True)   # show the key label in screenshots
+    win.run()
     return 0
 
 
