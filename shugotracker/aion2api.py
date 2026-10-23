@@ -70,6 +70,7 @@ class Character:
     gear_score: int | None = None
     title: str | None = None
     error: str | None = None
+    class_hint: str | None = None   # class from game packets, before the character is resolved
 
     @property
     def key(self) -> str:
@@ -77,7 +78,7 @@ class Character:
 
     @property
     def class_name(self) -> str:
-        return class_name(self.pc_id)
+        return class_name(self.pc_id) or (self.class_hint or "")
 
     @property
     def faction(self) -> str:

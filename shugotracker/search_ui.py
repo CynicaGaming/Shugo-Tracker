@@ -13,6 +13,7 @@ from typing import Callable
 
 import requests
 
+from . import servers as sv
 from .aion2api import REGION_LABELS, SUB_REGIONS, USER_AGENT, Api, Character, rank
 from .favorites import Favorites
 
@@ -35,6 +36,7 @@ ACCENT_FG = "#1a1306"
 ELYOS = "#6aa8ff"
 ASMO = "#b98cff"
 RED = "#ff6b6b"
+GREEN = "#5fd38a"
 SKEL_A = "#22262f"
 SKEL_B = "#2c313c"
 
@@ -138,15 +140,18 @@ class SearchWindow:
     def __init__(self, api: Api, cfg: dict, on_close: Callable[[], None], favorites: Favorites | None = None,
                  update_banner: Callable[[], str | None] = lambda: None,
                  on_update: Callable[[], bool] = lambda: False, version: str = "",
-                 initial_query: str | None = None, screenshot: str | None = None):
+                 initial_query: str | None = None, screenshot: str | None = None,
+                 nearby=None, nearby_enable: Callable[[], bool] | None = None):
         self.api = api
         self.cfg = cfg
         self.on_close_cb = on_close
         self.update_banner = update_banner
         self.on_update = on_update
         self.favorites = favorites or Favorites(None)
+        self.nearby = nearby                      # NearbyService or None
+        self.nearby_enable = nearby_enable        # asks for admin/Npcap and starts capture; True if running
 
-        self.mode = "search"          # search | favorites
+        self.mode = "search"          # search | nearby | favorites
         self.results: list[Character] = []
         self.fav_chars: list[Character] = []
         self.keyword = ""
@@ -213,12 +218,18 @@ class SearchWindow:
         self.pin.pack(side="right")
         self.pin.bind("<Button-1>", lambda e: self._toggle_pin())
         self._paint_pin()
+        self.nearby_switch = tk.Label(head, bg=BG, font=self.f_small, cursor="hand2", padx=8)
+        self.nearby_switch.pack(side="right")
+        self.nearby_switch.bind("<Button-1>", lambda e: self._toggle_nearby())
 
         # Search / Favorites tabs
         tabs = tk.Frame(self.top, bg=BG)
         tabs.pack(fill="x", pady=(10, 0))
         self.tab_search = tk.Label(tabs, text="Search", font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
         self.tab_search.pack(side="left")
+        self.tab_near = tk.Label(tabs, font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
+        self.tab_near.pack(side="left", padx=(18, 0))
+        self.tab_near.bind("<Button-1>", lambda e: self._set_mode("nearby"))
         self.tab_fav = tk.Label(tabs, font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
         self.tab_fav.pack(side="left", padx=(18, 0))
         self.tab_search.bind("<Button-1>", lambda e: self._set_mode("search"))
@@ -320,8 +331,22 @@ class SearchWindow:
     def _paint_tabs(self):
         n = len(self.favorites)
         self.tab_fav.config(text=f"★ Favorites{f'  {n}' if n else ''}")
-        for tab, mode in ((self.tab_search, "search"), (self.tab_fav, "favorites")):
+        near_n = self.nearby.count() if self.nearby and self.nearby.running else 0
+        self.tab_near.config(text=f"📡 Nearby{f'  {near_n}' if near_n else ''}")
+        for tab, mode in ((self.tab_search, "search"), (self.tab_near, "nearby"), (self.tab_fav, "favorites")):
             tab.config(fg=ACCENT if self.mode == mode else FG_DIM)
+        on = bool(self.nearby and self.nearby.running)
+        self.nearby_switch.config(text="● Nearby on" if on else "○ Nearby off", fg=GREEN if on else FG_FAINT)
+
+    def _toggle_nearby(self):
+        if self.nearby and self.nearby.running:
+            self.nearby.stop()
+            self.cfg["nearby_enabled"] = False
+        elif self.nearby_enable and self.nearby_enable():
+            self.cfg["nearby_enabled"] = True
+            self._set_mode("nearby")
+        self._paint_tabs()
+        self._mark()
 
     def _paint_pin(self):
         on = bool(self.root.attributes("-topmost"))
@@ -345,9 +370,10 @@ class SearchWindow:
         if mode == self.mode:
             return
         self.mode = mode
-        if mode == "favorites":
+        if mode in ("favorites", "nearby"):
             self.box.pack_forget()
-            self.fav_chars = self.favorites.characters()
+            if mode == "favorites":
+                self.fav_chars = self.favorites.characters()
         else:
             self.box.pack(fill="x", pady=(10, 8), before=self.filters)
             self.search_entry.focus_set()
@@ -481,6 +507,8 @@ class SearchWindow:
 
     # ═════ list rendering ═════
     def _source(self) -> list[Character]:
+        if self.mode == "nearby":
+            return self.nearby.nearby_cards() if self.nearby and self.nearby.running else []
         return self.fav_chars if self.mode == "favorites" else self.results
 
     def _visible(self) -> list[Character]:
@@ -499,6 +527,11 @@ class SearchWindow:
             self._drain()
             self._sync_banner()
             now = time.monotonic()
+            if self.nearby and self.nearby.running and self.nearby.pump():
+                if now - getattr(self, "_last_nearby_paint", 0) > 0.5:   # crowds: repaint at most twice a second
+                    self._last_nearby_paint = now
+                    self._paint_tabs()
+                    self._mark()
             if self.profile_view is None:
                 if self._dirty:
                     self._render()
@@ -541,7 +574,9 @@ class SearchWindow:
                 has_skel = True
                 continue
             c = view[i]
-            if c.status == "none":
+            if c.status == "unresolved" and self.nearby:
+                self.nearby.request_resolve(c)
+            elif c.status == "none" and c.char_id:
                 self.api.want(c, lambda ch: self.inbox.put(("detail",)))
             has_skel |= self._draw_card(cv, c, y, width, i == self.hover_index, a, b)
         if not view and not loading_any:
@@ -553,7 +588,14 @@ class SearchWindow:
         return has_skel
 
     def _draw_empty(self, cv, width):
-        if self.mode == "favorites":
+        if self.mode == "nearby":
+            if not (self.nearby and self.nearby.running):
+                msg, sub = "Nearby is off", "Turn it on with “○ Nearby off” at the top (needs Npcap + administrator)."
+            elif self.nearby.count():
+                msg, sub = "Nobody in range matches these filters", "Clear the filters to see everyone."
+            else:
+                msg, sub = "No players in range yet", "Players appear as they come into view, or when you load a map."
+        elif self.mode == "favorites":
             if len(self.favorites):
                 msg, sub = "No favorites match these filters", "Clear the filters to see them all."
             else:
@@ -586,6 +628,13 @@ class SearchWindow:
         x1 = width - 6
         round_rect(cv, 0, y, x1, y + CARD_H, 12, fill=HOVER if hover else SURFACE,
                    outline=BORDER if hover else "", tags="card")
+        near = None
+        if self.nearby and self.nearby.running:
+            near = self.nearby.player(c.name) if self.mode == "nearby" else self.nearby.match(c)
+        side = self.nearby.tracker.side(near) if near else None
+        if self.mode == "nearby" and side:
+            strip = RED if side == "enemy" else ELYOS if side == "ally" else FG_FAINT
+            round_rect(cv, 2, y + 10, 6, y + CARD_H - 10, 2, fill=strip, outline="", tags="card")
         px, py = 12, y + 12
         img = self.images.get(c.portrait, PORTRAIT, crop_top=True)
         if img:
@@ -596,24 +645,42 @@ class SearchWindow:
             cv.create_text(px + PORTRAIT / 2, py + PORTRAIT / 2, text=(c.class_name[:1] or "?"), fill=col,
                            font=self.f_name, tags="card")
         tx = 72
-        name_id = cv.create_text(tx, y + 23, text=c.name, fill=FG, font=self.f_name, anchor="w", tags="card")
+        prefix = "✝ " if near and near.dead else "⚡" if near and near.last_combat and time.time() - near.last_combat < 15 else ""
+        name_id = cv.create_text(tx, y + 23, text=prefix + c.name, fill=FG_DIM if near and near.dead else FG,
+                                 font=self.f_name, anchor="w", tags="card")
         bx = cv.bbox(name_id)[2] + 8
-        fac_col = ELYOS if c.race == 1 else ASMO if c.race == 2 else FG_DIM
-        pill_w = self.f_tiny.measure(c.faction) + 12
-        round_rect(cv, bx, y + 15, bx + pill_w, y + 31, 8, fill=SURFACE_2, outline=fac_col, tags="card")
-        cv.create_text(bx + pill_w / 2, y + 23, text=c.faction, fill=fac_col, font=self.f_tiny, tags="card")
+        if c.race:
+            fac_col = ELYOS if c.race == 1 else ASMO
+            pill_w = self.f_tiny.measure(c.faction) + 12
+            round_rect(cv, bx, y + 15, bx + pill_w, y + 31, 8, fill=SURFACE_2, outline=fac_col, tags="card")
+            cv.create_text(bx + pill_w / 2, y + 23, text=c.faction, fill=fac_col, font=self.f_tiny, tags="card")
+            bx += pill_w + 6
+        if near and self.mode != "nearby":
+            label, col = ("⚔ Nearby", RED) if side == "enemy" else ("● Nearby", GREEN)
+            bw = self.f_tiny.measure(label) + 12
+            round_rect(cv, bx, y + 15, bx + bw, y + 31, 8, fill=col, outline="", tags="card")
+            cv.create_text(bx + bw / 2, y + 23, text=label, fill=BG, font=self.f_tiny, tags="card")
         cls_col = CLASS_COLORS.get(c.class_name, FG_DIM)
         cid = cv.create_text(tx, y + 49, text=c.class_name or "Unknown", fill=cls_col, font=self.f_small,
                              anchor="w", tags="card")
-        rest = f"  ·  Lv {c.level}  ·  {c.server_name} ({REGION_LABELS.get(c.region, c.region.upper())})"
+        if c.status in ("unresolved", "resolving"):
+            rest = "  ·  finding character…"
+        elif c.status == "notfound":
+            rest = "  ·  not found in character search"
+        else:
+            guess = " · best guess" if c.error == "ambiguous" else ""
+            rest = f"  ·  Lv {c.level}  ·  {c.server_name} ({REGION_LABELS.get(c.region, c.region.upper())}){guess}"
         cv.create_text(cv.bbox(cid)[2], y + 49, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
 
-        # favorite star (top right)
-        fav = c.key in self.favorites
-        sx0, sy0, sx1, sy1 = self._star_box(width, y)
-        star_hover = hover and self.hover_star
-        cv.create_text((sx0 + sx1) / 2, (sy0 + sy1) / 2, text="★" if fav else "☆",
-                       fill=ACCENT if fav or star_hover else FG_FAINT, font=self.f_star, tags="card")
+        # favorite star (top right) - only for characters the search API knows
+        if c.char_id:
+            fav = c.key in self.favorites
+            sx0, sy0, sx1, sy1 = self._star_box(width, y)
+            star_hover = hover and self.hover_star
+            cv.create_text((sx0 + sx1) / 2, (sy0 + sy1) / 2, text="★" if fav else "☆",
+                           fill=ACCENT if fav or star_hover else FG_FAINT, font=self.f_star, tags="card")
+        if c.status == "notfound":
+            return False
 
         rx = x1 - 44
         if c.status == "ok":
@@ -634,6 +701,18 @@ class SearchWindow:
         return True
 
     def _update_status(self, view):
+        if self.mode == "nearby":
+            if not (self.nearby and self.nearby.running):
+                self.status.config(text="", fg=FG_DIM)
+                return
+            g = self.nearby.tracker.groups()
+            me = self.nearby.me
+            where = f"you: {me.name}" + (f" ({sv.label(me.server)})" if me.server else "") \
+                if me.name else "waiting for your character (load a map once)"
+            self.status.config(text=f"{len(g['enemy'])} enemies  ·  {len(g['ally'])} allies  ·  "
+                                    f"{len(g['unknown'])} unidentified  ·  {where}  ·  {self.nearby.status()}",
+                               fg=FG_DIM)
+            return
         if self.mode == "favorites":
             n = len(self.fav_chars)
             self.status.config(text=f"{len(view):,} of {n:,} favorites" if n else "", fg=FG_DIM)
@@ -676,6 +755,10 @@ class SearchWindow:
         if i < 0:
             return
         c = self._view[i]
+        if not c.char_id:
+            if self.nearby:
+                self.nearby.request_resolve(c)
+            return
         if on_star:
             self.toggle_favorite(c)
         else:
