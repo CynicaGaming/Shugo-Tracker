@@ -19,7 +19,12 @@ jobs:
         run: python -m unittest discover -s tests -t . -v
 
       - name: Live API check (real search + details through the app's own client)
-        run: python -m shugotracker.app --search-cli Luna
+        shell: pwsh
+        run: |
+          python -m shugotracker.app --search-cli Luna *> live.txt
+          $code = $LASTEXITCODE
+          Get-Content live.txt | Select-Object -First 40 | ForEach-Object { Write-Output "::notice title=live::$_" }
+          exit $code
 
       - name: UI screenshots (demo data)
         run: python -m shugotracker.app --demo --query Luna --screenshot ui-demo.png
