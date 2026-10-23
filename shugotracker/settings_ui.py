@@ -1,15 +1,13 @@
-"""Settings page (opened with ⚙): transparency, window behaviour, hotkey, startup, updates, speed, data."""
+"""Settings page (opened with ⚙): window behaviour, hotkey, startup, updates, data."""
 from __future__ import annotations
 
 import os
-import time
 import tkinter as tk
 import webbrowser
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from . import desktop
-from .settings import OPACITY_MIN, clamp_opacity
 from .search_ui import (ACCENT, ACCENT_FG, BG, BORDER, FG, FG_DIM, FG_FAINT, GREEN, HOVER, PAD, RED, SURFACE,
                         SURFACE_2)
 
@@ -26,7 +24,6 @@ class SettingsServices:
     clear_cache: Callable[[], int]           # returns bytes freed
     cache_size: Callable[[], int]
     data_dir: str
-    set_request_rate: Callable[[float], None]
 
 
 def human_size(n: int) -> str:
@@ -35,53 +32,6 @@ def human_size(n: int) -> str:
             return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
         n /= 1024
     return f"{n:.1f} GB"
-
-
-class Slider(tk.Canvas):
-    """Flat slider: drag or click the track. on_change(value, final)."""
-
-    def __init__(self, parent, value: float, lo: float, hi: float, on_change, fmt=lambda v: f"{v:.0%}",
-                 step: float = 0.05, width: int = 220):
-        super().__init__(parent, width=width + 54, height=24, bg=SURFACE, highlightthickness=0, cursor="hand2")
-        self.lo, self.hi, self.step, self.fmt, self.on_change = lo, hi, step, fmt, on_change
-        self.track_w = width
-        self.value = value
-        self.bind("<ButtonPress-1>", self._press)
-        self.bind("<B1-Motion>", self._drag)
-        self.bind("<ButtonRelease-1>", self._release)
-        self._draw()
-
-    def _x_for(self, v):
-        return 8 + (v - self.lo) / (self.hi - self.lo) * (self.track_w - 16)
-
-    def _v_for(self, x):
-        v = self.lo + (min(max(x, 8), self.track_w - 8) - 8) / (self.track_w - 16) * (self.hi - self.lo)
-        return round(round(v / self.step) * self.step, 4)
-
-    def _draw(self):
-        self.delete("all")
-        x = self._x_for(self.value)
-        self.create_line(8, 12, self.track_w - 8, 12, fill=SURFACE_2, width=4, capstyle="round")
-        self.create_line(8, 12, x, 12, fill=ACCENT, width=4, capstyle="round")
-        self.create_oval(x - 7, 5, x + 7, 19, fill=FG, outline=ACCENT, width=2)
-        self.create_text(self.track_w + 50, 12, text=self.fmt(self.value), fill=FG, anchor="e",
-                         font=("Segoe UI Semibold", 10))
-
-    def _set_from(self, x, final):
-        v = self._v_for(x)
-        if v != self.value or final:
-            self.value = v
-            self._draw()
-            self.on_change(v, final)
-
-    def _press(self, e):
-        self._set_from(e.x, False)
-
-    def _drag(self, e):
-        self._set_from(e.x, False)
-
-    def _release(self, e):
-        self._set_from(e.x, True)
 
 
 class Switch(tk.Canvas):
@@ -114,7 +64,6 @@ class SettingsView:
         self.app = app
         self.cfg = app.cfg
         self.services = services
-        self._revert_job = None
         self._capturing = False
         f = app
         self.frame = tk.Frame(app.root, bg=BG)
@@ -148,11 +97,8 @@ class SettingsView:
 
     def destroy(self):
         self._stop_capture()
-        if self._revert_job:
-            self.app.root.after_cancel(self._revert_job)
         self.app.root.unbind_all("<MouseWheel>")
         self.frame.destroy()
-        self.app._update_opacity(time.monotonic(), immediate=True)
 
     # ───── layout helpers ─────
     def _section(self, title: str):
@@ -190,16 +136,6 @@ class SettingsView:
     def _build(self):
         a, cfg = self.app, self.cfg
 
-        card = self._section("Transparency")
-        r, _ = self._row(card, "While active")
-        Slider(r, clamp_opacity(cfg["opacity_focused"]), OPACITY_MIN, 1.0,
-               lambda v, final: self._opacity("opacity_focused", v, final)).pack()
-        r, _ = self._row(card, "While in the game")
-        Slider(r, clamp_opacity(cfg["opacity_unfocused"]), OPACITY_MIN, 1.0,
-               lambda v, final: self._opacity("opacity_unfocused", v, final)).pack()
-        r, _ = self._row(card, "Solid while the mouse is over it")
-        Switch(r, bool(cfg["opacity_full_on_hover"]), lambda on: self._set("opacity_full_on_hover", on)).pack()
-
         card = self._section("Window")
         r, _ = self._row(card, "Always on top")
         Switch(r, bool(cfg["always_on_top"]), self._always_on_top).pack()
@@ -225,11 +161,6 @@ class SettingsView:
             self.update_btn.pack()
             self._sync_update()
 
-        card = self._section("Lookups")
-        r, _ = self._row(card, "Requests per second")
-        Slider(r, float(cfg["requests_per_second"]), 1.0, 8.0, self._rate,
-               fmt=lambda v: f"{v:.0f}/s", step=1.0).pack()
-
         card = self._section("Data")
         r, self._cache_sub = self._row(card, "Cached profiles, portraits and icons", " ")
         self._button(r, "Clear", self._clear_cache).pack(side="right")
@@ -252,17 +183,6 @@ class SettingsView:
         self.cfg[key] = value
         self._save()
 
-    def _opacity(self, key: str, value: float, final: bool):
-        self.cfg[key] = clamp_opacity(value)
-        self.app.preview_opacity(self.cfg[key])          # show it while dragging
-        if final:
-            self._save()
-            if self._revert_job:
-                self.app.root.after_cancel(self._revert_job)
-            # after previewing the in-game value, go back to whatever applies right now
-            self._revert_job = self.app.root.after(
-                1200, lambda: self.app._update_opacity(time.monotonic(), immediate=True))
-
     def _always_on_top(self, on: bool):
         self._set("always_on_top", on)
         self.app.root.attributes("-topmost", on)
@@ -281,12 +201,6 @@ class SettingsView:
         ok = desktop.set_autostart(on)
         self.cfg["start_with_windows"] = on if ok else desktop.get_autostart()
         self._save()
-
-    def _rate(self, value: float, final: bool):
-        if final:
-            self._set("requests_per_second", float(value))
-            if self.services:
-                self.services.set_request_rate(float(value))
 
     def _update_click(self):
         self.app._update_click()

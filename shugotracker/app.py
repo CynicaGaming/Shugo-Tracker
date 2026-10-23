@@ -38,8 +38,6 @@ DEFAULT_CONFIG = {
     "overlay": True,
     "hotkey": "ctrl+shift+s",
     "window_pos": [80, 80],
-    "detail_workers": 4,
-    "requests_per_second": 6.0,
     "opcodes": {},
 }
 
@@ -258,7 +256,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     cache_dir = None if (demo or screenshot) else os.path.join(HERE, "cache")
     api = Api(cache_path=None if demo else os.path.join(HERE, "character_cache.json"), session=session,
               profile_dir=os.path.join(cache_dir, "profiles") if cache_dir else None,
-              workers=int(cfg.get("detail_workers", 4)), rate=float(cfg.get("requests_per_second", 6.0)), log=log)
+              log=log)
     updater = Updater(repo=cfg.get("update_repo") or "CynicaGaming/Shugo-Tracker",
                       enabled=bool(cfg.get("auto_update", True)) and not demo and not screenshot, log=log)
     updater.start()
@@ -291,7 +289,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     favorites = Favorites(None if (demo or screenshot) else os.path.join(HERE, "favorites.json"))
     if screenshot:
         cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [], "factions": [],
-               "opacity_focused": 1.0, "opacity_unfocused": 1.0, "pill_pos": [560, 60]}
+               "pill_pos": [560, 60]}
     win = SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
                        on_update=on_update,
                        version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir)
@@ -334,7 +332,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         return max(0, before - cache_size())
 
     win.settings_services = SettingsServices(change_hotkey=change_hotkey, clear_cache=clear_cache,
-                                             cache_size=cache_size, data_dir=HERE, set_request_rate=api.set_rate)
+                                             cache_size=cache_size, data_dir=HERE)
     if instance:
         instance.on_show = lambda: post(("show",))
     if not screenshot:

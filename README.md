@@ -41,18 +41,16 @@ windowed** mode):
 | tray icon | Show / hide, Quit |
 | ✕ | quit |
 
-It's solid while it's the active window and fades while you're back in the game (and comes back while the
-mouse is over it). Starting it again while it's running (even hidden) brings the running copy forward.
+Starting it again while it's running (even hidden) brings the running copy forward. When an update is
+waiting, the ⚙ turns gold.
 
 ### Settings (⚙)
 
 | | |
 |---|---|
-| Transparency | how solid it is while active and while you're in the game; solid on mouse-over |
 | Window | always on top; overlay style or a normal Windows title bar (next start) |
 | Shortcut | click it and press a new key combination |
 | Startup & updates | start with Windows; check for updates automatically; check now |
-| Lookups | requests per second to NCSOFT's site |
 | Data | cache size and Clear; open the folder with settings, favorites and cache |
 
 Everything is saved immediately to `config.json` next to the exe.
@@ -102,7 +100,7 @@ Delete the `cache` folder and `character_cache.json` at any time to start fresh.
 
 ## Updates
 
-The **Check for updates** button sits at the top right of the window:
+The **Check for updates** button is in ⚙ Settings (the ⚙ turns gold when an update is waiting):
 
 | button shows | meaning / what clicking does |
 |---|---|
@@ -147,8 +145,6 @@ Working locally:
 |---|---|---|
 | `regions` / `factions` | `[]` / `[]` | last filters used (empty = all) |
 | `always_on_top` | `true` | pin the window above other windows |
-| `detail_workers` | `4` | parallel detail requests |
-| `requests_per_second` | `6.0` | starting request rate (adapts down automatically) |
 | `auto_update` | `true` | check for new releases at start-up and every 6 hours |
 | `update_repo` | `"CynicaGaming/Shugo-Tracker"` | GitHub repo the updater follows |
 
@@ -212,7 +208,6 @@ CP colours (enemies only) compare against **your** combat power, looked up once 
 | `extra_enemy_servers` | `[]` | more servers to try for players with no server, e.g. `["nae-zikel"]` |
 | `kr_tw_region` | `"kr"` | Shugo path for Korean/Taiwanese server ids (`"kr"` or `"tw"`) |
 | `interfaces` | `[]` | Npcap adapters to sniff; empty = all, including the loopback adapter (ExitLag etc.) |
-| `opacity_focused`, `opacity_unfocused` | `1.0`, `0.6` | overlay transparency (also in ⚙ Settings) |
 | `auto_update` | `true` | download and install new releases (see *Automatic updates*) |
 | `update_repo` | `"CynicaGaming/shugo-tracker"` | GitHub repo the updater follows |
 | `opcodes` | | packet opcodes — see *After a game patch* |

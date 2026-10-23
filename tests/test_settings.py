@@ -1,39 +1,32 @@
-"""Settings: migration from older versions, the opacity rule, hotkey capture text, cache clearing."""
+"""Settings: migration from older versions, hotkey capture text, cache clearing, request ceiling."""
 import json
 import os
 import tempfile
 import unittest
 
 from shugotracker import aion2api as a
-from shugotracker.settings import OPACITY_MIN, SETTING_DEFAULTS, clamp_opacity, decide_opacity, migrate
+from shugotracker.settings import SETTING_DEFAULTS, migrate
 
 
 class MigrateTests(unittest.TestCase):
-    def test_old_v170_config(self):
-        cfg = migrate({"opacity": 0.97, "idle_opacity": 0.45, "hotkey": "alt+f9", "region": "nae"})
-        self.assertEqual(cfg["opacity_focused"], 1.0)      # old 0.97 is not carried: active = solid
-        self.assertEqual(cfg["opacity_unfocused"], 0.45)
+    def test_old_configs(self):
+        cfg = migrate({"opacity": 0.97, "idle_opacity": 0.45, "opacity_unfocused": 0.6, "requests_per_second": 50,
+                       "hotkey": "alt+f9", "region": "nae"})
         self.assertEqual(cfg["hotkey"], "alt+f9")
-        for gone in ("opacity", "idle_opacity", "region"):
+        for gone in ("opacity", "idle_opacity", "opacity_unfocused", "requests_per_second", "region"):
             self.assertNotIn(gone, cfg)
-
-    def test_defaults_and_clamp(self):
-        cfg = migrate({"opacity_unfocused": 0.01, "opacity_focused": "junk"})
-        self.assertEqual(cfg["opacity_unfocused"], OPACITY_MIN)
-        self.assertEqual(cfg["opacity_focused"], 1.0)
         for k in SETTING_DEFAULTS:
             self.assertIn(k, cfg)
-        self.assertEqual(clamp_opacity(3), 1.0)
 
 
-class OpacityRuleTests(unittest.TestCase):
-    cfg = {"opacity_focused": 0.9, "opacity_unfocused": 0.5, "opacity_full_on_hover": True}
-
-    def test_rule(self):
-        self.assertEqual(decide_opacity(self.cfg, True, False), 0.9)
-        self.assertEqual(decide_opacity(self.cfg, False, False), 0.5)
-        self.assertEqual(decide_opacity(self.cfg, False, True), 0.9)
-        self.assertEqual(decide_opacity({**self.cfg, "opacity_full_on_hover": False}, False, True), 0.5)
+class RequestCeilingTests(unittest.TestCase):
+    def test_recovery_never_passes_the_ceiling(self):
+        api = a.Api()
+        self.addCleanup(api.close)
+        api.limiter.throttled(0)
+        for _ in range(500):
+            api.limiter.ok()
+        self.assertEqual(api.limiter.rate, a.REQUESTS_PER_SECOND)
 
 
 class HotkeyCaptureTests(unittest.TestCase):
@@ -59,8 +52,6 @@ class ClearCacheTests(unittest.TestCase):
             with open(os.path.join(pd, "p.json"), "w") as f:
                 f.write("{}")
             api._search_cache[("a",)] = (0, {})
-            api.set_rate(3)
-            self.assertEqual(api.limiter.rate, 3)
             api.clear_caches()
             self.assertEqual((api._cache, api._search_cache, os.listdir(pd), os.path.exists(cp)), ({}, {}, [], False))
 

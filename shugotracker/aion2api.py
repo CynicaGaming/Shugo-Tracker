@@ -165,6 +165,7 @@ class RateLimiter:
             self._pause_until = time.monotonic() + (retry_after or 5.0)
 
 
+REQUESTS_PER_SECOND = 6.0          # hard ceiling on requests to NCSOFT (backs off below this on 429/5xx)
 DETAILS_FRESH_S = 30 * 60          # cached card numbers newer than this are not refetched
 DETAILS_KEEP_S = 7 * 86400         # older ones are still shown instantly, then refreshed in the background
 SEARCH_KEEP_S = 15 * 60            # identical searches within this window are answered from memory
@@ -176,13 +177,13 @@ PROFILE_DISK_MAX = 300
 class Api:
     """Search (parallel over sub-regions) and lazily-fetched character details, with caching."""
 
-    def __init__(self, cache_path: str | None = None, workers: int = 4, rate: float = 6.0,
+    def __init__(self, cache_path: str | None = None, workers: int = 4, rate: float = REQUESTS_PER_SECOND,
                  cache_ttl_s: float = DETAILS_FRESH_S, log: Callable[[str], None] | None = None,
                  session: requests.Session | None = None, profile_dir: str | None = None):
         self.log = log or (lambda s: None)
         self.session = session or requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
-        self.limiter = RateLimiter(rate=rate)
+        self.limiter = RateLimiter(rate=rate, max_rate=rate)   # recovers after a back-off, never above
         self.cache_path = cache_path
         self.cache_ttl_s = cache_ttl_s
         self._cache: dict[str, dict] = self._load_cache()
@@ -495,10 +496,6 @@ class Api:
             return data if isinstance(data, dict) else {}
         except (OSError, ValueError):
             return {}
-
-    def set_rate(self, rate: float) -> None:
-        with self.limiter._lock:
-            self.limiter.rate = self.limiter.max_rate = max(self.limiter.min_rate, float(rate))
 
     def clear_caches(self) -> None:
         """Forget every cached search, card number and profile (memory and disk)."""

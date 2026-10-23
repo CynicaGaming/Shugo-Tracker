@@ -246,8 +246,6 @@ class SearchWindow:
         self.save_cfg: Callable[[], None] = lambda: None   # set by the app
         self.hotkey_text = cfg.get("hotkey", "ctrl+shift+s")
         self.hotkey_ok = False                  # set by the app once the global hotkey is registered
-        self._pointer_left_at: float | None = None
-        self._current_alpha = None
         self._hidden_state: str | None = None   # "window" or "pill" while hidden by hotkey / tray
         self.pill: tk.Toplevel | None = None
 
@@ -298,16 +296,13 @@ class SearchWindow:
             collapse = self._title_button(head, "—", self.collapse)
             collapse.pack(side="right")
             self.hotkey_cap = tk.Label(head, text="", bg=SURFACE, fg=FG_FAINT, font=self.f_tiny, padx=5)
-        gear = self._title_button(head, "⚙", self.open_settings, hover=ACCENT)
-        gear.pack(side="right")
-        self.pin = tk.Label(head, bg=BG, font=self.f_small, cursor="hand2", padx=4)
-        self.pin.pack(side="right", padx=(0, 4))
+        self.gear = self._title_button(head, "⚙", self.open_settings, hover=ACCENT)
+        self.gear.bind("<Leave>", lambda e: self._paint_gear(), add="")
+        self.gear.pack(side="right")
+        self.pin = tk.Label(head, bg=BG, font=self.f_small, cursor="hand2", padx=6)
+        self.pin.pack(side="right", padx=(0, 2))
         self.pin.bind("<Button-1>", lambda e: self._toggle_pin())
         self._paint_pin()
-        self.update_btn = tk.Label(head, font=self.f_small, padx=10, pady=2, cursor="hand2")
-        if self.updater is not None:
-            self.update_btn.pack(side="right", padx=(0, 8))
-            self.update_btn.bind("<Button-1>", lambda e: self._update_click())
         self._sync_update_button()
 
         self.top = tk.Frame(self.root, bg=BG)
@@ -438,7 +433,7 @@ class SearchWindow:
 
     def _paint_pin(self):
         on = bool(self.root.attributes("-topmost"))
-        self.pin.config(text="📌 On top" if on else "📌 Pin on top", fg=ACCENT if on else FG_FAINT)
+        self.pin.config(text="📌", fg=ACCENT if on else FG_FAINT)
 
     def _dark_titlebar(self):
         try:  # Windows 10/11 immersive dark title bar
@@ -622,9 +617,6 @@ class SearchWindow:
             self._drain()
             self._sync_update_button()
             now = time.monotonic()
-            if now - getattr(self, "_last_fade_check", 0) > 0.15:
-                self._last_fade_check = now
-                self._update_opacity(now)
             if self.profile_view is None:
                 if self._dirty:
                     self._render()
@@ -939,7 +931,6 @@ class SearchWindow:
         hwnd = window_handle(self.root)
         if hwnd:
             round_corners(hwnd)
-        self._update_opacity(time.monotonic(), immediate=True)
 
     def _drag_start(self, e):
         self._drag = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
@@ -957,14 +948,6 @@ class SearchWindow:
         h = max(420, h0 + e.y_root - y0)
         self.root.geometry(f"{w}x{h}")
         self._mark()
-
-    def _set_alpha(self, a: float):
-        if a != self._current_alpha:
-            self._current_alpha = a
-            try:
-                self.root.attributes("-alpha", a)
-            except tk.TclError:
-                pass
 
     def _hwnd(self):
         if getattr(self, "_hwnd_cache", None) is None:
@@ -988,31 +971,6 @@ class SearchWindow:
             activate(self._hwnd())
         self.root.focus_force()
 
-    def _update_opacity(self, now: float, immediate: bool = False):
-        """Focused opacity while the overlay is active (or pointed at), unfocused opacity otherwise."""
-        if self.root.state() == "withdrawn":
-            return
-        if not immediate and now < getattr(self, "_preview_until", 0):
-            return                      # a Settings slider is showing its value
-        from .settings import decide_opacity
-        x, y = self.root.winfo_pointerxy()
-        rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
-        hovering = rx <= x < rx + self.root.winfo_width() and ry <= y < ry + self.root.winfo_height()
-        target = decide_opacity(self.cfg, self.is_foreground(), hovering)
-        if self._current_alpha is not None and target < self._current_alpha and not immediate:
-            # going see-through: wait a moment so passing the pointer over the edge doesn't flicker
-            if self._pointer_left_at is None:
-                self._pointer_left_at = now
-            if now - self._pointer_left_at < 0.4:
-                return
-        self._pointer_left_at = None
-        self._set_alpha(target)
-
-    def preview_opacity(self, value: float):
-        """Settings page: show a slider value for a moment, then the normal rule takes over again."""
-        self._preview_until = time.monotonic() + 1.2
-        self._set_alpha(value)
-
     # collapse to a small bubble
     def collapse(self):
         if not self.overlay:
@@ -1030,8 +988,6 @@ class SearchWindow:
         self.root.deiconify()
         self.root.attributes("-topmost", bool(self.cfg.get("always_on_top", True)))
         self.root.lift()
-        self._pointer_left_at = None
-        self.root.after(50, lambda: self._update_opacity(time.monotonic(), immediate=True))
         self._mark()
 
     def _show_pill(self):
@@ -1112,22 +1068,19 @@ class SearchWindow:
         if self.profile_view:
             self.profile_view._hide_tip()
 
-    # ═════ update button ═════
-    UPDATE_STYLES = {
-        "plain": (SURFACE, FG_DIM), "accent": (ACCENT, ACCENT_FG), "busy": (SURFACE, FG_DIM),
-        "ok": (SURFACE, GREEN), "error": (SURFACE, RED),
-    }
-
+    # ═════ updates (the button lives in Settings; the gear turns gold when one is waiting) ═════
     def _sync_update_button(self):
-        if self.updater is None:
+        if self.updater is None or not hasattr(self, "gear"):
             return
         look = self.updater.button()
         if look == self._update_look:
             return
         self._update_look = look
-        text, style = look
-        bg, fg = self.UPDATE_STYLES.get(style, self.UPDATE_STYLES["plain"])
-        self.update_btn.config(text=text, bg=bg, fg=fg, cursor="watch" if style == "busy" else "hand2")
+        self._paint_gear()
+
+    def _paint_gear(self):
+        waiting = self.updater is not None and self.updater.state in ("available", "ready")
+        self.gear.config(text="⚙•" if waiting else "⚙", fg=ACCENT if waiting else FG_DIM, bg=BG)
 
     def _update_click(self):
         if self.updater is None:
@@ -1145,7 +1098,6 @@ class SearchWindow:
         steps = [
             (500, self._update_click),
             (900, lambda: self._grab(f"{base}-loading.png")),
-            (3500, lambda: self._grab(f"{base}-update-checked.png")),
             (7000, lambda: self._grab(f"{base}.png")),
             (7200, lambda: self._view and self.toggle_favorite(self._view[0])),
             (7400, lambda: self._view and self.open_profile(self._view[0])),
