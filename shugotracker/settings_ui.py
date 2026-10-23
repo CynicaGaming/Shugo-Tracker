@@ -139,6 +139,9 @@ class SettingsView:
         card = self._section("Window")
         r, _ = self._row(card, "Always on top")
         Switch(r, bool(cfg["always_on_top"]), self._always_on_top).pack()
+        r, _ = self._row(card, "Close to tray", None if a.tray_ok else "Tray icon unavailable")
+        Switch(r, bool(cfg["close_to_tray"]) and a.tray_ok, lambda on: self._set("close_to_tray", on),
+               enabled=a.tray_ok).pack()
         r, self._overlay_sub = self._row(card, "Overlay style (no Windows title bar)")
         self._overlay_initial = bool(cfg["overlay"])
         Switch(r, bool(cfg["overlay"]), self._overlay).pack()

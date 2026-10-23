@@ -3,6 +3,7 @@ from __future__ import annotations
 
 SETTING_DEFAULTS = {
     "always_on_top": True,
+    "close_to_tray": False,         # ✕ hides to the tray instead of quitting
     "overlay": True,                # frameless overlay window (False = normal Windows title bar)
     "hotkey": "ctrl+shift+s",
     "auto_update": True,

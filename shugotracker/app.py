@@ -228,7 +228,7 @@ def _wire_demo(app: App) -> None:
 
 
 def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | None = None,
-                screenshot: str | None = None) -> int:
+                screenshot: str | None = None, after_update: bool = False) -> int:
     from .aion2api import Api
     from .search_ui import SearchWindow
     from .updater import Updater
@@ -240,7 +240,15 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     instance = None
     if not (demo or screenshot):
         instance = SingleInstance()
-        if not instance.acquire():
+        acquired = instance.acquire()
+        if not acquired and after_update:
+            # Started by the updater: the old version may still be finishing its shutdown.
+            for _ in range(40):
+                time.sleep(0.25)
+                if instance.acquire():
+                    acquired = True
+                    break
+        if not acquired:
             # Already running (maybe hidden): bring that copy forward instead of opening a second one.
             if instance.notify_running():
                 return 0
@@ -262,27 +270,31 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     updater.start()
 
     extras: dict = {}
+    restart = {"pending": False}
 
     def on_close():
+        """Everything shuts down here (✕, tray Quit, or Restart after an update)."""
         for k in ("hotkey", "tray"):
             if extras.get(k):
                 extras[k].stop()
         if instance:
-            instance.release()
+            instance.release()          # free the single-instance port before the new copy starts
         updater.stop()
         api.close()
         if not screenshot:
             save_config(config_path, cfg)
-        if updater.state == "ready":
+        if restart["pending"]:
+            args = [a for a in sys.argv[1:] if a != "--after-update"] + ["--after-update"]
+            log(f"update: restarting into v{updater.latest}")
+            updater.relaunch(args)
+        elif updater.state == "ready":
             updater.apply(restart=False)  # next launch runs the new version
 
     def on_update() -> bool:
-        save_config(config_path, cfg)
+        """Restart clicked: install now; on_close launches the new version once this copy has let go."""
         if not updater.apply(restart=False):
             return False
-        updater.stop()
-        api.close()
-        updater.relaunch(sys.argv[1:])
+        restart["pending"] = True
         return True
 
     from .favorites import Favorites
@@ -345,6 +357,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         tray = Tray(on_toggle=lambda: post(("toggle",)), on_quit=lambda: post(("quit",)))
         if tray.start():
             extras["tray"] = tray
+            win.tray_ok = True
     else:
         win.set_hotkey_ok(True)   # show the key label in screenshots
     win.run()
@@ -481,6 +494,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--debug", action="store_true", help="log every decoded event")
     ap.add_argument("--demo", action="store_true", help="show the overlay with made-up players (no game, no network)")
     ap.add_argument("--version", action="version", version=f"Shugo Tracker {__version__}")
+    ap.add_argument("--after-update", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
@@ -493,7 +507,11 @@ def main(argv: list[str] | None = None) -> int:
         return _bench(args.bench)
     nearby = args.nearby or args.replay or args.console
     if not nearby:
-        return _run_search(cfg, args.config, demo=args.demo, query=args.query, screenshot=args.screenshot)
+        code = _run_search(cfg, args.config, demo=args.demo, query=args.query, screenshot=args.screenshot,
+                           after_update=args.after_update)
+        if FROZEN:
+            os._exit(code)              # don't let a leftover background thread keep the process alive
+        return code
 
     app = App(cfg, debug=args.debug)
     if args.demo:

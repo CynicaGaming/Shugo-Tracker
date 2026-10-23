@@ -147,7 +147,7 @@ class ButtonFlowTests(UpdateFlowTests):
         self.assertIsNone(u.click(lambda url: None))       # Download v1.4.0
         self.wait_idle(u)
         self.assertEqual(u.state, "ready")
-        self.assertEqual(u.button(), ("⟳ Restart to update", "ok"))
+        self.assertEqual(u.button(), ("Restart", "accent"))
         self.assertEqual(u.click(lambda url: None), "restart")
         with mock.patch.object(up.subprocess, "Popen"):
             self.assertTrue(u.apply(restart=False))
@@ -188,3 +188,11 @@ class ButtonFlowTests(UpdateFlowTests):
         u.check()
         self.assertEqual(u.state, "dev")
         self.assertEqual(u.button(), ("✓ Dev build", "ok"))
+
+
+class RelaunchEnvTests(unittest.TestCase):
+    def test_child_gets_its_own_runtime(self):
+        from shugotracker.updater import fresh_environment
+        env = fresh_environment({"_MEIPASS2": "x", "_PYI_ARCHIVE_FILE": "y", "_PYI_PARENT_PROCESS_LEVEL": "1",
+                                 "PATH": "p"})
+        self.assertEqual(env, {"PATH": "p", "PYINSTALLER_RESET_ENVIRONMENT": "1"})

@@ -236,7 +236,8 @@ class SearchWindow:
         x, y = cfg.get("window_pos", [80, 80])
         self.root.geometry(f"{int(w)}x{int(h)}+{int(x)}+{int(y)}")
         self.root.attributes("-topmost", bool(cfg.get("always_on_top", True)))
-        self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self.root.protocol("WM_DELETE_WINDOW", self.close_button)
+        self.tray_ok = False                     # set by the app once the tray icon is up
         if self.overlay:
             self.root.overrideredirect(True)   # our own title bar replaces the Windows frame
         else:
@@ -291,7 +292,7 @@ class SearchWindow:
                 w.bind("<ButtonPress-1>", self._drag_start)
                 w.bind("<B1-Motion>", self._drag_move)
                 w.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
-            close = self._title_button(head, "✕", self.close, hover=RED)
+            close = self._title_button(head, "✕", self.close_button, hover=RED)
             close.pack(side="right")
             collapse = self._title_button(head, "—", self.collapse)
             collapse.pack(side="right")
@@ -1086,10 +1087,9 @@ class SearchWindow:
         if self.updater is None:
             return
         if self.updater.click(webbrowser.open) == "restart":
-            self._save_geometry()
-            if self.on_update():
-                self.images.close()
-                self.root.destroy()
+            if self.on_update():         # installed; the app relaunches it once we're fully closed
+                self.close()
+                return
         self._sync_update_button()
 
     # ═════ screenshots (CI) ═════
@@ -1178,6 +1178,13 @@ class SearchWindow:
             self.cfg["window_pos"] = [self.root.winfo_x(), self.root.winfo_y()]
         except tk.TclError:
             pass
+
+    def close_button(self):
+        """✕: quit, or tuck away into the tray when "Close to tray" is on."""
+        if self.cfg.get("close_to_tray") and self.tray_ok:
+            self.hide()
+        else:
+            self.close()
 
     def close(self):
         if getattr(self, "_closed", False):

@@ -221,7 +221,8 @@ class Updater:
     def relaunch(argv: list[str] | None = None) -> None:
         exe = sys.executable
         flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-        subprocess.Popen([exe, *(argv or [])], cwd=os.path.dirname(exe), close_fds=True, creationflags=flags)
+        subprocess.Popen([exe, *(argv or [])], cwd=os.path.dirname(exe), close_fds=True, creationflags=flags,
+                         env=fresh_environment())
 
     def _cleanup_old(self) -> None:
         if not FROZEN:
@@ -248,7 +249,7 @@ class Updater:
             pct = f" {int((self.progress or 0) * 100)}%" if self.progress else ""
             return f"Downloading…{pct}", "busy"
         if st == "ready":
-            return "⟳ Restart to update", "ok"
+            return "Restart", "accent"
         if st == "error":
             return "Update failed · retry", "error"
         recent = time.time() - self.checked_at < 5
@@ -283,3 +284,22 @@ class Updater:
         if self.state == "ready_source":
             return f"⬆ v{self.latest} released — git pull to update"
         return None
+
+
+def fresh_environment(env: dict | None = None) -> dict:
+    """
+    Environment for starting a new copy of the one-file exe from inside the running one.
+    Without this the child reuses *this* process's unpacked runtime folder (PyInstaller passes it down through
+    environment variables), which is deleted as soon as we exit, so the new version dies on start.
+    """
+    env = dict(os.environ if env is None else env)
+    for k in list(env):
+        if k.startswith("_PYI_") or k in ("_MEIPASS2", "_MEIPASS"):
+            env.pop(k)
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"   # PyInstaller >= 6.9: start as an independent process
+    runtime = getattr(sys, "_MEIPASS", None)
+    if runtime:
+        # e.g. TCL_LIBRARY/TK_LIBRARY point into this copy's runtime folder, which is about to vanish
+        for k in [k for k, v in env.items() if runtime in v and k != "PATH"]:
+            env.pop(k)
+    return env
