@@ -496,6 +496,25 @@ class Api:
         except (OSError, ValueError):
             return {}
 
+    def set_rate(self, rate: float) -> None:
+        with self.limiter._lock:
+            self.limiter.rate = self.limiter.max_rate = max(self.limiter.min_rate, float(rate))
+
+    def clear_caches(self) -> None:
+        """Forget every cached search, card number and profile (memory and disk)."""
+        with self._cache_lock:
+            self._cache.clear()
+        with self._pflock:
+            self._profiles.clear()
+        self._search_cache.clear()
+        for path in [self.cache_path] + ([os.path.join(self._profile_dir, f) for f in os.listdir(self._profile_dir)]
+                                         if self._profile_dir and os.path.isdir(self._profile_dir) else []):
+            try:
+                if path and os.path.isfile(path):
+                    os.remove(path)
+            except OSError:
+                pass
+
     def save_cache(self) -> None:
         if not self.cache_path:
             return

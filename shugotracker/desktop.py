@@ -225,3 +225,102 @@ def window_handle(tk_widget) -> int | None:
         return ctypes.windll.user32.GetParent(tk_widget.winfo_id())
     except Exception:  # noqa: BLE001
         return None
+
+
+def foreground_hwnd() -> int | None:
+    """The window Windows considers active (the one receiving keyboard input)."""
+    try:
+        return ctypes.windll.user32.GetForegroundWindow()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def is_same_app_window(fg: int | None, ours: int | None) -> bool:
+    """Is the foreground window ours, or one of its popups (menus, tooltips)? Compares top-level owners."""
+    if not fg or not ours:
+        return False
+    if fg == ours:
+        return True
+    try:
+        u = ctypes.windll.user32
+        GA_ROOT, GA_ROOTOWNER = 2, 3
+        mine = u.GetAncestor(ours, GA_ROOT) or ours
+        return mine in (u.GetAncestor(fg, GA_ROOT), u.GetAncestor(fg, GA_ROOTOWNER))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def activate(hwnd: int) -> None:
+    """Make our frameless window the active one (a click alone doesn't, for overrideredirect windows)."""
+    try:
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# ───── start with Windows ─────
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+RUN_NAME = "ShugoTracker"
+
+
+def autostart_command(exe: str) -> str:
+    return f'"{exe}"'
+
+
+def autostart_supported() -> bool:
+    import sys
+    return os.name == "nt" and bool(getattr(sys, "frozen", False))
+
+
+def get_autostart() -> bool:
+    if os.name != "nt":
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as k:
+            winreg.QueryValueEx(k, RUN_NAME)
+        return True
+    except OSError:
+        return False
+
+
+def set_autostart(enabled: bool) -> bool:
+    """Add/remove the per-user Run entry for the packaged exe. True on success."""
+    import sys
+    if not autostart_supported():
+        return False
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as k:
+            if enabled:
+                winreg.SetValueEx(k, RUN_NAME, 0, winreg.REG_SZ, autostart_command(sys.executable))
+            else:
+                try:
+                    winreg.DeleteValue(k, RUN_NAME)
+                except FileNotFoundError:
+                    pass
+        return True
+    except OSError:
+        return False
+
+
+def open_folder(path: str) -> None:
+    try:
+        if os.name == "nt":
+            os.startfile(path)  # noqa: S606
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", path])
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def folder_size(path: str) -> int:
+    total = 0
+    for root, _dirs, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total

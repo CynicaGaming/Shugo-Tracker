@@ -8,7 +8,6 @@
   "extra_enemy_servers": [],
   "kr_tw_region": "kr",
   "interfaces": [],
-  "opacity": 0.97,
   "position": [
     40,
     200
@@ -30,7 +29,6 @@
   "factions": [],
   "overlay": true,
   "hotkey": "ctrl+shift+s",
-  "idle_opacity": 0.6,
   "opcodes": {
     "damage": [
       "04 38"
@@ -54,5 +52,9 @@
     "map_load": [
       "21 36"
     ]
-  }
+  },
+  "opacity_focused": 1.0,
+  "opacity_unfocused": 0.6,
+  "opacity_full_on_hover": true,
+  "start_with_windows": false
 }

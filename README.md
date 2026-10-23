@@ -37,13 +37,25 @@ windowed** mode):
 | ◢ (bottom-right corner) | resize it |
 | — | collapse to a small Shugo bubble; drag the bubble anywhere, click it to expand |
 | **Ctrl+Shift+S** | hide / show from anywhere, including in-game (shown on the title bar) |
+| ⚙ | settings |
 | tray icon | Show / hide, Quit |
 | ✕ | quit |
 
-It fades while your mouse is elsewhere and you're not typing in it, and comes back to full opacity on
-hover. Starting it again while it's running (even hidden) brings the running copy forward.
-Settings in `config.json`: `hotkey` (e.g. `"alt+f9"`), `opacity`, `idle_opacity`, and `overlay: false` for a
-normal window with a Windows title bar.
+It's solid while it's the active window and fades while you're back in the game (and comes back while the
+mouse is over it). Starting it again while it's running (even hidden) brings the running copy forward.
+
+### Settings (⚙)
+
+| | |
+|---|---|
+| Transparency | how solid it is while active and while you're in the game; solid on mouse-over |
+| Window | always on top; overlay style or a normal Windows title bar (next start) |
+| Shortcut | click it and press a new key combination |
+| Startup & updates | start with Windows; check for updates automatically; check now |
+| Lookups | requests per second to NCSOFT's site |
+| Data | cache size and Clear; open the folder with settings, favorites and cache |
+
+Everything is saved immediately to `config.json` next to the exe.
 
 ## Using it
 
@@ -200,7 +212,7 @@ CP colours (enemies only) compare against **your** combat power, looked up once 
 | `extra_enemy_servers` | `[]` | more servers to try for players with no server, e.g. `["nae-zikel"]` |
 | `kr_tw_region` | `"kr"` | Shugo path for Korean/Taiwanese server ids (`"kr"` or `"tw"`) |
 | `interfaces` | `[]` | Npcap adapters to sniff; empty = all, including the loopback adapter (ExitLag etc.) |
-| `opacity`, `position` | | overlay look and place |
+| `opacity_focused`, `opacity_unfocused` | `1.0`, `0.6` | overlay transparency (also in ⚙ Settings) |
 | `auto_update` | `true` | download and install new releases (see *Automatic updates*) |
 | `update_repo` | `"CynicaGaming/shugo-tracker"` | GitHub repo the updater follows |
 | `opcodes` | | packet opcodes — see *After a game patch* |

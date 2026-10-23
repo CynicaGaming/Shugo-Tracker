@@ -28,7 +28,6 @@ DEFAULT_CONFIG = {
     "extra_enemy_servers": [],
     "kr_tw_region": "kr",
     "interfaces": [],
-    "opacity": 0.9,
     "position": [40, 200],
     "auto_update": True,
     "update_repo": "CynicaGaming/Shugo-Tracker",
@@ -38,8 +37,6 @@ DEFAULT_CONFIG = {
     "window_size": [560, 760],
     "overlay": True,
     "hotkey": "ctrl+shift+s",
-    "opacity": 0.97,
-    "idle_opacity": 0.6,
     "window_pos": [80, 80],
     "detail_workers": 4,
     "requests_per_second": 6.0,
@@ -238,7 +235,9 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     from .search_ui import SearchWindow
     from .updater import Updater
 
-    from .desktop import GlobalHotkey, SingleInstance, Tray
+    from .desktop import GlobalHotkey, SingleInstance, Tray, folder_size
+    from .settings import migrate
+    from .settings_ui import SettingsServices
 
     instance = None
     if not (demo or screenshot):
@@ -249,6 +248,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
                 return 0
             instance = None
 
+    migrate(cfg)
     log = _file_logger()
     log(f"Shugo Tracker v{__version__}" + (" (demo data)" if demo else ""))
     session = None
@@ -291,13 +291,50 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     favorites = Favorites(None if (demo or screenshot) else os.path.join(HERE, "favorites.json"))
     if screenshot:
         cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [], "factions": [],
-               "idle_opacity": 1.0, "opacity": 1.0, "pill_pos": [560, 60]}
-    for old in ("region", "faction", "max_level_only"):
-        cfg.pop(old, None)
+               "opacity_focused": 1.0, "opacity_unfocused": 1.0, "pill_pos": [560, 60]}
     win = SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
                        on_update=on_update,
                        version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir)
     post = win.inbox.put
+    if not screenshot:
+        win.save_cfg = lambda: save_config(config_path, cfg)
+
+    def change_hotkey(text: str):
+        old = extras.pop("hotkey", None)
+        if old:
+            old.stop()
+        hk = GlobalHotkey(text, lambda: post(("toggle",)))
+        if screenshot or hk.start():
+            if not screenshot:
+                extras["hotkey"] = hk
+            win.hotkey_text = text
+            win.set_hotkey_ok(True)
+            return True, None
+        if old:                      # keep the previous shortcut working
+            again = GlobalHotkey(old.text, lambda: post(("toggle",)))
+            if again.start():
+                extras["hotkey"] = again
+        return False, hk.error or "not available"
+
+    def cache_size() -> int:
+        size = folder_size(cache_dir) if cache_dir and os.path.isdir(cache_dir) else 0
+        cp = api.cache_path
+        return size + (os.path.getsize(cp) if cp and os.path.exists(cp) else 0)
+
+    def clear_cache() -> int:
+        before = cache_size()
+        api.clear_caches()
+        if cache_dir and os.path.isdir(cache_dir):
+            for root, _dirs, files in os.walk(cache_dir):
+                for f in files:
+                    try:
+                        os.remove(os.path.join(root, f))
+                    except OSError:
+                        pass
+        return max(0, before - cache_size())
+
+    win.settings_services = SettingsServices(change_hotkey=change_hotkey, clear_cache=clear_cache,
+                                             cache_size=cache_size, data_dir=HERE, set_request_rate=api.set_rate)
     if instance:
         instance.on_show = lambda: post(("show",))
     if not screenshot:

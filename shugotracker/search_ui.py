@@ -224,6 +224,8 @@ class SearchWindow:
         self._has_skeletons = False
         self._last_frame = 0.0
         self.profile_view: ProfileView | None = None
+        self.settings_view = None
+        self.settings_services = None            # SettingsServices, set by the app
 
         self.root = tk.Tk()
         self.root.title("Shugo Tracker")
@@ -239,8 +241,9 @@ class SearchWindow:
             self.root.overrideredirect(True)   # our own title bar replaces the Windows frame
         else:
             self._dark_titlebar()
-        self.opacity = float(cfg.get("opacity", 0.97))
-        self.idle_opacity = float(cfg.get("idle_opacity", 0.6))
+        from .settings import migrate
+        migrate(cfg)
+        self.save_cfg: Callable[[], None] = lambda: None   # set by the app
         self.hotkey_text = cfg.get("hotkey", "ctrl+shift+s")
         self.hotkey_ok = False                  # set by the app once the global hotkey is registered
         self._pointer_left_at: float | None = None
@@ -295,6 +298,8 @@ class SearchWindow:
             collapse = self._title_button(head, "—", self.collapse)
             collapse.pack(side="right")
             self.hotkey_cap = tk.Label(head, text="", bg=SURFACE, fg=FG_FAINT, font=self.f_tiny, padx=5)
+        gear = self._title_button(head, "⚙", self.open_settings, hover=ACCENT)
+        gear.pack(side="right")
         self.pin = tk.Label(head, bg=BG, font=self.f_small, cursor="hand2", padx=4)
         self.pin.pack(side="right", padx=(0, 4))
         self.pin.bind("<Button-1>", lambda e: self._toggle_pin())
@@ -386,7 +391,8 @@ class SearchWindow:
             self.grip.bind("<ButtonPress-1>", self._resize_start)
             self.grip.bind("<B1-Motion>", self._resize_move)
             self.grip.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
-            self.search_entry.bind("<Button-1>", lambda e: self.root.focus_force(), add="+")
+            # A click on a frameless window doesn't activate it on Windows: do it ourselves
+            self.root.bind_all("<ButtonPress-1>", self._activate_on_click, add="+")
             self.root.after(50, self._style_window)
             # 1px border drawn as four edge lines (placed above the packed content)
             self._edges = [tk.Frame(self.root, bg=BORDER) for _ in range(4)]
@@ -616,9 +622,9 @@ class SearchWindow:
             self._drain()
             self._sync_update_button()
             now = time.monotonic()
-            if now - getattr(self, "_last_fade_check", 0) > 0.2:
+            if now - getattr(self, "_last_fade_check", 0) > 0.15:
                 self._last_fade_check = now
-                self._idle_fade(now)
+                self._update_opacity(now)
             if self.profile_view is None:
                 if self._dirty:
                     self._render()
@@ -873,10 +879,39 @@ class SearchWindow:
             return
         self.profile_view.destroy()
         self.profile_view = None
-        self.top.pack(fill="x", padx=PAD, pady=(PAD, 4))
+        self._show_main()
+
+    def _show_main(self):
+        self.top.pack(fill="x", padx=PAD, pady=(6, 4))
         self.status.pack(fill="x", pady=(4, 4))
         self.list_wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(0, PAD))
+        if self.overlay:
+            self._lift_chrome()
         self._mark()
+
+    # ═════ settings ═════
+    def open_settings(self):
+        if self.settings_view is not None:
+            self.close_settings()
+            return
+        from .settings_ui import SettingsView
+        if self.profile_view:
+            self.profile_view.destroy()
+            self.profile_view = None
+        self.top.pack_forget()
+        self.status.pack_forget()
+        self.list_wrap.pack_forget()
+        self.settings_view = SettingsView(self, self.settings_services)
+        self.settings_view.frame.pack(fill="both", expand=True)
+        if self.overlay:
+            self._lift_chrome()
+
+    def close_settings(self):
+        if self.settings_view is None:
+            return
+        self.settings_view.destroy()
+        self.settings_view = None
+        self._show_main()
 
     # ═════ overlay window ═════
     def _title_button(self, parent, text, cmd, hover=FG):
@@ -904,7 +939,7 @@ class SearchWindow:
         hwnd = window_handle(self.root)
         if hwnd:
             round_corners(hwnd)
-        self._set_alpha(self.opacity)
+        self._update_opacity(time.monotonic(), immediate=True)
 
     def _drag_start(self, e):
         self._drag = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
@@ -931,22 +966,52 @@ class SearchWindow:
             except tk.TclError:
                 pass
 
-    def _idle_fade(self, now: float):
-        """Fade the overlay while the pointer is elsewhere (e.g. playing), back to full on hover."""
-        if not self.overlay or self.root.state() == "withdrawn":
+    def _hwnd(self):
+        if getattr(self, "_hwnd_cache", None) is None:
+            from .desktop import window_handle
+            self._hwnd_cache = window_handle(self.root)
+        return self._hwnd_cache
+
+    def is_foreground(self) -> bool:
+        """Is the overlay the active window? (Asks Windows; Tk's own focus tracking is unreliable here.)"""
+        from .desktop import foreground_hwnd, is_same_app_window
+        fg, ours = foreground_hwnd(), self._hwnd()
+        if fg is None or ours is None:
+            return self.root.focus_get() is not None
+        return is_same_app_window(fg, ours)
+
+    def _activate_on_click(self, _e=None):
+        if self.root.state() == "withdrawn" or self.is_foreground():
             return
+        from .desktop import activate
+        if self._hwnd():
+            activate(self._hwnd())
+        self.root.focus_force()
+
+    def _update_opacity(self, now: float, immediate: bool = False):
+        """Focused opacity while the overlay is active (or pointed at), unfocused opacity otherwise."""
+        if self.root.state() == "withdrawn":
+            return
+        if not immediate and now < getattr(self, "_preview_until", 0):
+            return                      # a Settings slider is showing its value
+        from .settings import decide_opacity
         x, y = self.root.winfo_pointerxy()
         rx, ry = self.root.winfo_rootx(), self.root.winfo_rooty()
-        inside = rx <= x < rx + self.root.winfo_width() and ry <= y < ry + self.root.winfo_height()
-        if inside:
-            self._pointer_left_at = None
-            self._set_alpha(self.opacity)
-            return
-        if self._pointer_left_at is None:
-            self._pointer_left_at = now
-        typing_here = self.root.focus_get() is not None    # our window still has the keyboard
-        if now - self._pointer_left_at > 1.5 and not typing_here:
-            self._set_alpha(self.idle_opacity)
+        hovering = rx <= x < rx + self.root.winfo_width() and ry <= y < ry + self.root.winfo_height()
+        target = decide_opacity(self.cfg, self.is_foreground(), hovering)
+        if self._current_alpha is not None and target < self._current_alpha and not immediate:
+            # going see-through: wait a moment so passing the pointer over the edge doesn't flicker
+            if self._pointer_left_at is None:
+                self._pointer_left_at = now
+            if now - self._pointer_left_at < 0.4:
+                return
+        self._pointer_left_at = None
+        self._set_alpha(target)
+
+    def preview_opacity(self, value: float):
+        """Settings page: show a slider value for a moment, then the normal rule takes over again."""
+        self._preview_until = time.monotonic() + 1.2
+        self._set_alpha(value)
 
     # collapse to a small bubble
     def collapse(self):
@@ -965,8 +1030,8 @@ class SearchWindow:
         self.root.deiconify()
         self.root.attributes("-topmost", bool(self.cfg.get("always_on_top", True)))
         self.root.lift()
-        self._set_alpha(self.opacity)
         self._pointer_left_at = None
+        self.root.after(50, lambda: self._update_opacity(time.monotonic(), immediate=True))
         self._mark()
 
     def _show_pill(self):
@@ -1038,7 +1103,7 @@ class SearchWindow:
             self.expand()
             if focus:
                 self.root.focus_force()
-                if self.profile_view is None and self.mode == "search":
+                if self.profile_view is None and self.settings_view is None and self.mode == "search":
                     self.search_entry.focus_set()
                     self.search_entry.select_range(0, "end")
         self._hidden_state = None
@@ -1102,11 +1167,14 @@ class SearchWindow:
             (t, lambda: self._set_mode("favorites")),
             (t + 600, lambda: self._toggle_faction("2")),
             (t + 2500, lambda: self._grab(f"{base}-favorites.png")),
-            (t + 2800, self.collapse),
-            (t + 3600, lambda: self._grab_area(f"{base}-pill.png", self.pill, pad=30)),
-            (t + 3800, self.expand),
-            (t + 4400, lambda: self._grab(f"{base}-expanded.png")),
-            (t + 5000, self.close),
+            (t + 2700, self.open_settings),
+            (t + 3500, lambda: self._grab(f"{base}-settings.png")),
+            (t + 3700, self.close_settings),
+            (t + 3900, self.collapse),
+            (t + 4700, lambda: self._grab_area(f"{base}-pill.png", self.pill, pad=30)),
+            (t + 4900, self.expand),
+            (t + 5500, lambda: self._grab(f"{base}-expanded.png")),
+            (t + 6100, self.close),
         ]
         for delay, fn in steps:
             self.root.after(delay, fn)
