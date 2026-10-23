@@ -59,15 +59,24 @@ Details are only requested for cards on screen, newest scroll position first, by
 rate limit (6 requests/s, halved automatically if the server says to slow down). Starting a new search
 cancels the old one's pending requests. Results are cached for 30 minutes.
 
-## Automatic updates
+## Updates
 
-The exe checks this repo's latest GitHub Release at start-up and every 6 hours. When a newer version exists
-it downloads `ShugoTracker.exe` in the background and verifies it against the release's
-`ShugoTracker.exe.sha256`. A green bar then appears under the title — click it to restart into the new
-version. If you just quit instead, the update is installed on exit and the next launch is the new version.
-Your `config.json` and cache are untouched. Turn it off with `"auto_update": false`.
+The **Check for updates** button sits at the top right of the window:
 
-Running from source, the bar only tells you a new version is out (`git pull`).
+| button shows | meaning / what clicking does |
+|---|---|
+| Check for updates | asks GitHub for the latest release |
+| ✓ Up to date | you have the newest version (goes back to *Check for updates* after a few seconds) |
+| ⬇ Download v1.x.y | a newer version exists — click to download it (shows progress) |
+| ⟳ Restart to update | downloaded and checksum-verified — click to switch to the new version |
+
+The app also checks quietly at start-up and every 6 hours, so the button may already say
+**Download** when you open it; nothing is downloaded until you click. If you quit with an update
+downloaded, it's installed on exit. `config.json`, favorites and the cache are kept. Set
+`"auto_update": false` to turn off the automatic checks (the button still works).
+
+Builds made with `build_exe.bat` show **✓ Dev build** and are never replaced; running from source,
+the button opens the release page instead.
 
 ## Development & publishing
 
@@ -99,7 +108,7 @@ Working locally:
 | `always_on_top` | `true` | pin the window above other windows |
 | `detail_workers` | `4` | parallel detail requests |
 | `requests_per_second` | `6.0` | starting request rate (adapts down automatically) |
-| `auto_update` | `true` | download and install new releases |
+| `auto_update` | `true` | check for new releases at start-up and every 6 hours |
 | `update_repo` | `"CynicaGaming/Shugo-Tracker"` | GitHub repo the updater follows |
 
 The remaining keys belong to the experimental nearby overlay below.

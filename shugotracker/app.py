@@ -269,7 +269,8 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 900], "regions": [], "factions": []}
     for old in ("region", "faction", "max_level_only"):
         cfg.pop(old, None)
-    SearchWindow(api, cfg, on_close=on_close, favorites=favorites, update_banner=updater.banner, on_update=on_update,
+    SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
+                 on_update=on_update,
                  version=__version__, initial_query=query, screenshot=screenshot).run()
     return 0
 

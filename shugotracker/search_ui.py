@@ -35,6 +35,7 @@ ACCENT_FG = "#1a1306"
 ELYOS = "#6aa8ff"
 ASMO = "#b98cff"
 RED = "#ff6b6b"
+GREEN = "#5fd38a"
 LEGION = "#9fd0a8"
 SKEL_A = "#22262f"
 SKEL_B = "#2c313c"
@@ -137,14 +138,13 @@ class ImageLoader:
 
 class SearchWindow:
     def __init__(self, api: Api, cfg: dict, on_close: Callable[[], None], favorites: Favorites | None = None,
-                 update_banner: Callable[[], str | None] = lambda: None,
-                 on_update: Callable[[], bool] = lambda: False, version: str = "",
+                 updater=None, on_update: Callable[[], bool] = lambda: False, version: str = "",
                  initial_query: str | None = None, screenshot: str | None = None):
         self.api = api
         self.cfg = cfg
         self.on_close_cb = on_close
-        self.update_banner = update_banner
-        self.on_update = on_update
+        self.updater = updater                  # Updater or None
+        self.on_update = on_update              # installs the downloaded update and relaunches
         self.favorites = favorites or Favorites(None)
 
         self.mode = "search"          # search | favorites
@@ -160,7 +160,7 @@ class SearchWindow:
         self.hover_star = False
         self._dirty = True
         self._debounce = None
-        self._banner_text = None
+        self._update_look = None
         self._view: list[Character] = []
         self._has_skeletons = False
         self._last_frame = 0.0
@@ -214,6 +214,11 @@ class SearchWindow:
         self.pin.pack(side="right")
         self.pin.bind("<Button-1>", lambda e: self._toggle_pin())
         self._paint_pin()
+        self.update_btn = tk.Label(head, font=self.f_small, padx=10, pady=2, cursor="hand2")
+        if self.updater is not None:
+            self.update_btn.pack(side="right", padx=(0, 8))
+            self.update_btn.bind("<Button-1>", lambda e: self._update_click())
+        self._sync_update_button()
 
         # Search / Favorites tabs
         tabs = tk.Frame(self.top, bg=BG)
@@ -227,9 +232,6 @@ class SearchWindow:
         self.tab_line = tk.Frame(self.top, bg=BORDER, height=1)
         self.tab_line.pack(fill="x")
 
-        self.banner = tk.Label(self.root, text="", bg="#203a2a", fg="#bff0cf", font=self.f_small,
-                               anchor="w", padx=PAD, pady=5, cursor="hand2")
-        self.banner.bind("<Button-1>", lambda e: self._update_now())
 
         # search box
         self.box = tk.Frame(self.top, bg=SURFACE_2, highlightthickness=1, highlightbackground=BORDER,
@@ -498,7 +500,7 @@ class SearchWindow:
     def _tick(self):
         try:
             self._drain()
-            self._sync_banner()
+            self._sync_update_button()
             now = time.monotonic()
             if self.profile_view is None:
                 if self._dirty:
@@ -745,34 +747,40 @@ class SearchWindow:
         self.list_wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(0, PAD))
         self._mark()
 
-    # ═════ update banner ═════
-    def _sync_banner(self):
-        text = self.update_banner()
-        if text == self._banner_text:
-            return
-        self._banner_text = text
-        if text:
-            self.banner.config(text=text)
-            first = next((w for w in self.root.pack_slaves() if w is not self.banner), None)
-            if first is not None:
-                self.banner.pack(fill="x", side="top", before=first)
-            else:
-                self.banner.pack(fill="x", side="top")
-        else:
-            self.banner.pack_forget()
+    # ═════ update button ═════
+    UPDATE_STYLES = {
+        "plain": (SURFACE, FG_DIM), "accent": (ACCENT, ACCENT_FG), "busy": (SURFACE, FG_DIM),
+        "ok": (SURFACE, GREEN), "error": (SURFACE, RED),
+    }
 
-    def _update_now(self):
-        if self._banner_text and "restart" in self._banner_text:
+    def _sync_update_button(self):
+        if self.updater is None:
+            return
+        look = self.updater.button()
+        if look == self._update_look:
+            return
+        self._update_look = look
+        text, style = look
+        bg, fg = self.UPDATE_STYLES.get(style, self.UPDATE_STYLES["plain"])
+        self.update_btn.config(text=text, bg=bg, fg=fg, cursor="watch" if style == "busy" else "hand2")
+
+    def _update_click(self):
+        if self.updater is None:
+            return
+        if self.updater.click(webbrowser.open) == "restart":
             self._save_geometry()
             if self.on_update():
                 self.images.close()
                 self.root.destroy()
+        self._sync_update_button()
 
     # ═════ screenshots (CI) ═════
     def _schedule_screenshots(self, path: str):
         base = path[:-4] if path.endswith(".png") else path
         steps = [
+            (500, self._update_click),
             (900, lambda: self._grab(f"{base}-loading.png")),
+            (3500, lambda: self._grab(f"{base}-update-checked.png")),
             (7000, lambda: self._grab(f"{base}.png")),
             (7200, lambda: self._view and self.toggle_favorite(self._view[0])),
             (7400, lambda: self._view and self.open_profile(self._view[0])),
