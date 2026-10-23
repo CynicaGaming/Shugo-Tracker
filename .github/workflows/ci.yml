@@ -23,7 +23,7 @@ jobs:
         run: |
           python -m shugotracker.app --search-cli Luna *> live.txt
           $code = $LASTEXITCODE
-          Get-Content live.txt | Select-Object -First 40 | ForEach-Object { Write-Output "::notice title=live::$_" }
+          Get-Content live.txt | Select-Object -Last 9 | ForEach-Object { Write-Output "::notice title=live::$_" }
           exit $code
 
       - name: UI screenshots (demo data)
