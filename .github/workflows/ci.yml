@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: windows-latest
@@ -39,3 +42,18 @@ jobs:
           name: ui-screenshots
           path: ui-*.png
           if-no-files-found: warn
+
+      - name: Publish screenshots to the ci-screenshots branch
+        if: always() && github.event_name != 'pull_request'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path ui-demo.png)) { exit 0 }
+          New-Item -ItemType Directory -Force shots | Out-Null
+          Copy-Item ui-*.png shots\
+          Set-Location shots
+          git init -q -b ci-screenshots
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "UI screenshots for ${{ github.sha }}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-screenshots

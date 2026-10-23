@@ -272,6 +272,11 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
 
 
 def _search_cli(name: str) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     import threading as _t
     from .aion2api import SUB_REGIONS, Api, rank
     api = Api(workers=4)
@@ -290,12 +295,11 @@ def _search_cli(name: str) -> int:
     api.search(name, SUB_REGIONS, size=10, on_done=on_done)
     done.wait(30)
     top = rank(found, name)[:10]
-    pending = _t.Semaphore(0)
     for c in top:
-        api.want(c, lambda ch: pending.release())
-    for c in top:
-        if c.status == "loading":
-            pending.acquire(timeout=30)
+        api.want(c, lambda ch: None)
+    deadline = time.time() + 30
+    while any(c.status == "loading" for c in top) and time.time() < deadline:
+        time.sleep(0.1)
     for c in top:
         print(f"  {c.name:14} {c.class_name:12} Lv{c.level:<3} {c.server_name:12} {c.region:4} {c.faction:9} "
               f"GS {c.gear_score or '-':>5}  CP {c.combat_power or '-':>8}  [{c.status}]")
