@@ -229,3 +229,9 @@ class CachingTests(unittest.TestCase):
         self.assertEqual(luna.status, "loading")          # too old to show: skeleton, then real numbers
         self.assertTrue(done.wait(5))
         self.assertEqual(luna.combat_power, 50566)
+
+
+class RankStabilityTests(unittest.TestCase):
+    def test_same_results_in_any_arrival_order(self):
+        chars, _ = a.parse_search(SEARCH_JSON)
+        self.assertEqual([c.key for c in a.rank(chars, "luna")], [c.key for c in a.rank(chars[::-1], "luna")])

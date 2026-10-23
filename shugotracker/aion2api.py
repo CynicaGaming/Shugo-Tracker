@@ -133,7 +133,7 @@ def rank(results: list[Character], keyword: str) -> list[Character]:
     def score(c: Character):
         n = c.name.casefold()
         tier = 0 if n == k else 1 if n.startswith(k) else 2
-        return (tier, -c.level, len(c.name), c.name.casefold())
+        return (tier, -c.level, len(c.name), c.name.casefold(), c.region, c.server_id, c.char_id)
     return sorted(results, key=score)
 
 
