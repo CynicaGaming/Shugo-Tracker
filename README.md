@@ -23,7 +23,8 @@ and links to Shugo.GG profiles, but it is not made by or affiliated with Shugo.G
 2. Run it. SmartScreen may warn the first time because the exe isn't code-signed: *More info → Run anyway*.
    No administrator rights or extra installs are needed.
 
-`config.json`, `favorites.json`, `character_cache.json` and `shugo-tracker.log` are kept next to the exe.
+`config.json`, `favorites.json`, the cache and `shugo-tracker.log` are kept in `%APPDATA%\ShugoTracker`, so they
+survive updates and moving the exe (older versions kept them next to the exe; they're moved over on first start).
 `ShugoTracker.exe --demo` shows the window with made-up characters (no network).
 
 ## The overlay
@@ -36,7 +37,6 @@ windowed** mode):
 | drag the title bar | move it |
 | ◢ (bottom-right corner) | resize it |
 | — | collapse to a small Shugo bubble; drag the bubble anywhere, click it to expand |
-| **Ctrl+Shift+S** | hide / show from anywhere, including in-game (shown on the title bar) |
 | ⚙ | settings |
 | tray icon | Show / hide, Quit |
 | ✕ | quit |
@@ -48,12 +48,11 @@ waiting, the ⚙ turns gold.
 
 | | |
 |---|---|
-| Window | always on top; close to tray |
-| Shortcut | click it and press a new key combination |
+| Window | opacity (100% by default); always on top; close to tray |
 | Startup & updates | start with Windows; check for updates automatically; check now |
 | Data | cache size and Clear; open the folder with settings, favorites and cache |
 
-Everything is saved immediately to `config.json` next to the exe.
+Everything is saved immediately.
 
 ## Using it
 
@@ -88,7 +87,7 @@ Details are only requested for cards on screen, newest scroll position first, by
 rate limit (6 requests/s, halved automatically if the server says to slow down). Starting a new search
 cancels the old one's pending requests.
 
-Caching (all next to the app, in `character_cache.json` and `cache/`):
+Caching (in the data folder, `character_cache.json` and `cache/`):
 
 - card numbers are kept for 7 days and shown instantly; if older than 30 minutes they refresh quietly;
 - profiles are kept for 7 days and shown instantly; if older than 10 minutes they refresh quietly;

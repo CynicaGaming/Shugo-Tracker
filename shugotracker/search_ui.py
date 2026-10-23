@@ -42,10 +42,11 @@ LEGION = "#9fd0a8"
 SKEL_A = "#22262f"
 SKEL_B = "#2c313c"
 
-CARD_H = 72
-CARD_GAP = 8
-PAD = 14
-PORTRAIT = 48
+CARD_H = 50
+CARD_GAP = 4
+PAD = 10
+PORTRAIT = 34
+SHORT_REGION = {"nae": "NA-E", "naw": "NA-W", "eu": "EU", "la": "LATAM", "as": "Asia"}
 PAGE_SIZE = 30
 
 CLASS_COLORS = {
@@ -231,8 +232,8 @@ class SearchWindow:
         self.root.title("Shugo Tracker")
         self.overlay = True                      # frameless window with our own title bar (always)
         self.root.configure(bg=BG)
-        self.root.minsize(460, 420)
-        w, h = cfg.get("window_size", [560, 760])
+        self.root.minsize(360, 320)
+        w, h = cfg.get("window_size", [420, 600])
         x, y = cfg.get("window_pos", [80, 80])
         self.root.geometry(f"{int(w)}x{int(h)}+{int(x)}+{int(y)}")
         self.root.attributes("-topmost", bool(cfg.get("always_on_top", True)))
@@ -245,24 +246,22 @@ class SearchWindow:
         from .settings import migrate
         migrate(cfg)
         self.save_cfg: Callable[[], None] = lambda: None   # set by the app
-        self.hotkey_text = cfg.get("hotkey", "ctrl+shift+s")
-        self.hotkey_ok = False                  # set by the app once the global hotkey is registered
         self._hidden_state: str | None = None   # "window" or "pill" while hidden by hotkey / tray
         self.pill: tk.Toplevel | None = None
 
         fams = set(tkfont.families())
         base = "Segoe UI Variable Text" if "Segoe UI Variable Text" in fams else "Segoe UI"
         self.base_font = base
-        self.f_body = tkfont.Font(family=base, size=10)
-        self.f_bold = tkfont.Font(family=base, size=10, weight="bold")
-        self.f_small = tkfont.Font(family=base, size=9)
-        self.f_tiny = tkfont.Font(family=base, size=8)
-        self.f_name = tkfont.Font(family=base, size=12, weight="bold")
-        self.f_cp = tkfont.Font(family=base, size=14, weight="bold")
-        self.f_input = tkfont.Font(family=base, size=12)
-        self.f_title = tkfont.Font(family=base, size=11, weight="bold")
-        self.f_big = tkfont.Font(family=base, size=18, weight="bold")
-        self.f_star = tkfont.Font(family="Segoe UI Symbol", size=13)
+        self.f_body = tkfont.Font(family=base, size=9)
+        self.f_bold = tkfont.Font(family=base, size=9, weight="bold")
+        self.f_small = tkfont.Font(family=base, size=8)
+        self.f_tiny = tkfont.Font(family=base, size=7)
+        self.f_name = tkfont.Font(family=base, size=10, weight="bold")
+        self.f_cp = tkfont.Font(family=base, size=11, weight="bold")
+        self.f_input = tkfont.Font(family=base, size=10)
+        self.f_title = tkfont.Font(family=base, size=9, weight="bold")
+        self.f_big = tkfont.Font(family=base, size=13, weight="bold")
+        self.f_star = tkfont.Font(family="Segoe UI Symbol", size=11)
 
         self.images = ImageLoader(os.path.join(cache_dir, "images") if cache_dir else None)
         self._prefetch_job = None
@@ -278,23 +277,23 @@ class SearchWindow:
     # ═════ layout ═════
     def _build(self, version: str):
         head = self.titlebar = tk.Frame(self.root, bg=BG)
-        head.pack(fill="x", padx=(PAD, 6), pady=(8, 0))
-        logo = tk.Canvas(head, width=20, height=20, bg=BG, highlightthickness=0)
+        head.pack(fill="x", padx=(PAD, 4), pady=(5, 0))
+        logo = tk.Canvas(head, width=16, height=16, bg=BG, highlightthickness=0)
         self._icons = {}
         try:
             from PIL import ImageTk
             from .desktop import make_icon_image
-            self._icons["logo"] = ImageTk.PhotoImage(make_icon_image(20))
-            logo.create_image(10, 10, image=self._icons["logo"])
+            self._icons["logo"] = ImageTk.PhotoImage(make_icon_image(16))
+            logo.create_image(8, 8, image=self._icons["logo"])
             self._icons["app"] = [ImageTk.PhotoImage(make_icon_image(s)) for s in (64, 32, 16)]
             self.root.iconphoto(True, *self._icons["app"])
         except Exception:  # noqa: BLE001  (no Pillow: plain gold disc)
-            logo.create_oval(1, 1, 19, 19, fill=ACCENT, outline="")
-        logo.pack(side="left", padx=(0, 7))
+            logo.create_oval(1, 1, 15, 15, fill=ACCENT, outline="")
+        logo.pack(side="left", padx=(0, 6))
         title = tk.Label(head, text="Shugo Tracker", bg=BG, fg=FG, font=self.f_title)
         title.pack(side="left")
         ver = tk.Label(head, text=f"v{version}", bg=BG, fg=FG_FAINT, font=self.f_tiny)
-        ver.pack(side="left", padx=(6, 0), pady=(3, 0))
+        ver.pack(side="left", padx=(5, 0), pady=(2, 0))
         if self.overlay:
             for w in (head, logo, title, ver):
                 w.bind("<ButtonPress-1>", self._drag_start)
@@ -304,26 +303,25 @@ class SearchWindow:
             close.pack(side="right")
             collapse = self._title_button(head, "—", self.collapse)
             collapse.pack(side="right")
-            self.hotkey_cap = tk.Label(head, text="", bg=SURFACE, fg=FG_FAINT, font=self.f_tiny, padx=5)
         self.gear = self._title_button(head, "⚙", self.open_settings, hover=ACCENT)
         self.gear.bind("<Leave>", lambda e: self._paint_gear(), add="")
         self.gear.pack(side="right")
-        self.pin = tk.Label(head, bg=BG, font=self.f_small, cursor="hand2", padx=6)
+        self.pin = tk.Label(head, bg=BG, font=self.f_small, cursor="hand2", padx=5)
         self.pin.pack(side="right", padx=(0, 2))
         self.pin.bind("<Button-1>", lambda e: self._toggle_pin())
         self._paint_pin()
         self._sync_update_button()
 
         self.top = tk.Frame(self.root, bg=BG)
-        self.top.pack(fill="x", padx=PAD, pady=(6, 4))
+        self.top.pack(fill="x", padx=PAD, pady=(2, 2))
 
         # Search / Favorites tabs
         tabs = tk.Frame(self.top, bg=BG)
-        tabs.pack(fill="x", pady=(4, 0))
-        self.tab_search = tk.Label(tabs, text="Search", font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
+        tabs.pack(fill="x", pady=(2, 0))
+        self.tab_search = tk.Label(tabs, text="Search", font=self.f_bold, padx=2, pady=2, cursor="hand2", bg=BG)
         self.tab_search.pack(side="left")
-        self.tab_fav = tk.Label(tabs, font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
-        self.tab_fav.pack(side="left", padx=(18, 0))
+        self.tab_fav = tk.Label(tabs, font=self.f_bold, padx=2, pady=2, cursor="hand2", bg=BG)
+        self.tab_fav.pack(side="left", padx=(14, 0))
         self.tab_search.bind("<Button-1>", lambda e: self._set_mode("search"))
         self.tab_fav.bind("<Button-1>", lambda e: self._set_mode("favorites"))
         self.tab_line = tk.Frame(self.top, bg=BORDER, height=1)
@@ -333,50 +331,48 @@ class SearchWindow:
         # search box
         self.box = tk.Frame(self.top, bg=SURFACE_2, highlightthickness=1, highlightbackground=BORDER,
                             highlightcolor=ACCENT)
-        self.box.pack(fill="x", pady=(10, 8))
-        tk.Label(self.box, text="⌕", bg=SURFACE_2, fg=FG_DIM, font=self.f_input).pack(side="left", padx=(10, 2))
+        self.box.pack(fill="x", pady=(6, 6))
+        tk.Label(self.box, text="⌕", bg=SURFACE_2, fg=FG_DIM, font=self.f_input).pack(side="left", padx=(8, 0))
         self.search_var = tk.StringVar()
         self.search_entry = tk.Entry(self.box, textvariable=self.search_var, bg=SURFACE_2, fg=FG,
                                      insertbackground=FG, relief="flat", font=self.f_input, highlightthickness=0)
-        self.search_entry.pack(side="left", fill="x", expand=True, ipady=8, padx=(2, 4))
+        self.search_entry.pack(side="left", fill="x", expand=True, ipady=4, padx=(2, 4))
         self.search_entry.bind("<Return>", lambda e: self._start_search(now=True))
         self.search_entry.bind("<Escape>", lambda e: self.search_var.set(""))
         self.search_var.trace_add("write", lambda *a: self._on_type())
         self.placeholder = tk.Label(self.box, text="Search character name…", bg=SURFACE_2, fg=FG_FAINT,
                                     font=self.f_input)
-        self.placeholder.place(x=36, rely=0.5, anchor="w")
+        self.placeholder.place(x=28, rely=0.5, anchor="w")
         self.placeholder.bind("<Button-1>", lambda e: self.search_entry.focus_set())
-        go = tk.Label(self.box, text="Search", bg=ACCENT, fg=ACCENT_FG, font=self.f_body, padx=14, pady=6,
+        go = tk.Label(self.box, text="Search", bg=ACCENT, fg=ACCENT_FG, font=self.f_body, padx=10, pady=2,
                       cursor="hand2")
-        go.pack(side="right", padx=4, pady=4)
+        go.pack(side="right", padx=3, pady=3)
         go.bind("<Button-1>", lambda e: self._start_search(now=True))
 
         # filter chips: toggles; nothing selected means "all"
         self.filters = tk.Frame(self.top, bg=BG)
-        self.filters.pack(fill="x", pady=(2, 0))
+        self.filters.pack(fill="x", pady=(0, 0))
         row1 = tk.Frame(self.filters, bg=BG)
         row1.pack(fill="x")
-        self.region_chips = [(r, self._chip(row1, REGION_LABELS[r], lambda k=r: self._toggle_region(k)))
+        self.region_chips = [(r, self._chip(row1, SHORT_REGION[r], lambda k=r: self._toggle_region(k)))
                              for r in SUB_REGIONS]
-        row2 = tk.Frame(self.filters, bg=BG)
-        row2.pack(fill="x", pady=(6, 0))
-        self.faction_chips = [(f, self._chip(row2, label, lambda k=f: self._toggle_faction(k)))
-                              for f, label in FACTIONS]
-        self.clear_chip = tk.Label(row2, text="Clear filters", bg=BG, fg=FG_FAINT, font=self.f_small,
-                                   cursor="hand2", padx=6)
+        tk.Frame(row1, bg=BORDER, width=1, height=14).pack(side="left", padx=(0, 4))
+        self.faction_chips = [(f, self._chip(row1, label, lambda k=f: self._toggle_faction(k)))
+                              for f, label in (("1", "Elyos"), ("2", "Asmo"))]
+        self.clear_chip = tk.Label(row1, text="✕", bg=BG, fg=FG_FAINT, font=self.f_small, cursor="hand2", padx=4)
         self.clear_chip.bind("<Button-1>", lambda e: self._clear_filters())
         self._paint_chips()
         self._paint_tabs()
 
         self.status = tk.Label(self.root, text="Type a character name and press Enter.", bg=BG, fg=FG_DIM,
-                               font=self.f_small, anchor="w", padx=PAD)
-        self.status.pack(fill="x", pady=(4, 4))
+                               font=self.f_tiny, anchor="w", padx=PAD)
+        self.status.pack(fill="x", pady=(2, 2))
 
         # virtualized card list
         self.list_wrap = tk.Frame(self.root, bg=BG)
-        self.list_wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(0, PAD))
-        self.canvas = tk.Canvas(self.list_wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=16)
-        self.scroll = tk.Scrollbar(self.list_wrap, orient="vertical", command=self._yview, width=10)
+        self.list_wrap.pack(fill="both", expand=True, padx=(PAD, 2), pady=(0, 8))
+        self.canvas = tk.Canvas(self.list_wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=12)
+        self.scroll = tk.Scrollbar(self.list_wrap, orient="vertical", command=self._yview, width=8)
         self.scroll.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.configure(yscrollcommand=self.scroll.set)
@@ -416,8 +412,8 @@ class SearchWindow:
         self._menu_char: Character | None = None
 
     def _chip(self, parent, text, cmd):
-        lb = tk.Label(parent, text=text, font=self.f_small, padx=10, pady=3, cursor="hand2")
-        lb.pack(side="left", padx=(0, 6))
+        lb = tk.Label(parent, text=text, font=self.f_small, padx=6, pady=1, cursor="hand2")
+        lb.pack(side="left", padx=(0, 4))
         lb.bind("<Button-1>", lambda e: cmd())
         return lb
 
@@ -694,75 +690,76 @@ class SearchWindow:
             msg, sub = "No matches with these filters", "Clear the filters to see all results."
         else:
             msg, sub = f"No characters match “{self.keyword}”", "Try a different spelling."
-        cv.create_text(width / 2, 70, text=msg, fill=FG, font=self.f_name, tags="card")
-        cv.create_text(width / 2, 96, text=sub, fill=FG_DIM, font=self.f_small, tags="card")
+        cv.create_text(width / 2, 48, text=msg, fill=FG, font=self.f_name, tags="card")
+        cv.create_text(width / 2, 68, text=sub, fill=FG_DIM, font=self.f_small, tags="card")
 
     def _draw_skeleton(self, cv, y, width, a, b):
-        x1 = width - 6
-        round_rect(cv, 0, y, x1, y + CARD_H, 12, fill=SURFACE, outline="", tags="card")
-        round_rect(cv, 12, y + 12, 12 + PORTRAIT, y + 12 + PORTRAIT, 10, fill=a, outline="", tags="card")
-        round_rect(cv, 72, y + 16, 72 + 130, y + 30, 6, fill=a, outline="", tags="card")
-        round_rect(cv, 72, y + 42, 72 + 190, y + 54, 6, fill=b, outline="", tags="card")
-        round_rect(cv, x1 - 120, y + 16, x1 - 40, y + 32, 6, fill=a, outline="", tags="card")
-        round_rect(cv, x1 - 94, y + 42, x1 - 40, y + 54, 6, fill=b, outline="", tags="card")
+        x1 = width - 4
+        round_rect(cv, 0, y, x1, y + CARD_H, 8, fill=SURFACE, outline="", tags="card")
+        round_rect(cv, 8, y + 8, 8 + PORTRAIT, y + 8 + PORTRAIT, 7, fill=a, outline="", tags="card")
+        round_rect(cv, 52, y + 11, 52 + 110, y + 22, 5, fill=a, outline="", tags="card")
+        round_rect(cv, 52, y + 30, 52 + 160, y + 39, 5, fill=b, outline="", tags="card")
+        round_rect(cv, x1 - 96, y + 11, x1 - 30, y + 23, 5, fill=a, outline="", tags="card")
+        round_rect(cv, x1 - 74, y + 30, x1 - 30, y + 39, 5, fill=b, outline="", tags="card")
 
     def _star_box(self, width, y):
-        x1 = width - 6
-        return x1 - 34, y + 8, x1 - 6, y + 36
+        x1 = width - 4
+        return x1 - 26, y + 13, x1 - 4, y + CARD_H - 13
 
     def _draw_card(self, cv, c: Character, y, width, hover: bool, a, b) -> bool:
-        x1 = width - 6
-        round_rect(cv, 0, y, x1, y + CARD_H, 12, fill=HOVER if hover else SURFACE,
+        x1 = width - 4
+        round_rect(cv, 0, y, x1, y + CARD_H, 8, fill=HOVER if hover else SURFACE,
                    outline=BORDER if hover else "", tags="card")
-        px, py = 12, y + 12
-        img = self.images.get(c.portrait, PORTRAIT, crop_top=True)
+        px, py = 8, y + 8
+        img = self.images.get(c.portrait, PORTRAIT, radius=7, crop_top=True)
         if img:
             cv.create_image(px, py, image=img, anchor="nw", tags="card")
         else:
             col = CLASS_COLORS.get(c.class_name, FG_DIM)
-            round_rect(cv, px, py, px + PORTRAIT, py + PORTRAIT, 10, fill=SURFACE_2, outline="", tags="card")
+            round_rect(cv, px, py, px + PORTRAIT, py + PORTRAIT, 7, fill=SURFACE_2, outline="", tags="card")
             cv.create_text(px + PORTRAIT / 2, py + PORTRAIT / 2, text=(c.class_name[:1] or "?"), fill=col,
                            font=self.f_name, tags="card")
-        tx = 72
-        name_id = cv.create_text(tx, y + 23, text=c.name, fill=FG, font=self.f_name, anchor="w", tags="card")
-        bx = cv.bbox(name_id)[2] + 8
+        tx, l1, l2 = 52, y + 17, y + 35
+        name_id = cv.create_text(tx, l1, text=c.name, fill=FG, font=self.f_name, anchor="w", tags="card")
+        bx = cv.bbox(name_id)[2] + 6
         if c.legion:
-            leg_id = cv.create_text(bx - 2, y + 24, text=f"<{c.legion}>", fill=LEGION, font=self.f_body, anchor="w",
+            leg_id = cv.create_text(bx - 2, l1 + 1, text=f"<{c.legion}>", fill=LEGION, font=self.f_small, anchor="w",
                                     tags="card")
-            bx = cv.bbox(leg_id)[2] + 8
+            bx = cv.bbox(leg_id)[2] + 6
         fac_col = ELYOS if c.race == 1 else ASMO if c.race == 2 else FG_DIM
-        pill_w = self.f_tiny.measure(c.faction) + 12
-        round_rect(cv, bx, y + 15, bx + pill_w, y + 31, 8, fill=SURFACE_2, outline=fac_col, tags="card")
-        cv.create_text(bx + pill_w / 2, y + 23, text=c.faction, fill=fac_col, font=self.f_tiny, tags="card")
+        fac = {"Asmodian": "Asmo"}.get(c.faction, c.faction)
+        pill_w = self.f_tiny.measure(fac) + 10
+        round_rect(cv, bx, l1 - 7, bx + pill_w, l1 + 7, 7, fill=SURFACE_2, outline=fac_col, tags="card")
+        cv.create_text(bx + pill_w / 2, l1, text=fac, fill=fac_col, font=self.f_tiny, tags="card")
         cls_col = CLASS_COLORS.get(c.class_name, FG_DIM)
-        cid = cv.create_text(tx, y + 49, text=c.class_name or "Unknown", fill=cls_col, font=self.f_small,
+        cid = cv.create_text(tx, l2, text=c.class_name or "Unknown", fill=cls_col, font=self.f_small,
                              anchor="w", tags="card")
-        rest = f"  ·  Lv {c.level}  ·  {c.server_name} ({REGION_LABELS.get(c.region, c.region.upper())})"
-        cv.create_text(cv.bbox(cid)[2], y + 49, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
+        rest = f" · {c.level} · {c.server_name} · {SHORT_REGION.get(c.region, c.region.upper())}"
+        cv.create_text(cv.bbox(cid)[2], l2, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
 
-        # favorite star (top right)
+        # favorite star (right edge, centred)
         fav = c.key in self.favorites
         sx0, sy0, sx1, sy1 = self._star_box(width, y)
         star_hover = hover and self.hover_star
         cv.create_text((sx0 + sx1) / 2, (sy0 + sy1) / 2, text="★" if fav else "☆",
                        fill=ACCENT if fav or star_hover else FG_FAINT, font=self.f_star, tags="card")
 
-        rx = x1 - 44
+        rx = x1 - 30
         if c.status == "ok":
-            cv.create_text(rx, y + 22, text=fmt_int(c.combat_power), fill=ACCENT, font=self.f_cp, anchor="e",
+            cv.create_text(rx, l1, text=fmt_int(c.combat_power), fill=ACCENT, font=self.f_cp, anchor="e",
                            tags="card")
-            cv.create_text(rx - self.f_cp.measure(fmt_int(c.combat_power)) - 6, y + 24, text="CP", fill=FG_FAINT,
+            cv.create_text(rx - self.f_cp.measure(fmt_int(c.combat_power)) - 4, l1 + 1, text="CP", fill=FG_FAINT,
                            font=self.f_tiny, anchor="e", tags="card")
-            cv.create_text(rx, y + 49, text=f"GS {fmt_int(c.gear_score)}", fill=FG, font=self.f_small, anchor="e",
+            cv.create_text(rx, l2, text=f"GS {fmt_int(c.gear_score)}", fill=FG, font=self.f_small, anchor="e",
                            tags="card")
             return False
         if c.status == "error":
-            cv.create_text(rx, y + 22, text="couldn't load", fill=RED, font=self.f_small, anchor="e", tags="card")
-            cv.create_text(rx, y + 49, text="right-click → refresh", fill=FG_FAINT, font=self.f_tiny, anchor="e",
+            cv.create_text(rx, l1, text="couldn't load", fill=RED, font=self.f_small, anchor="e", tags="card")
+            cv.create_text(rx, l2, text="right-click → refresh", fill=FG_FAINT, font=self.f_tiny, anchor="e",
                            tags="card")
             return False
-        round_rect(cv, rx - 80, y + 14, rx, y + 31, 6, fill=a, outline="", tags="card")
-        round_rect(cv, rx - 54, y + 42, rx, y + 55, 6, fill=b, outline="", tags="card")
+        round_rect(cv, rx - 66, l1 - 6, rx, l1 + 6, 5, fill=a, outline="", tags="card")
+        round_rect(cv, rx - 44, l2 - 5, rx, l2 + 5, 5, fill=b, outline="", tags="card")
         return True
 
     def _update_status(self, view):
@@ -916,7 +913,7 @@ class SearchWindow:
 
     # ═════ overlay window ═════
     def _title_button(self, parent, text, cmd, hover=FG):
-        b = tk.Label(parent, text=text, bg=BG, fg=FG_DIM, font=self.f_body, padx=9, pady=1, cursor="hand2")
+        b = tk.Label(parent, text=text, bg=BG, fg=FG_DIM, font=self.f_body, padx=7, pady=0, cursor="hand2")
         b.bind("<Button-1>", lambda e: cmd())
         b.bind("<Enter>", lambda e: b.config(fg=hover, bg=SURFACE_2))
         b.bind("<Leave>", lambda e: b.config(fg=FG_DIM, bg=BG))
@@ -927,19 +924,19 @@ class SearchWindow:
             w.lift()
         self.grip.lift()
 
-    def set_hotkey_ok(self, ok: bool):
-        """Show the hotkey on the title bar once it is actually registered."""
-        self.hotkey_ok = ok
-        if self.overlay and ok:
-            from .desktop import hotkey_label
-            self.hotkey_cap.config(text=hotkey_label(self.hotkey_text))
-            self.hotkey_cap.pack(side="right", padx=(0, 8), pady=(1, 0), before=self.pin)
-
     def _style_window(self):
         from .desktop import round_corners, window_handle
         hwnd = window_handle(self.root)
         if hwnd:
             round_corners(hwnd)
+        self.apply_opacity()
+
+    def apply_opacity(self):
+        from .settings import clamp_opacity
+        try:
+            self.root.attributes("-alpha", clamp_opacity(self.cfg.get("window_opacity", 1.0)))
+        except tk.TclError:
+            pass
 
     def _drag_start(self, e):
         self._drag = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
@@ -996,6 +993,7 @@ class SearchWindow:
             self.pill.withdraw()
         self.root.deiconify()
         self.root.attributes("-topmost", bool(self.cfg.get("always_on_top", True)))
+        self.apply_opacity()
         self.root.lift()
         self._mark()
 

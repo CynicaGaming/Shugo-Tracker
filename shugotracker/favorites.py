@@ -27,6 +27,16 @@ class Favorites:
         except (OSError, ValueError):
             pass
 
+    def merge_from(self, path: str) -> int:
+        """Add favorites from another favorites.json (keeps ours on conflicts). Returns how many were added."""
+        other = Favorites(path)
+        added = 0
+        for k, d in other._items.items():
+            if k not in self._items:
+                self._items[k] = d
+                added += 1
+        return added
+
     def save(self) -> None:
         if not self.path:
             return

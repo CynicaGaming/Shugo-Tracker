@@ -18,6 +18,48 @@ from .updater import Updater, __version__
 FROZEN = getattr(sys, "frozen", False)
 # Next to ShugoTracker.exe when built, else the project folder.
 HERE = os.path.dirname(sys.executable) if FROZEN else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _data_dir() -> str:
+    """
+    Where settings, favorites and caches live. The packaged app uses %APPDATA%\\ShugoTracker so they survive
+    updates, moving the exe, or running a freshly downloaded copy from somewhere else.
+    """
+    if FROZEN and os.name == "nt" and os.environ.get("APPDATA"):
+        return os.path.join(os.environ["APPDATA"], "ShugoTracker")
+    return HERE
+
+
+DATA = _data_dir()
+USER_FILES = ("config.json", "favorites.json", "character_cache.json")
+
+
+def migrate_user_files(old_dir: str, new_dir: str) -> list[str]:
+    """Bring files that older versions kept next to the exe into the data folder. Returns what moved."""
+    import shutil
+    moved = []
+    if os.path.normcase(os.path.abspath(old_dir)) == os.path.normcase(os.path.abspath(new_dir)):
+        return moved
+    os.makedirs(new_dir, exist_ok=True)
+    for name in USER_FILES:
+        src, dst = os.path.join(old_dir, name), os.path.join(new_dir, name)
+        if not os.path.isfile(src):
+            continue
+        try:
+            if name == "favorites.json" and os.path.exists(dst):
+                from .favorites import Favorites
+                merged = Favorites(dst)
+                if merged.merge_from(src):
+                    merged.save()
+            elif not os.path.exists(dst):
+                shutil.copy2(src, dst)
+            else:
+                continue
+            os.replace(src, src + ".moved")      # leave a trace, never read again
+            moved.append(name)
+        except OSError:
+            pass
+    return moved
 DEFAULT_CONFIG = {
     "my_server": "",
     "lookup_allies": True,
@@ -34,8 +76,6 @@ DEFAULT_CONFIG = {
     "regions": [],
     "factions": [],
     "always_on_top": True,
-    "window_size": [560, 760],
-    "hotkey": "ctrl+shift+s",
     "window_pos": [80, 80],
     "opcodes": {},
 }
@@ -65,7 +105,7 @@ class App:
         self.log_lines: list[str] = []
         self._log_file = None
         try:
-            self._log_file = open(os.path.join(HERE, "shugo-tracker.log"), "w", encoding="utf-8")
+            self._log_file = open(os.path.join(DATA, "shugo-tracker.log"), "w", encoding="utf-8")
         except OSError:
             pass
         self.capture = None
@@ -232,7 +272,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     from .search_ui import SearchWindow
     from .updater import Updater
 
-    from .desktop import GlobalHotkey, SingleInstance, Tray, folder_size
+    from .desktop import SingleInstance, Tray, folder_size
     from .settings import migrate
     from .settings_ui import SettingsServices
 
@@ -260,8 +300,8 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     if demo:
         from .demo import DemoSession
         session = DemoSession()
-    cache_dir = None if (demo or screenshot) else os.path.join(HERE, "cache")
-    api = Api(cache_path=None if demo else os.path.join(HERE, "character_cache.json"), session=session,
+    cache_dir = None if (demo or screenshot) else os.path.join(DATA, "cache")
+    api = Api(cache_path=None if demo else os.path.join(DATA, "character_cache.json"), session=session,
               profile_dir=os.path.join(cache_dir, "profiles") if cache_dir else None,
               log=log)
     updater = Updater(repo=cfg.get("update_repo") or "CynicaGaming/Shugo-Tracker",
@@ -297,33 +337,16 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         return True
 
     from .favorites import Favorites
-    favorites = Favorites(None if (demo or screenshot) else os.path.join(HERE, "favorites.json"))
+    favorites = Favorites(None if (demo or screenshot) else os.path.join(DATA, "favorites.json"))
     if screenshot:
-        cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [], "factions": [],
-               "pill_pos": [560, 60]}
+        cfg = {**cfg, "window_pos": [40, 40], "window_size": [420, 600], "layout_version": 2, "regions": [],
+               "factions": [], "pill_pos": [400, 60]}
     win = SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
                        on_update=on_update,
                        version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir)
     post = win.inbox.put
     if not screenshot:
         win.save_cfg = lambda: save_config(config_path, cfg)
-
-    def change_hotkey(text: str):
-        old = extras.pop("hotkey", None)
-        if old:
-            old.stop()
-        hk = GlobalHotkey(text, lambda: post(("toggle",)))
-        if screenshot or hk.start():
-            if not screenshot:
-                extras["hotkey"] = hk
-            win.hotkey_text = text
-            win.set_hotkey_ok(True)
-            return True, None
-        if old:                      # keep the previous shortcut working
-            again = GlobalHotkey(old.text, lambda: post(("toggle",)))
-            if again.start():
-                extras["hotkey"] = again
-        return False, hk.error or "not available"
 
     def cache_size() -> int:
         size = folder_size(cache_dir) if cache_dir and os.path.isdir(cache_dir) else 0
@@ -342,23 +365,14 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
                         pass
         return max(0, before - cache_size())
 
-    win.settings_services = SettingsServices(change_hotkey=change_hotkey, clear_cache=clear_cache,
-                                             cache_size=cache_size, data_dir=HERE)
+    win.settings_services = SettingsServices(clear_cache=clear_cache, cache_size=cache_size, data_dir=DATA)
     if instance:
         instance.on_show = lambda: post(("show",))
     if not screenshot:
-        hk = GlobalHotkey(cfg.get("hotkey", "ctrl+shift+s"), lambda: post(("toggle",)))
-        if hk.start():
-            extras["hotkey"] = hk
-            win.set_hotkey_ok(True)
-        elif hk.error and hk.error != "unsupported":
-            log(f"hotkey {cfg.get('hotkey')!r}: {hk.error}")
         tray = Tray(on_toggle=lambda: post(("toggle",)), on_quit=lambda: post(("quit",)))
         if tray.start():
             extras["tray"] = tray
             win.tray_ok = True
-    else:
-        win.set_hotkey_ok(True)   # show the key label in screenshots
     win.run()
     return 0
 
@@ -460,7 +474,7 @@ def _bench(name: str) -> int:
 
 def _file_logger():
     try:
-        f = open(os.path.join(HERE, "shugo-tracker.log"), "w", encoding="utf-8")
+        f = open(os.path.join(DATA, "shugo-tracker.log"), "w", encoding="utf-8")
     except OSError:
         f = None
 
@@ -499,7 +513,7 @@ def _selftest_relaunch(path: str, child: bool) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Shugo Tracker: AION 2 character search with gear score & combat power")
-    ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
+    ap.add_argument("--config", default=os.path.join(DATA, "config.json"))
     ap.add_argument("--nearby", action="store_true",
                     help="EXPERIMENTAL: in-game overlay of nearby players (needs Npcap + administrator)")
     ap.add_argument("--search-cli", metavar="NAME", help="search from the command line and print results")
@@ -520,6 +534,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.selftest_relaunch:
         return _selftest_relaunch(args.selftest_relaunch, child=args.selftest_child)
 
+    if DATA != HERE and args.config == os.path.join(DATA, "config.json"):
+        try:
+            migrate_user_files(HERE, DATA)
+        except OSError:
+            pass
     cfg = load_config(args.config)
     if not os.path.exists(args.config):
         save_config(args.config, cfg)  # first run: write the defaults so they can be edited

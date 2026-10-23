@@ -15,17 +15,12 @@
   "auto_update": true,
   "update_repo": "CynicaGaming/Shugo-Tracker",
   "always_on_top": true,
-  "window_size": [
-    560,
-    760
-  ],
   "window_pos": [
     80,
     80
   ],
   "regions": [],
   "factions": [],
-  "hotkey": "ctrl+shift+s",
   "opcodes": {
     "damage": [
       "04 38"
