@@ -27,8 +27,12 @@ def name_of(server: int) -> str:
     return SERVER_NAMES.get(server, str(server))
 
 
+def re_slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", name.lower())
+
+
 def slug_of(server: int) -> str:
-    return re.sub(r"[^a-z0-9]+", "", name_of(server).lower())
+    return re_slug(name_of(server))
 
 
 def shugo_server_path(server: int, kr_tw_region: str = "kr") -> str | None:

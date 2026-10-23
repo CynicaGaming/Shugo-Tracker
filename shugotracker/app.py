@@ -31,7 +31,15 @@ DEFAULT_CONFIG = {
     "opacity": 0.9,
     "position": [40, 200],
     "auto_update": True,
-    "update_repo": "CynicaGaming/shugo-tracker",
+    "update_repo": "CynicaGaming/Shugo-Tracker",
+    "region": "all",
+    "faction": "all",
+    "max_level_only": False,
+    "always_on_top": True,
+    "window_size": [520, 720],
+    "window_pos": [80, 80],
+    "detail_workers": 4,
+    "requests_per_second": 6.0,
     "opcodes": {},
 }
 
@@ -221,9 +229,107 @@ def _wire_demo(app: App) -> None:
     threading.Thread(target=feed, daemon=True).start()
 
 
+def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | None = None,
+                screenshot: str | None = None) -> int:
+    from .aion2api import Api
+    from .search_ui import SearchWindow
+    from .updater import Updater
+
+    log = _file_logger()
+    log(f"Shugo Tracker v{__version__}" + (" (demo data)" if demo else ""))
+    session = None
+    if demo:
+        from .demo import DemoSession
+        session = DemoSession()
+    api = Api(cache_path=None if demo else os.path.join(HERE, "character_cache.json"), session=session,
+              workers=int(cfg.get("detail_workers", 4)), rate=float(cfg.get("requests_per_second", 6.0)), log=log)
+    updater = Updater(repo=cfg.get("update_repo") or "CynicaGaming/Shugo-Tracker",
+                      enabled=bool(cfg.get("auto_update", True)) and not demo and not screenshot, log=log)
+    updater.start()
+
+    def on_close():
+        updater.stop()
+        api.close()
+        if not screenshot:
+            save_config(config_path, cfg)
+        if updater.state == "ready":
+            updater.apply(restart=False)  # next launch runs the new version
+
+    def on_update() -> bool:
+        save_config(config_path, cfg)
+        if not updater.apply(restart=False):
+            return False
+        updater.stop()
+        api.close()
+        updater.relaunch(sys.argv[1:])
+        return True
+
+    if screenshot:
+        cfg = {**cfg, "window_pos": [40, 40]}
+    SearchWindow(api, cfg, on_close=on_close, update_banner=updater.banner, on_update=on_update,
+                 version=__version__, initial_query=query, screenshot=screenshot).run()
+    return 0
+
+
+def _search_cli(name: str) -> int:
+    import threading as _t
+    from .aion2api import SUB_REGIONS, Api, rank
+    api = Api(workers=4)
+    found, done = [], _t.Event()
+    left = [len(SUB_REGIONS)]
+    lock = _t.Lock()
+
+    def on_done(region, chars, total, err):
+        with lock:
+            print(f"{region}: {total} matches" + (f" (error: {err})" if err else ""))
+            found.extend(chars)
+            left[0] -= 1
+            if left[0] == 0:
+                done.set()
+
+    api.search(name, SUB_REGIONS, size=10, on_done=on_done)
+    done.wait(30)
+    top = rank(found, name)[:10]
+    pending = _t.Semaphore(0)
+    for c in top:
+        api.want(c, lambda ch: pending.release())
+    for c in top:
+        if c.status == "loading":
+            pending.acquire(timeout=30)
+    for c in top:
+        print(f"  {c.name:14} {c.class_name:12} Lv{c.level:<3} {c.server_name:12} {c.region:4} {c.faction:9} "
+              f"GS {c.gear_score or '-':>5}  CP {c.combat_power or '-':>8}  [{c.status}]")
+    api.close()
+    return 0 if found else 1
+
+
+def _file_logger():
+    try:
+        f = open(os.path.join(HERE, "shugo-tracker.log"), "w", encoding="utf-8")
+    except OSError:
+        f = None
+
+    def log(msg: str) -> None:
+        line = time.strftime("%H:%M:%S ") + msg
+        if sys.stdout is not None:
+            print(line, flush=True)
+        if f:
+            try:
+                f.write(line + "\n")
+                f.flush()
+            except (OSError, ValueError):
+                pass
+    return log
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Shugo Tracker: enemies/allies in render range with Shugo.GG gear score & combat power")
+    ap = argparse.ArgumentParser(description="Shugo Tracker: AION 2 character search with gear score & combat power")
     ap.add_argument("--config", default=os.path.join(HERE, "config.json"))
+    ap.add_argument("--nearby", action="store_true",
+                    help="EXPERIMENTAL: in-game overlay of nearby players (needs Npcap + administrator)")
+    ap.add_argument("--search-cli", metavar="NAME", help="search from the command line and print results")
+    ap.add_argument("--query", metavar="NAME", help="start the search window with this search")
+    ap.add_argument("--screenshot", metavar="PNG", help="save screenshots of the search window, then exit")
     ap.add_argument("--replay", metavar="PCAP", help="decode a Wireshark capture instead of live traffic")
     ap.add_argument("--port", type=int, action="append", help="with --replay: game server port(s), e.g. 13328")
     ap.add_argument("--console", action="store_true", help="print a table instead of showing the overlay")
@@ -236,6 +342,13 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(args.config)
     if not os.path.exists(args.config):
         save_config(args.config, cfg)  # first run: write the defaults so they can be edited
+
+    if args.search_cli:
+        return _search_cli(args.search_cli)
+    nearby = args.nearby or args.replay or args.console
+    if not nearby:
+        return _run_search(cfg, args.config, demo=args.demo, query=args.query, screenshot=args.screenshot)
+
     app = App(cfg, debug=args.debug)
     if args.demo:
         _wire_demo(app)

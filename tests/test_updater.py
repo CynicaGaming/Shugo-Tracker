@@ -43,10 +43,10 @@ class FakeSession:
 
 
 def release(tag, new_exe, sha=None):
-    base = "https://github.com/CynicaGaming/shugo-tracker/releases/download/" + tag
+    base = "https://github.com/" + up.DEFAULT_REPO + "/releases/download/" + tag
     sha = sha or hashlib.sha256(new_exe).hexdigest()
     return {
-        "https://api.github.com/repos/CynicaGaming/shugo-tracker/releases/latest": FakeResp(json_data={
+        "https://api.github.com/repos/" + up.DEFAULT_REPO + "/releases/latest": FakeResp(json_data={
             "tag_name": tag, "html_url": "x",
             "assets": [{"name": up.EXE_ASSET, "browser_download_url": base + "/exe"},
                        {"name": up.SHA_ASSET, "browser_download_url": base + "/sha"}]}),
@@ -112,7 +112,7 @@ class UpdateFlowTests(unittest.TestCase):
         self.assertIsNone(u.banner())
 
     def test_no_release_yet(self):
-        u = self.make({"https://api.github.com/repos/CynicaGaming/shugo-tracker/releases/latest": FakeResp(404)})
+        u = self.make({"https://api.github.com/repos/" + up.DEFAULT_REPO + "/releases/latest": FakeResp(404)})
         u.check_and_download()
         self.assertEqual(u.state, "uptodate")
 

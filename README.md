@@ -1,38 +1,50 @@
 # Shugo Tracker
 
-An always-on-top overlay for **AION 2** that lists **every player in render range**, split into collapsible
-**Enemies** and **Allies** sections, with each player's **gear score** and **combat power** from
-[Shugo.GG](https://shugo.gg). It reads the game's own network traffic through Npcap.
+A fast, modern **AION 2 (Global) character search**. Type a name and get every matching character across
+all Global regions — class, level, server, faction, **gear score** and **combat power** — with one click to
+open their [Shugo.GG](https://shugo.gg) profile.
 
-```
-⚔ Shugo Tracker   3 enemies · 4 allies   ⟲ – ✕
-▾ ENEMIES  3   top 151.3k CP
- ●  ⚡Morg          Templar     1,482  151.3k   ← red: stronger than you
- ●  Kesh            Sorcerer    2,670  96.2k    ← amber: within ±10%
- ●  ✝Vyrelle ?      Chanter     1,193  71.4k    ← green: weaker · ✝ dead · ? server guessed
-▸ ALLIES  4                                    ← click a header to collapse / expand
-▾ UNIDENTIFIED  1                              ← faction not known yet (only shown when non-empty)
- ●  Nameless        …           …      …
- Aerin 100.0k CP · capturing 1 game connection(s)
-```
+- Searches NA East, NA West, Europe, Latin America and Asia at the same time.
+- Results appear instantly as skeleton cards; gear score and combat power fill in for the cards you can see,
+  and more results load as you scroll — so even a common name with thousands of matches stays smooth.
+- Filter by region, faction, or max-level characters. Pin the window on top of the game.
+- Updates itself from this repo's releases.
 
-It is passive: it reads packets as they reach your PC and never sends, modifies or injects anything, and
-never touches game memory — the same approach the community DPS meters use.
-
-*Shugo Tracker is an independent fan tool; it uses Shugo.GG's public profile pages but is not made by or affiliated with Shugo.GG.*
+*Shugo Tracker is an independent fan tool. It reads the same public NCSOFT character endpoints Shugo.GG uses
+and links to Shugo.GG profiles, but it is not made by or affiliated with Shugo.GG or NCSOFT.*
 
 ## Install & run
 
-1. Install **Npcap** from [npcap.com](https://npcap.com) with **"WinPcap API-compatible Mode"** ticked.
-   (Npcap's licence doesn't allow bundling it, so it's a separate install.)
-2. Download **`ShugoTracker.exe`** from the latest
-   [release](https://github.com/CynicaGaming/shugo-tracker/releases/latest), put it in its own folder and run it.
-   Windows asks for administrator rights — packet capture needs them. SmartScreen may warn the first time
-   because the exe isn't code-signed: *More info → Run anyway*.
-3. Play AION 2 in **borderless windowed** mode so the overlay can sit on top.
+1. Download **`ShugoTracker.exe`** from the latest
+   [release](https://github.com/CynicaGaming/Shugo-Tracker/releases/latest) and put it in its own folder.
+2. Run it. SmartScreen may warn the first time because the exe isn't code-signed: *More info → Run anyway*.
+   No administrator rights or extra installs are needed.
 
-`config.json`, `shugo-tracker.log` and `shugo_cache.json` are kept next to the exe. Start it with `--demo`
-(e.g. from a shortcut) to see the overlay with made-up players, no game needed.
+`config.json`, `character_cache.json` and `shugo-tracker.log` are kept next to the exe.
+`ShugoTracker.exe --demo` shows the window with made-up characters (no network).
+
+## Using it
+
+| | |
+|---|---|
+| type a name, press Enter | search (it also searches by itself after you pause typing) |
+| region / faction / *Max level only* chips | narrow the results |
+| click a card | open the character on Shugo.GG |
+| right-click a card | open on Shugo.GG / copy name / refresh details |
+| 📌 | keep the window above the game (play in borderless windowed) |
+
+Search matches anywhere in the name (“luna” also finds “Aluna”); exact matches and higher levels come first.
+
+## Where the data comes from
+
+Shugo.GG's own search and profile pages read two public NCSOFT endpoints; Shugo Tracker calls them directly:
+
+- **Search:** `api-search.plaync.com/aion2global/search/v2/character` — one request per region, 30 results a page.
+- **Details:** `aion2.plaync.com/api/character/info` — combat power and item level (gear score).
+
+Details are only requested for cards on screen, newest scroll position first, by 4 parallel workers sharing a
+rate limit (6 requests/s, halved automatically if the server says to slow down). Starting a new search
+cancels the old one's pending requests. Results are cached for 30 minutes.
 
 ## Automatic updates
 
@@ -61,11 +73,33 @@ The repo holds the source; the exe is only built when you publish.
 Working locally:
 
 - `run.bat` — run from source (sets up a venv, runs `python -m shugotracker.app`).
+- `python -m shugotracker.app --search-cli NAME` — search from a terminal.
 - `build_exe.bat` — build `dist\ShugoTracker.exe` on your PC (version shows as `0.0.0-dev`; dev builds never
   auto-update).
 - `python -m unittest discover -s tests -t .` — tests.
 
-## Who shows up, and where
+## config.json
+
+| key | default | meaning |
+|---|---|---|
+| `region` / `faction` / `max_level_only` | `all` / `all` / `false` | last filters used |
+| `always_on_top` | `true` | pin the window above other windows |
+| `detail_workers` | `4` | parallel detail requests |
+| `requests_per_second` | `6.0` | starting request rate (adapts down automatically) |
+| `auto_update` | `true` | download and install new releases |
+| `update_repo` | `"CynicaGaming/Shugo-Tracker"` | GitHub repo the updater follows |
+
+The remaining keys belong to the experimental nearby overlay below.
+
+## Experimental: nearby players overlay
+
+Not part of the normal app yet — it will come back as an add-on. Run `ShugoTracker.exe --nearby`
+**as administrator** with [Npcap](https://npcap.com) installed ("WinPcap API-compatible Mode") to get an
+overlay that reads the game's network traffic and lists players in render range as Enemies / Allies.
+It is read-only (no injection, no memory reading), but it is unproven against live play and does not yet
+scale to crowded areas. Third-party tools may be against AION 2's terms of service; use at your own risk.
+
+### Who shows up, and where
 
 **Everyone in render range.** Players are added when the server sends their spawn record (they come into
 view, or you load a map), removed when it sends the record that they left view, marked ✝ when they die,
@@ -88,7 +122,7 @@ then the opposite-faction server paired with it (Siel ↔ Israphel), then `extra
 servers first if they're fighting you). The Shugo profile's faction then settles enemy vs ally. A profile
 found this way is marked **`?`**; hover to see which server was used, right-click → *Retry lookup*.
 
-## Overlay controls
+### Overlay controls
 
 | | |
 |---|---|
@@ -102,7 +136,7 @@ found this way is marked **`?`**; hover to see which server was used, right-clic
 
 CP colours (enemies only) compare against **your** combat power, looked up once your character is seen.
 
-## config.json
+### Nearby overlay settings (config.json)
 
 | key | default | meaning |
 |---|---|---|
@@ -120,14 +154,14 @@ CP colours (enemies only) compare against **your** combat power, looked up once 
 | `update_repo` | `"CynicaGaming/shugo-tracker"` | GitHub repo the updater follows |
 | `opcodes` | | packet opcodes — see *After a game patch* |
 
-## Being polite to Shugo.GG
+### Being polite to Shugo.GG
 
 Lookups go one at a time, at most one every `lookup_interval_s`, in this order: players fighting you,
 enemies, unidentified, allies. Results are cached for 30 minutes (misses for 15) and HTTP 429/5xx backs off.
 In a crowded town the queue grows (≈30 lookups a minute) — set `lookup_allies` to `false` if you mostly
 care about enemies.
 
-## After a game patch
+### After a game patch
 
 Patches sometimes renumber opcodes (the June 2026 patch shifted the `xx 36` family by one). If names stop
 appearing or players never leave the list, update the `opcodes` block in `config.json` from the open-source
@@ -141,7 +175,7 @@ python -m shugotracker.app --replay fight.pcapng --port 13328 --no-lookup --debu
 The despawn (`42 36` / `35 36`) and map-load (`21 36`) records are the least battle-tested part: the meters
 this is based on use them for NPCs and world objects; using them for players is new here.
 
-## Limitations
+### Limitations
 
 - Player names only arrive with spawn records. Someone already in range when you start the tracker stays
   invisible until they re-enter view or you load a map.

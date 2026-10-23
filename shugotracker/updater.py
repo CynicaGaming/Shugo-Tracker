@@ -25,7 +25,7 @@ import requests
 
 from ._version import __version__
 
-DEFAULT_REPO = "CynicaGaming/shugo-tracker"
+DEFAULT_REPO = "CynicaGaming/Shugo-Tracker"
 EXE_ASSET = "ShugoTracker.exe"
 SHA_ASSET = "ShugoTracker.exe.sha256"
 CHECK_EVERY_S = 6 * 3600

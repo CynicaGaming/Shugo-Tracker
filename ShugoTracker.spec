@@ -4,7 +4,7 @@ from PyInstaller.utils.hooks import collect_submodules
 hidden = (
     collect_submodules("scapy.layers")
     + collect_submodules("scapy.arch")
-    + ["scapy.all", "scapy.sendrecv", "scapy.utils", "lz4.block"]
+    + ["scapy.all", "scapy.sendrecv", "scapy.utils", "lz4.block", "PIL.ImageTk"]
 )
 
 a = Analysis(
@@ -23,7 +23,7 @@ exe = EXE(
     [],
     name="ShugoTracker",
     console=False,      # windowed: logs go to shugo-tracker.log next to the exe
-    uac_admin=True,     # Npcap packet capture needs administrator rights
+    uac_admin=False,    # search needs no admin; the experimental --nearby mode must be run as administrator
     upx=False,
     icon=None,
 )

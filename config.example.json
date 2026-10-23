@@ -14,7 +14,21 @@
     200
   ],
   "auto_update": true,
-  "update_repo": "CynicaGaming/shugo-tracker",
+  "update_repo": "CynicaGaming/Shugo-Tracker",
+  "region": "all",
+  "faction": "all",
+  "max_level_only": false,
+  "always_on_top": true,
+  "window_size": [
+    520,
+    720
+  ],
+  "window_pos": [
+    80,
+    80
+  ],
+  "detail_workers": 4,
+  "requests_per_second": 6.0,
   "opcodes": {
     "damage": [
       "04 38"
