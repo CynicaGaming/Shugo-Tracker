@@ -26,6 +26,25 @@ and links to Shugo.GG profiles, but it is not made by or affiliated with Shugo.G
 `config.json`, `favorites.json`, `character_cache.json` and `shugo-tracker.log` are kept next to the exe.
 `ShugoTracker.exe --demo` shows the window with made-up characters (no network).
 
+## The overlay
+
+Shugo Tracker is a frameless, always-on-top window meant to sit over the game (play in **borderless
+windowed** mode):
+
+| | |
+|---|---|
+| drag the title bar | move it |
+| ◢ (bottom-right corner) | resize it |
+| — | collapse to a small Shugo bubble; drag the bubble anywhere, click it to expand |
+| **Ctrl+Shift+S** | hide / show from anywhere, including in-game (shown on the title bar) |
+| tray icon | Show / hide, Quit |
+| ✕ | quit |
+
+It fades while your mouse is elsewhere and you're not typing in it, and comes back to full opacity on
+hover. Starting it again while it's running (even hidden) brings the running copy forward.
+Settings in `config.json`: `hotkey` (e.g. `"alt+f9"`), `opacity`, `idle_opacity`, and `overlay: false` for a
+normal window with a Windows title bar.
+
 ## Using it
 
 | | |
@@ -35,7 +54,7 @@ and links to Shugo.GG profiles, but it is not made by or affiliated with Shugo.G
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add / remove a favorite (see the **★ Favorites** tab) |
 | right-click a card | profile / favorite / open on Shugo.GG / copy name / refresh |
-| 📌 | keep the window above the game (play in borderless windowed) |
+| 📌 | keep the window above other windows |
 
 The profile has tabs for **Gear** (equipment, accessories and Arcana with grade and enchant level),
 **Skills** (Active, Passive and DP, equipped first), **Daevanion** (board progress), **Stats** (primary and
