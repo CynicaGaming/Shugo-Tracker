@@ -228,6 +228,8 @@ class ProfileView:
     def _drop_frames(self):
         for f in getattr(self, "_frames", {}).values():
             f.destroy()
+        if getattr(self, "_transient", None) is not None:
+            self._transient.destroy()     # skeleton / error placeholder
         self._frames: dict[str, tk.Frame] = {}
         self._transient = None
 

@@ -57,7 +57,17 @@ Shugo.GG's own search and profile pages read two public NCSOFT endpoints; Shugo 
 
 Details are only requested for cards on screen, newest scroll position first, by 4 parallel workers sharing a
 rate limit (6 requests/s, halved automatically if the server says to slow down). Starting a new search
-cancels the old one's pending requests. Results are cached for 30 minutes.
+cancels the old one's pending requests.
+
+Caching (all next to the app, in `character_cache.json` and `cache/`):
+
+- card numbers are kept for 7 days and shown instantly; if older than 30 minutes they refresh quietly;
+- profiles are kept for 7 days and shown instantly; if older than 10 minutes they refresh quietly;
+- portraits (1 day) and game icons (30 days) are stored on disk;
+- the same search within 15 minutes is answered from memory;
+- resting the pointer on a card for a moment preloads its profile.
+
+Delete the `cache` folder and `character_cache.json` at any time to start fresh.
 
 ## Updates
 

@@ -862,6 +862,7 @@ class SearchWindow:
             steps.append((t + 900, lambda tb=tab: self._grab(f"{base}-profile-{tb.lower()}.png")))
             t += 1400
         pv = lambda: self.profile_view  # noqa: E731
+        steps.append((t - 200, lambda: self._ui_check(f"{base}-check.txt")))
         steps += [
             (t, lambda: pv() and pv().show_tab("Stats")),
             (t + 800, lambda: pv() and pv().demo_hover_first_stat()),
@@ -876,6 +877,25 @@ class SearchWindow:
         ]
         for delay, fn in steps:
             self.root.after(delay, fn)
+
+    def _ui_check(self, path: str):
+        """CI self-test: once a profile has loaded, no placeholder may remain and the tab must have content."""
+        pv = self.profile_view
+        problems = []
+        if pv is None:
+            problems.append("profile did not open")
+        else:
+            if pv.loading:
+                problems.append("profile still loading")
+            if pv._transient is not None and not pv.animating:
+                problems.append("placeholder left on screen after load")
+            if not pv._frames:
+                problems.append("no tab content was built")
+            visible = [w for w in pv.body_root.pack_slaves()]
+            if len(visible) != 1:
+                problems.append(f"{len(visible)} frames packed in the profile body (expected 1)")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("FAIL: " + "; ".join(problems) if problems else "OK")
 
     def _grab(self, path: str):
         try:

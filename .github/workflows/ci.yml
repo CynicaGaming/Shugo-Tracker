@@ -43,6 +43,15 @@ jobs:
         continue-on-error: true
         run: python -m shugotracker.app --query Luna --screenshot ui-live.png
 
+      - name: UI self-check
+        shell: pwsh
+        run: |
+          foreach ($f in Get-ChildItem ui-*-check.txt) {
+            $r = Get-Content $f
+            Write-Output "::notice title=ui-check::$($f.Name): $r"
+            if ($r -like "FAIL*") { exit 1 }
+          }
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
