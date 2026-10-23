@@ -43,6 +43,15 @@ jobs:
         continue-on-error: true
         run: python -m shugotracker.app --query Luna --screenshot ui-live.png
 
+      - name: App log (update / api lines)
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path shugo-tracker.log) {
+            Get-Content shugo-tracker.log | Select-String -Pattern "update:|api:" | Select-Object -Last 8 |
+              ForEach-Object { Write-Output "::notice title=applog::$_" }
+          }
+
       - name: UI self-check
         shell: pwsh
         run: |
