@@ -1,7 +1,9 @@
 """Shugo Tracker main window: character search, favorites, and full character profiles."""
 from __future__ import annotations
 
+import hashlib
 import io
+import os
 import queue
 import time
 import tkinter as tk
@@ -69,10 +71,24 @@ def round_rect(cv: tk.Canvas, x0, y0, x1, y1, r, **kw):
     return cv.create_polygon(pts, smooth=True, **kw)
 
 
-class ImageLoader:
-    """Downloads images off the UI thread; PhotoImages are created on the UI thread."""
+ICON_KEEP_S = 30 * 86400      # game icons never change
+PORTRAIT_KEEP_S = 86400       # character portraits can
 
-    def __init__(self):
+
+class ImageLoader:
+    """
+    Downloads images off the UI thread (PhotoImages are created on the UI thread) and keeps the
+    downloaded files on disk, so after the first time portraits and icons appear instantly.
+    """
+
+    def __init__(self, cache_dir: str | None = None):
+        self.cache_dir = cache_dir
+        if cache_dir:
+            try:
+                os.makedirs(cache_dir, exist_ok=True)
+                self._prune()
+            except OSError:
+                self.cache_dir = None
         self.enabled = Image is not None
         self._images: OrderedDict[tuple, object] = OrderedDict()
         self._pending: set[tuple] = set()
@@ -95,16 +111,58 @@ class ImageLoader:
             self._pool.submit(self._fetch, key)
         return None
 
+    def _disk_path(self, url: str) -> str | None:
+        if not self.cache_dir:
+            return None
+        return os.path.join(self.cache_dir, hashlib.sha1(url.encode()).hexdigest()[:24] + ".img")
+
+    @staticmethod
+    def _keep_s(url: str) -> float:
+        return PORTRAIT_KEEP_S if "profileimg." in url else ICON_KEEP_S
+
+    def _read_disk(self, url: str) -> bytes | None:
+        path = self._disk_path(url)
+        try:
+            if path and time.time() - os.path.getmtime(path) < self._keep_s(url):
+                with open(path, "rb") as f:
+                    return f.read()
+        except OSError:
+            pass
+        return None
+
+    def _write_disk(self, url: str, data: bytes) -> None:
+        path = self._disk_path(url)
+        if not path:
+            return
+        try:
+            tmp = path + ".tmp"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, path)
+        except OSError:
+            pass
+
+    def _prune(self) -> None:
+        now = time.time()
+        for name in os.listdir(self.cache_dir):
+            path = os.path.join(self.cache_dir, name)
+            try:
+                if now - os.path.getmtime(path) > ICON_KEEP_S:
+                    os.remove(path)
+            except OSError:
+                pass
+
     def _fetch(self, key):
         url, size, radius, crop_top = key
         try:
-            data = self._bytes.get(url)
+            data = self._bytes.get(url) or self._read_disk(url)
             if data is None:
                 r = self._session.get(url, timeout=10)
                 r.raise_for_status()
                 data = r.content
-                if len(self._bytes) < 400:
-                    self._bytes[url] = data
+                self._write_disk(url, data)
+            if len(self._bytes) < 400:
+                self._bytes[url] = data
             im = Image.open(io.BytesIO(data)).convert("RGBA")
             w, h = im.size
             side = min(w, h)
@@ -139,7 +197,8 @@ class ImageLoader:
 class SearchWindow:
     def __init__(self, api: Api, cfg: dict, on_close: Callable[[], None], favorites: Favorites | None = None,
                  updater=None, on_update: Callable[[], bool] = lambda: False, version: str = "",
-                 initial_query: str | None = None, screenshot: str | None = None):
+                 initial_query: str | None = None, screenshot: str | None = None,
+                 cache_dir: str | None = None):
         self.api = api
         self.cfg = cfg
         self.on_close_cb = on_close
@@ -191,7 +250,8 @@ class SearchWindow:
         self.f_big = tkfont.Font(family=base, size=18, weight="bold")
         self.f_star = tkfont.Font(family="Segoe UI Symbol", size=13)
 
-        self.images = ImageLoader()
+        self.images = ImageLoader(os.path.join(cache_dir, "images") if cache_dir else None)
+        self._prefetch_job = None
         self._build(version)
         self.root.after(30, self._tick)
         self.search_entry.focus_set()
@@ -509,7 +569,7 @@ class SearchWindow:
                 elif self._has_skeletons and now - self._last_frame > 0.12:
                     self._render(shimmer_only=True)
                     self._last_frame = now
-            elif self.profile_view.loading and now - self._last_frame > 0.12:
+            elif self.profile_view.animating and now - self._last_frame > 0.12:
                 self.profile_view.shimmer()
                 self._last_frame = now
         finally:
@@ -544,7 +604,7 @@ class SearchWindow:
                 has_skel = True
                 continue
             c = view[i]
-            if c.status == "none":
+            if c.status == "none" or c.stale:
                 self.api.want(c, lambda ch: self.inbox.put(("detail",)))
             has_skel |= self._draw_card(cv, c, y, width, i == self.hover_index, a, b)
         if not view and not loading_any:
@@ -674,9 +734,20 @@ class SearchWindow:
 
     def _set_hover(self, i, on_star):
         if i != self.hover_index or on_star != self.hover_star:
+            if i != self.hover_index:
+                self._schedule_prefetch(i)
             self.hover_index, self.hover_star = i, on_star
             self.canvas.config(cursor="hand2" if i >= 0 else "")
             self._mark()
+
+    def _schedule_prefetch(self, i):
+        """If the pointer rests on a card, start loading its profile so the click opens instantly."""
+        if self._prefetch_job:
+            self.root.after_cancel(self._prefetch_job)
+            self._prefetch_job = None
+        if 0 <= i < len(self._view):
+            c = self._view[i]
+            self._prefetch_job = self.root.after(250, lambda: self.api.prefetch_profile(c))
 
     def _click(self, e):
         i, on_star = self._hit(e.x, e.y)

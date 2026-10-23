@@ -240,7 +240,9 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     if demo:
         from .demo import DemoSession
         session = DemoSession()
+    cache_dir = None if (demo or screenshot) else os.path.join(HERE, "cache")
     api = Api(cache_path=None if demo else os.path.join(HERE, "character_cache.json"), session=session,
+              profile_dir=os.path.join(cache_dir, "profiles") if cache_dir else None,
               workers=int(cfg.get("detail_workers", 4)), rate=float(cfg.get("requests_per_second", 6.0)), log=log)
     updater = Updater(repo=cfg.get("update_repo") or "CynicaGaming/Shugo-Tracker",
                       enabled=bool(cfg.get("auto_update", True)) and not demo and not screenshot, log=log)
@@ -271,7 +273,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         cfg.pop(old, None)
     SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
                  on_update=on_update,
-                 version=__version__, initial_query=query, screenshot=screenshot).run()
+                 version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir).run()
     return 0
 
 
@@ -311,6 +313,65 @@ def _search_cli(name: str) -> int:
     return 0 if found else 1
 
 
+def _bench(name: str) -> int:
+    """Time a search, card numbers and a profile open, cold and then warm (cached), against the live API."""
+    import tempfile
+    import threading as _t
+    from .aion2api import SUB_REGIONS, Api, rank
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+    tmp = tempfile.mkdtemp()
+
+    def run(label: str) -> None:
+        api = Api(cache_path=os.path.join(tmp, "details.json"), profile_dir=os.path.join(tmp, "profiles"))
+        t0 = time.perf_counter()
+        first, done, found, lock, left = [None], _t.Event(), [], _t.Lock(), [len(SUB_REGIONS)]
+
+        def on_done(region, chars, total, err):
+            with lock:
+                if first[0] is None and chars:
+                    first[0] = time.perf_counter() - t0
+                found.extend(chars)
+                left[0] -= 1
+                if not left[0]:
+                    done.set()
+        api.search(name, SUB_REGIONS, on_done=on_done)
+        done.wait(30)
+        t_search = time.perf_counter() - t0
+        top = rank(found, name)[:10]
+        t1 = time.perf_counter()
+        for c in top:
+            api.want(c, lambda ch: None)
+        while any(c.status == "loading" for c in top) and time.perf_counter() - t1 < 30:
+            time.sleep(0.01)
+        t_cards = time.perf_counter() - t1
+        times, fin = {}, _t.Event()
+        t2 = time.perf_counter()
+
+        def on_prof(ch, prof, err):
+            if prof is None:
+                fin.set()
+                return
+            times.setdefault("first", time.perf_counter() - t2)
+            if not prof.equipment_pending:
+                times.setdefault("full", time.perf_counter() - t2)
+                fin.set()
+        api.fetch_profile(top[0], on_prof)
+        fin.wait(30)
+        api.close()
+        print(f"{label}: first results {first[0] or 0:.2f}s, all regions {t_search:.2f}s | "
+              f"10 cards' GS/CP {t_cards:.2f}s | profile first paint {times.get('first', -1):.2f}s, "
+              f"complete {times.get('full', -1):.2f}s")
+
+    run("cold (nothing cached)")
+    run("warm (new app start, cached)")
+    return 0
+
+
 def _file_logger():
     try:
         f = open(os.path.join(HERE, "shugo-tracker.log"), "w", encoding="utf-8")
@@ -337,6 +398,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="EXPERIMENTAL: in-game overlay of nearby players (needs Npcap + administrator)")
     ap.add_argument("--search-cli", metavar="NAME", help="search from the command line and print results")
     ap.add_argument("--query", metavar="NAME", help="start the search window with this search")
+    ap.add_argument("--bench", metavar="NAME", help="time cold vs cached search/profile loading and exit")
     ap.add_argument("--screenshot", metavar="PNG", help="save screenshots of the search window, then exit")
     ap.add_argument("--replay", metavar="PCAP", help="decode a Wireshark capture instead of live traffic")
     ap.add_argument("--port", type=int, action="append", help="with --replay: game server port(s), e.g. 13328")
@@ -353,6 +415,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.search_cli:
         return _search_cli(args.search_cli)
+    if args.bench:
+        return _bench(args.bench)
     nearby = args.nearby or args.replay or args.console
     if not nearby:
         return _run_search(cfg, args.config, demo=args.demo, query=args.query, screenshot=args.screenshot)

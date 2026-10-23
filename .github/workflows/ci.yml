@@ -29,6 +29,13 @@ jobs:
           Get-Content live.txt | Select-Object -Last 9 | ForEach-Object { Write-Output "::notice title=live::$_" }
           exit $code
 
+      - name: Loading-speed benchmark (cold vs cached)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          python -m shugotracker.app --bench Luna *> bench.txt
+          Get-Content bench.txt | Select-Object -Last 4 | ForEach-Object { Write-Output "::notice title=bench::$_" }
+
       - name: UI screenshots (demo data)
         run: python -m shugotracker.app --demo --query Luna --screenshot ui-demo.png
 

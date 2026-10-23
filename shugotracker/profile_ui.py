@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import asdict
 import tkinter as tk
 import webbrowser
 from typing import TYPE_CHECKING
@@ -109,9 +110,10 @@ class ProfileView:
         sb.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.configure(yscrollcommand=sb.set)
-        self.body = tk.Frame(self.canvas, bg=BG)
-        self._win = self.canvas.create_window((0, 0), window=self.body, anchor="nw")
-        self.body.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+        self.body_root = tk.Frame(self.canvas, bg=BG)
+        self.body = self.body_root
+        self._win = self.canvas.create_window((0, 0), window=self.body_root, anchor="nw")
+        self.body_root.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
         self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(self._win, width=e.width - 6))
         self.app.root.bind_all("<MouseWheel>", self._wheel)
 
@@ -127,17 +129,41 @@ class ProfileView:
         self.frame.destroy()
 
     # ───── state ─────
+    GEAR_TABS = {"Gear", "Skills", "Cosmetics"}   # need the equipment call
+
+    @property
+    def animating(self) -> bool:
+        p = self.profile
+        return self.loading or bool(p and p.equipment_pending and self.tab in self.GEAR_TABS)
+
+    @staticmethod
+    def _fingerprint(prof: Profile | None):
+        if prof is None:
+            return None
+        d = asdict(prof)
+        d.pop("cached_at", None)
+        return hash(repr(d))
+
     def set_profile(self, prof: Profile | None, err: str | None):
+        """Called with a cached copy, then a partial (gear pending), then the fresh profile."""
+        if err and self.profile is not None:
+            return  # keep showing what we have; a failed background refresh shouldn't blank the page
+        if prof is not None and self._fingerprint(prof) == self._fingerprint(self.profile):
+            self.profile = prof   # identical data (e.g. cache confirmed by refresh): nothing to redraw
+            return
         self.loading = False
         self.profile, self.error = prof, err
+        self._drop_frames()
         self._paint_hero()
-        self.render()
+        self.render(keep_scroll=True)
 
     def reload(self):
         self.app.api.forget(self.char)
         self.loading, self.profile, self.error = True, None, None
+        self._drop_frames()
         self.render()
-        self.app.api.fetch_profile(self.char, lambda ch, p, e: self.app.inbox.put(("profile", ch, p, e)))
+        self.app.api.fetch_profile(self.char, lambda ch, p, e: self.app.inbox.put(("profile", ch, p, e)),
+                                   force=True)
 
     def show_tab(self, name: str):
         self.tab = name
@@ -199,20 +225,35 @@ class ProfileView:
                 pass
 
     # ───── content ─────
-    def render(self):
+    def _drop_frames(self):
+        for f in getattr(self, "_frames", {}).values():
+            f.destroy()
+        self._frames: dict[str, tk.Frame] = {}
+        self._transient = None
+
+    def render(self, keep_scroll: bool = False):
+        """Show the current tab. Each tab is built once per profile and then just shown again."""
         self._hide_tip()
-        self._first_tip = None
         for name, lb in self.tab_labels.items():
             lb.config(fg=ACCENT if name == self.tab else FG_DIM)
-        for w in self.body.winfo_children():
-            w.destroy()
-        self._img_slots = [s for s in self._img_slots if s[0] is self.portrait]
+        if not hasattr(self, "_frames"):
+            self._drop_frames()
+        y = self.canvas.yview()[0] if keep_scroll else 0
+        for f in self._frames.values():
+            f.pack_forget()
+        if self._transient is not None:
+            self._transient.destroy()
+            self._transient = None
         self._skel_items = []
-        self.canvas.yview_moveto(0)
-        if self.loading:
+
+        p = self.profile
+        if self.loading or (p and p.equipment_pending and self.tab in self.GEAR_TABS):
+            self.body = self._transient = tk.Frame(self.body_root, bg=BG)
+            self.body.pack(fill="x")
             self._skeleton()
-            return
-        if self.error or not self.profile:
+        elif self.error or not p:
+            self.body = self._transient = tk.Frame(self.body_root, bg=BG)
+            self.body.pack(fill="x")
             box = tk.Frame(self.body, bg=BG)
             box.pack(fill="x", pady=30)
             tk.Label(box, text="Couldn't load this profile", bg=BG, fg=FG, font=self.app.f_name).pack()
@@ -221,8 +262,17 @@ class ProfileView:
                              cursor="hand2")
             retry.pack(pady=8)
             retry.bind("<Button-1>", lambda e: self.reload())
-            return
-        getattr(self, f"_tab_{self.tab.lower()}")(self.profile)
+        else:
+            frame = self._frames.get(self.tab)
+            if frame is None:
+                frame = self._frames[self.tab] = tk.Frame(self.body_root, bg=BG)
+                self.body = frame
+                getattr(self, f"_tab_{self.tab.lower()}")(p)
+            self.body = frame
+            frame.pack(fill="x")
+        self.body_root.update_idletasks()
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        self.canvas.yview_moveto(y)
 
     def _skeleton(self):
         cv = tk.Canvas(self.body, bg=BG, height=420, highlightthickness=0)
@@ -368,6 +418,7 @@ class ProfileView:
             round_rect(cv, 0, 0, max(8, width * pct / 100), 8, 4, fill=ACCENT, outline="")
 
     def _tab_stats(self, p: Profile):
+        self._first_tip = None
         for title, stats in (("Primary stats", p.primary_stats), ("Deity stats", p.deity_stats)):
             if not stats:
                 continue

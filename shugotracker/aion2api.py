@@ -70,6 +70,7 @@ class Character:
     gear_score: int | None = None
     title: str | None = None
     legion: str | None = None
+    stale: bool = False             # showing cached numbers that are being refreshed
     error: str | None = None
 
     @property
@@ -164,12 +165,20 @@ class RateLimiter:
             self._pause_until = time.monotonic() + (retry_after or 5.0)
 
 
+DETAILS_FRESH_S = 30 * 60          # cached card numbers newer than this are not refetched
+DETAILS_KEEP_S = 7 * 86400         # older ones are still shown instantly, then refreshed in the background
+SEARCH_KEEP_S = 15 * 60            # identical searches within this window are answered from memory
+PROFILE_FRESH_S = 10 * 60
+PROFILE_KEEP_S = 7 * 86400
+PROFILE_DISK_MAX = 300
+
+
 class Api:
-    """Search (parallel over sub-regions) and lazily-fetched character details."""
+    """Search (parallel over sub-regions) and lazily-fetched character details, with caching."""
 
     def __init__(self, cache_path: str | None = None, workers: int = 4, rate: float = 6.0,
-                 cache_ttl_s: float = 1800, log: Callable[[str], None] | None = None,
-                 session: requests.Session | None = None):
+                 cache_ttl_s: float = DETAILS_FRESH_S, log: Callable[[str], None] | None = None,
+                 session: requests.Session | None = None, profile_dir: str | None = None):
         self.log = log or (lambda s: None)
         self.session = session or requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
@@ -180,7 +189,14 @@ class Api:
         self._cache_lock = threading.Lock()
         self._search_pool = ThreadPoolExecutor(max_workers=len(SUB_REGIONS), thread_name_prefix="search")
         self._profile_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="profile")
-        self._profiles: dict[str, tuple[float, object]] = {}
+        self._profiles: dict[str, tuple[float, dict, dict | None]] = {}   # key -> (ts, info, equipment)
+        self._profile_dir = profile_dir
+        self._inflight: dict[str, list] = {}
+        self._pflock = threading.Lock()
+        self._search_cache: dict[tuple, tuple[float, dict]] = {}
+        if profile_dir:
+            os.makedirs(profile_dir, exist_ok=True)
+            self._prune_profiles()
         # details: newest request first, stale generations dropped
         self._dq: queue.PriorityQueue = queue.PriorityQueue()
         self._seq = itertools.count()
@@ -196,7 +212,7 @@ class Api:
     def close(self) -> None:
         self._stop.set()
         for _ in self._workers:
-            self._dq.put((0, 0, None, None))
+            self._dq.put((-1, 0, 0, None, None))
         self._search_pool.shutdown(wait=False, cancel_futures=True)
         self._profile_pool.shutdown(wait=False, cancel_futures=True)
         self.save_cache()
@@ -218,8 +234,17 @@ class Api:
 
     # ───── search ─────
     def search_region(self, keyword: str, region: str, page: int = 1, size: int = 30) -> tuple[list[Character], int]:
-        data = self._get_json(SEARCH_URL, {"keyword": keyword, "page": page, "size": size,
-                                           "localeInfo": "en-US", "region": region, "serverId": ""})
+        key = (keyword.casefold(), region, page, size)
+        hit = self._search_cache.get(key)
+        if hit and time.time() - hit[0] < SEARCH_KEEP_S:
+            data = hit[1]
+        else:
+            data = self._get_json(SEARCH_URL, {"keyword": keyword, "page": page, "size": size,
+                                               "localeInfo": "en-US", "region": region, "serverId": ""})
+            self._search_cache[key] = (time.time(), data)
+            if len(self._search_cache) > 400:
+                oldest = min(self._search_cache, key=lambda k: self._search_cache[k][0])
+                self._search_cache.pop(oldest, None)
         chars, total = parse_search(data)
         for c in chars:
             self._apply_cached(c)
@@ -244,28 +269,41 @@ class Api:
             self._queued.clear()
 
     def want(self, c: Character, on_done: Callable[[Character], None]) -> None:
-        """Ask for c's details (no-op if loaded or already queued). Newest requests are served first."""
-        if c.status in ("ok", "loading") or self._apply_cached(c):
+        """
+        Ask for c's details. Cached numbers are shown at once; stale ones (older than 30 min) are
+        refreshed in the background at lower priority. Newest requests are served first.
+        """
+        if c.status == "loading":
             return
+        if c.status == "ok" and not c.stale:
+            return
+        if c.status != "ok":
+            cached = self._apply_cached(c)
+            if cached == "fresh":
+                return
+        refresh = c.status == "ok"          # already showing (stale) numbers
         with self._qlock:
             if c.key in self._queued:
                 return
             self._queued.add(c.key)
             gen = self._generation
-        c.status = "loading"
-        self._dq.put((-next(self._seq), gen, c, on_done))
+        if not refresh:
+            c.status = "loading"
+        self._dq.put((1 if refresh else 0, -next(self._seq), gen, c, on_done))
 
     def _detail_worker(self) -> None:
         while not self._stop.is_set():
-            _, gen, c, on_done = self._dq.get()
+            _, _, gen, c, on_done = self._dq.get()
             if c is None:
                 return
             with self._qlock:
-                stale = gen != self._generation
+                old_search = gen != self._generation
                 self._queued.discard(c.key)
-            if stale:
-                c.status = "none"
+            if old_search:
+                if c.status == "loading":
+                    c.status = "none"
                 continue
+            was_showing = c.status == "ok"
             try:
                 data = self._get_json(INFO_URL, {"lang": "en-US", "characterId": c.char_id,
                                                  "serverId": c.server_id, "region": c.region})
@@ -273,7 +311,10 @@ class Api:
                 self._store(c, info)
                 self._fill(c, info)
             except Exception as e:  # noqa: BLE001
-                c.status, c.error = "error", f"{e.__class__.__name__}"
+                if was_showing:
+                    c.stale = False          # keep the cached numbers; try again next session
+                else:
+                    c.status, c.error = "error", f"{e.__class__.__name__}"
                 self.log(f"api: details for {c.name}@{c.server_name} failed: {e}")
             on_done(c)
 
@@ -288,57 +329,158 @@ class Api:
         if info.get("portrait"):
             c.portrait = info["portrait"]
         c.status = "ok"
+        c.stale = False
 
     # ───── full profile ─────
     def fetch_profile(self, c: Character, on_done: Callable[[Character, object, str | None], None],
-                      max_age_s: float = 300) -> None:
-        """Fetch info + equipment in parallel; on_done(character, Profile | None, error)."""
-        from .profile import EQUIPMENT_URL, parse_profile
-        hit = self._profiles.get(c.key)
-        if hit and time.time() - hit[0] < max_age_s:
-            on_done(c, hit[1], None)
-            return
-        params = {"lang": "en-US", "characterId": c.char_id, "serverId": c.server_id, "region": c.region}
-
-        def run():
-            f_info = self._profile_pool.submit(self._get_json, INFO_URL, params)
-            f_eq = self._profile_pool.submit(self._get_json, EQUIPMENT_URL, params)
-            try:
-                info = f_info.result()
-            except Exception as e:  # noqa: BLE001
-                on_done(c, None, f"{e.__class__.__name__}: {e}")
-                return
-            eq, eq_err = None, None
-            try:
-                eq = f_eq.result()
-            except Exception as e:  # noqa: BLE001
-                eq_err = f"{e.__class__.__name__}: {e}"
+                      force: bool = False) -> None:
+        """
+        on_done(character, Profile | None, error) may be called more than once:
+          - at once with a cached copy (up to 7 days old), if there is one;
+          - with a partial profile (prof.equipment_pending) as soon as the info call returns,
+            when there was nothing cached to show;
+          - with the complete, fresh profile.
+        Concurrent requests for the same character (hover prefetch, then click) share one fetch.
+        """
+        from .profile import parse_profile
+        key = c.key
+        cached = None if force else self._profile_get(key)
+        if cached:
+            ts, info, eq = cached
             prof = parse_profile(info, eq)
-            prof.equipment_error = eq_err
-            # the info call also refreshes the card's numbers
-            details = parse_info(info)
-            self._store(c, details)
-            self._fill(c, details)
-            if eq_err is None:
-                self._profiles[c.key] = (time.time(), prof)
+            prof.cached_at = ts
             on_done(c, prof, None)
+            if time.time() - ts < PROFILE_FRESH_S:
+                return
+        with self._pflock:
+            waiters = self._inflight.get(key)
+            if waiters is not None:
+                waiters.append(on_done)
+                return
+            self._inflight[key] = [on_done]
+        threading.Thread(target=self._fetch_profile_run, args=(c, cached is not None), name="profile",
+                         daemon=True).start()
 
-        threading.Thread(target=run, name="profile", daemon=True).start()
+    def prefetch_profile(self, c: Character) -> None:
+        """Warm the cache (e.g. while the pointer rests on a card) so opening the profile is instant."""
+        if not c.char_id:
+            return
+        hit = self._profiles.get(c.key)
+        if hit and time.time() - hit[0] < PROFILE_FRESH_S:
+            return
+        with self._pflock:
+            if c.key in self._inflight:
+                return
+        self.fetch_profile(c, lambda *a: None)
+
+    def _deliver(self, key: str, c: Character, prof, err, final: bool) -> None:
+        with self._pflock:
+            waiters = list(self._inflight.get(key, []))
+            if final:
+                self._inflight.pop(key, None)
+        for cb in waiters:
+            try:
+                cb(c, prof, err)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"api: profile callback failed: {e}")
+
+    def _fetch_profile_run(self, c: Character, had_cached: bool) -> None:
+        from .profile import EQUIPMENT_URL, parse_profile
+        key = c.key
+        params = {"lang": "en-US", "characterId": c.char_id, "serverId": c.server_id, "region": c.region}
+        f_info = self._profile_pool.submit(self._get_json, INFO_URL, params)
+        f_eq = self._profile_pool.submit(self._get_json, EQUIPMENT_URL, params)
+        try:
+            info = f_info.result()
+        except Exception as e:  # noqa: BLE001
+            self._deliver(key, c, None, f"{e.__class__.__name__}: {e}", final=True)
+            return
+        details = parse_info(info)            # the info call also refreshes the card's numbers
+        self._store(c, details)
+        self._fill(c, details)
+        if not had_cached and not f_eq.done():
+            partial = parse_profile(info, None)
+            partial.equipment_pending = True
+            self._deliver(key, c, partial, None, final=False)
+        eq, eq_err = None, None
+        try:
+            eq = f_eq.result()
+        except Exception as e:  # noqa: BLE001
+            eq_err = f"{e.__class__.__name__}: {e}"
+        prof = parse_profile(info, eq)
+        prof.equipment_error = eq_err
+        if eq_err is None:
+            self._profile_put(key, info, eq)
+        self._deliver(key, c, prof, None, final=True)
+
+    def _profile_get(self, key: str):
+        hit = self._profiles.get(key)
+        if hit is None and self._profile_dir:
+            path = self._profile_path(key)
+            try:
+                with open(path, encoding="utf-8") as f:
+                    d = json.load(f)
+                hit = (float(d["ts"]), d["info"], d.get("equipment"))
+                self._profiles[key] = hit
+            except (OSError, ValueError, KeyError, TypeError):
+                return None
+        if hit and time.time() - hit[0] < PROFILE_KEEP_S:
+            return hit
+        return None
+
+    def _profile_put(self, key: str, info: dict, eq: dict | None) -> None:
+        ts = time.time()
+        self._profiles[key] = (ts, info, eq)
+        if self._profile_dir:
+            try:
+                tmp = self._profile_path(key) + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump({"ts": ts, "info": info, "equipment": eq}, f)
+                os.replace(tmp, self._profile_path(key))
+            except OSError:
+                pass
+
+    def _profile_path(self, key: str) -> str:
+        import hashlib
+        return os.path.join(self._profile_dir, hashlib.sha1(key.encode()).hexdigest()[:20] + ".json")
+
+    def _prune_profiles(self) -> None:
+        try:
+            files = [os.path.join(self._profile_dir, f) for f in os.listdir(self._profile_dir) if f.endswith(".json")]
+            files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            now = time.time()
+            for i, path in enumerate(files):
+                if i >= PROFILE_DISK_MAX or now - os.path.getmtime(path) > PROFILE_KEEP_S:
+                    os.remove(path)
+        except OSError:
+            pass
 
     def forget(self, c: Character) -> None:
         self._profiles.pop(c.key, None)
+        if self._profile_dir:
+            try:
+                os.remove(self._profile_path(c.key))
+            except OSError:
+                pass
         with self._cache_lock:
             self._cache.pop(c.key, None)
 
     # ───── cache ─────
-    def _apply_cached(self, c: Character) -> bool:
+    def _apply_cached(self, c: Character) -> str | None:
+        """Fill c from the cache. Returns "fresh", "stale" (shown, but due a refresh) or None."""
         with self._cache_lock:
             hit = self._cache.get(c.key)
         # entries saved by versions before legions were shown lack the key: refetch those
-        if hit and "legion" in hit and time.time() - hit.get("ts", 0) < self.cache_ttl_s:
-            self._fill(c, hit)
-            return True
-        return False
+        if not hit or "legion" not in hit:
+            return None
+        age = time.time() - hit.get("ts", 0)
+        if age >= DETAILS_KEEP_S:
+            return None
+        self._fill(c, hit)
+        if age < self.cache_ttl_s:
+            return "fresh"
+        c.stale = True
+        return "stale"
 
     def _store(self, c: Character, info: dict) -> None:
         with self._cache_lock:
@@ -359,7 +501,7 @@ class Api:
             return
         now = time.time()
         with self._cache_lock:
-            keep = {k: v for k, v in self._cache.items() if now - v.get("ts", 0) < self.cache_ttl_s}
+            keep = {k: v for k, v in self._cache.items() if now - v.get("ts", 0) < DETAILS_KEEP_S}
         try:
             tmp = self.cache_path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:

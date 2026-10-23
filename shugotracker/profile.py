@@ -106,6 +106,8 @@ class Profile:
     titles_owned: int | None = None
     titles_total: int | None = None
     equipment_error: str | None = None
+    equipment_pending: bool = False   # info arrived, gear/skills/cosmetics still loading
+    cached_at: float | None = None    # set when this copy came from the cache
 
     def skills_in(self, category: str) -> list[Skill]:
         out = [s for s in self.skills if s.category == category]

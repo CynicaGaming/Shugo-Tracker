@@ -176,3 +176,56 @@ class ApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CachingTests(unittest.TestCase):
+    def make(self):
+        sess = FakeSession(default_handler)
+        api = a.Api(session=sess, rate=1000)
+        self.addCleanup(api.close)
+        return api, sess
+
+    def test_repeat_search_is_served_from_memory(self):
+        api, sess = self.make()
+        api.search_region("Luna", "nae")
+        api.search_region("luna", "nae")                 # same search, different case
+        self.assertEqual(len([1 for u, _ in sess.calls if u == a.SEARCH_URL]), 1)
+        api.search_region("Luna", "nae", page=2)
+        self.assertEqual(len([1 for u, _ in sess.calls if u == a.SEARCH_URL]), 2)
+
+    def test_stale_numbers_show_instantly_then_refresh(self):
+        api, sess = self.make()
+        chars, _ = a.parse_search(SEARCH_JSON)
+        luna = chars[1]
+        api._cache[luna.key] = {"combat_power": 111, "gear_score": 222, "legion": None,
+                                "ts": time.time() - a.DETAILS_FRESH_S - 60}
+        chars, _ = api.search_region("Luna", "nae")      # the search applies the cache
+        luna = chars[1]
+        self.assertEqual((luna.status, luna.combat_power, luna.stale), ("ok", 111, True))
+        done = threading.Event()
+        api.want(luna, lambda c: done.set())             # card is on screen: refresh quietly
+        self.assertEqual(luna.status, "ok")               # numbers stay visible meanwhile
+        self.assertTrue(done.wait(5))
+        self.assertEqual((luna.combat_power, luna.stale), (50566, False))
+
+    def test_fresh_numbers_are_not_refetched(self):
+        api, sess = self.make()
+        chars, _ = a.parse_search(SEARCH_JSON)
+        luna = chars[1]
+        api._cache[luna.key] = {"combat_power": 111, "gear_score": 222, "legion": None, "ts": time.time()}
+        api.want(luna, lambda c: None)
+        time.sleep(0.2)
+        self.assertEqual(luna.combat_power, 111)
+        self.assertFalse(any(u == a.INFO_URL for u, _ in sess.calls))
+
+    def test_very_old_cache_is_ignored(self):
+        api, _ = self.make()
+        chars, _ = a.parse_search(SEARCH_JSON)
+        luna = chars[1]
+        api._cache[luna.key] = {"combat_power": 111, "gear_score": 222, "legion": None,
+                                "ts": time.time() - a.DETAILS_KEEP_S - 60}
+        done = threading.Event()
+        api.want(luna, lambda c: done.set())
+        self.assertEqual(luna.status, "loading")          # too old to show: skeleton, then real numbers
+        self.assertTrue(done.wait(5))
+        self.assertEqual(luna.combat_power, 50566)
