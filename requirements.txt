@@ -1,0 +1,4 @@
+scapy>=2.5
+psutil>=5.9
+requests>=2.31
+lz4>=4.0  # optional speed-up; a pure-Python decoder is used without it

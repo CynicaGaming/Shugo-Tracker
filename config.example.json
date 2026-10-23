@@ -1,0 +1,42 @@
+{
+  "my_server": "",
+  "lookup_allies": true,
+  "lookup_interval_s": 2.0,
+  "forget_after_s": 900,
+  "collapsed_sections": [],
+  "max_height": 520,
+  "extra_enemy_servers": [],
+  "kr_tw_region": "kr",
+  "interfaces": [],
+  "opacity": 0.9,
+  "position": [
+    40,
+    200
+  ],
+  "auto_update": true,
+  "update_repo": "CynicaGaming/shugo-tracker",
+  "opcodes": {
+    "damage": [
+      "04 38"
+    ],
+    "self_record": [
+      "33 36"
+    ],
+    "player_spawn": [
+      "44 36",
+      "45 36"
+    ],
+    "ownership": [
+      "04 8D"
+    ],
+    "death": [
+      "42 36"
+    ],
+    "object_gone": [
+      "35 36"
+    ],
+    "map_load": [
+      "21 36"
+    ]
+  }
+}

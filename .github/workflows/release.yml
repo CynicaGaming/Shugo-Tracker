@@ -1,0 +1,76 @@
+name: Publish release
+
+# Builds ShugoTracker.exe and publishes it as a GitHub Release. Runs ONLY when you publish:
+#   - Actions tab → "Publish release" → Run workflow → enter a version like 1.2.0, or
+#   - push a tag:  git tag v1.2.0 && git push origin v1.2.0
+# The in-app updater picks up the newest release automatically.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 1.2.0)"
+        required: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out version
+        id: v
+        shell: pwsh
+        run: |
+          $v = "${{ github.event.inputs.version }}"
+          if (-not $v) { $v = "${{ github.ref_name }}" }
+          $v = $v.TrimStart("v")
+          if ($v -notmatch '^\d+\.\d+(\.\d+)?$') { throw "Version must look like 1.2.0 (got '$v')" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Test
+        run: python -m unittest discover -s tests -t .
+
+      - name: Stamp version
+        shell: pwsh
+        run: |
+          Set-Content -Path shugotracker/_version.py -Value "__version__ = `"${{ steps.v.outputs.version }}`""
+
+      - name: Build exe
+        run: python -m PyInstaller --noconfirm --clean ShugoTracker.spec
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\ShugoTracker.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  ShugoTracker.exe" | Set-Content -NoNewline dist\ShugoTracker.exe.sha256
+          New-Item -ItemType Directory -Force pkg | Out-Null
+          Copy-Item dist\ShugoTracker.exe, README.md, LICENSE pkg\
+          Copy-Item config.example.json pkg\config.json
+          Compress-Archive -Path pkg\* -DestinationPath ShugoTracker-windows.zip -Force
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.version }}
+          name: Shugo Tracker v${{ steps.v.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: |
+            dist/ShugoTracker.exe
+            dist/ShugoTracker.exe.sha256
+            ShugoTracker-windows.zip

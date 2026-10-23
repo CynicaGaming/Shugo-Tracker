@@ -1,0 +1,10 @@
+.venv/
+.build-venv/
+build/
+dist/
+__pycache__/
+*.pyc
+config.json
+shugo_cache.json
+shugo-tracker.log
+shugo-tracker-crash.log
