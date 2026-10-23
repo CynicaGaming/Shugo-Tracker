@@ -734,7 +734,7 @@ class SearchWindow:
         cls_col = CLASS_COLORS.get(c.class_name, FG_DIM)
         cid = cv.create_text(tx, l2, text=c.class_name or "Unknown", fill=cls_col, font=self.f_small,
                              anchor="w", tags="card")
-        rest = f" · {c.level} · {c.server_name} · {SHORT_REGION.get(c.region, c.region.upper())}"
+        rest = f" · Lv{c.level} · {c.server_name} · {SHORT_REGION.get(c.region, c.region.upper())}"
         cv.create_text(cv.bbox(cid)[2], l2, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
 
         # favorite star (right edge, centred)
