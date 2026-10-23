@@ -228,8 +228,7 @@ class SearchWindow:
         self.root = tk.Tk()
         self.root.title("Shugo Tracker")
         self.overlay = bool(cfg.get("overlay", True))
-        self.root.configure(bg=BORDER if self.overlay else BG, padx=1 if self.overlay else 0,
-                            pady=1 if self.overlay else 0)
+        self.root.configure(bg=BG)
         self.root.minsize(460, 420)
         w, h = cfg.get("window_size", [560, 760])
         x, y = cfg.get("window_pos", [80, 80])
@@ -389,6 +388,13 @@ class SearchWindow:
             self.grip.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
             self.search_entry.bind("<Button-1>", lambda e: self.root.focus_force(), add="+")
             self.root.after(50, self._style_window)
+            # 1px border drawn as four edge lines (placed above the packed content)
+            self._edges = [tk.Frame(self.root, bg=BORDER) for _ in range(4)]
+            self._edges[0].place(x=0, y=0, relwidth=1, height=1)
+            self._edges[1].place(x=0, rely=1.0, y=-1, relwidth=1, height=1)
+            self._edges[2].place(x=0, y=0, width=1, relheight=1)
+            self._edges[3].place(relx=1.0, x=-1, y=0, width=1, relheight=1)
+            self._lift_chrome()
 
         self.menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
                             activeforeground=FG, bd=0)
@@ -859,7 +865,7 @@ class SearchWindow:
         self.profile_view = ProfileView(self, c)
         self.profile_view.frame.pack(fill="both", expand=True)
         if self.overlay:
-            self.grip.lift()
+            self._lift_chrome()
         self.api.fetch_profile(c, lambda ch, prof, err: self.inbox.put(("profile", ch, prof, err)))
 
     def close_profile(self):
@@ -879,6 +885,11 @@ class SearchWindow:
         b.bind("<Enter>", lambda e: b.config(fg=hover, bg=SURFACE_2))
         b.bind("<Leave>", lambda e: b.config(fg=FG_DIM, bg=BG))
         return b
+
+    def _lift_chrome(self):
+        for w in getattr(self, "_edges", []):
+            w.lift()
+        self.grip.lift()
 
     def set_hotkey_ok(self, ok: bool):
         """Show the hotkey on the title bar once it is actually registered."""

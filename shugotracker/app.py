@@ -290,7 +290,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     from .favorites import Favorites
     favorites = Favorites(None if (demo or screenshot) else os.path.join(HERE, "favorites.json"))
     if screenshot:
-        cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 900], "regions": [], "factions": [],
+        cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [], "factions": [],
                "idle_opacity": 1.0, "opacity": 1.0, "pill_pos": [560, 60]}
     for old in ("region", "faction", "max_level_only"):
         cfg.pop(old, None)
