@@ -487,10 +487,11 @@ class SearchWindow:
         self.filters.columnconfigure(1, weight=1)
 
         def row(r, title):
+            gap = 0 if r == 0 else 5
             tk.Label(self.filters, text=title, bg=BG, fg=FG_FAINT, font=self.f_small, anchor="w", width=8).grid(
-                row=r, column=0, sticky="nw", pady=(4 if r else 3, 0))
+                row=r, column=0, sticky="nw", pady=(gap + 4, 0))          # lines up with the first row of chips
             flow = FlowFrame(self.filters, bg=BG, height=1)
-            flow.grid(row=r, column=1, sticky="ew", pady=(0 if r == 0 else 5, 0))
+            flow.grid(row=r, column=1, sticky="ew", pady=(gap, 0))
             return flow
 
         regions = row(0, "Region")
