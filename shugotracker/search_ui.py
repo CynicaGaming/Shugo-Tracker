@@ -529,7 +529,7 @@ class SearchWindow:
         self.status = tk.Label(self.root, text="", bg=BG, fg=FG_DIM,
                                font=self.f_small, anchor="w", padx=PAD)
         self.status.pack(fill="x", pady=(4, 4))
-
+        self.status.bind("<Shift-Button-1>", lambda e: self._nearby_record())   # hidden: Nearby capture
         # virtualized card list
         self.list_wrap = tk.Frame(self.root, bg=BG)
         self.list_wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(0, PAD))
@@ -875,6 +875,9 @@ class SearchWindow:
             if self.nearby is not None and now - getattr(self, "_nearby_poll", 0) > 0.3:
                 self._nearby_poll = now
                 self._refresh_nearby()
+                if self.mode == "nearby" and (self.nearby.recording() or getattr(self, "_rec_done_at", 0) is None
+                                              or time.time() - (getattr(self, "_rec_done_at", 0) or 0) < 11):
+                    self._mark()                   # keep the recording countdown / saved note current
             if self.profile_view is None:
                 if self._dirty:
                     self._render()
@@ -1139,12 +1142,29 @@ class SearchWindow:
         if self.mode == "nearby":
             self._mark()
 
+    def _nearby_record(self):
+        """Shift+click on the Live line: save 60 s of game traffic for fixing the decoder."""
+        from .nearby import CAPTURING
+        if self.mode == "nearby" and self._nearby_on() and self.nearby.state == CAPTURING \
+                and not self.nearby.recording():
+            self.nearby.start_recording(60)
+            self._mark()
+
     def _nearby_status_text(self, view) -> str:
         if not self._nearby_on():
             return ""
         from .nearby import CAPTURING
         if self.nearby.state != CAPTURING:
             return ""
+        left = self.nearby.recording()
+        if left:
+            self._rec_done_at = None
+            return f"● Recording  ·  {int(left)} s"
+        if self.nearby.record_path:
+            if getattr(self, "_rec_done_at", 0) is None:
+                self._rec_done_at = time.time()
+            if time.time() - (self._rec_done_at or 0) < 10:
+                return f"Saved {os.path.basename(self.nearby.record_path)} in the diagnostics folder"
         name, _server = self.nearby.me()
         return "  ·  ".join(["● Live"] + ([name] if name else []) + ([f"{len(view):,} shown"] if view else []))
 

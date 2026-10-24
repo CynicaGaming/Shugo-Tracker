@@ -275,6 +275,8 @@ class NearbyService:
                 cls = WIRE_CLASS.get(p.class_name or "", p.class_name or "")
                 seen_servers = {c.server_id for c in self._chars.values()}
                 my_faction = self.tracker.me.faction
+                # someone in a fight with you is almost certainly on the other side (an invader, a gank)
+                prefer = (3 - my_faction) if (p.last_combat and my_faction in (1, 2)) else my_faction
             err, cands = None, []
             try:
                 if cls:
@@ -283,7 +285,7 @@ class NearbyService:
                     cands = self._find(name, region)
             except Exception as e:  # noqa: BLE001
                 err = f"{e.__class__.__name__}: {e}"
-            pick = choose(cands, hint, seen_servers, my_faction)
+            pick = choose(cands, hint, seen_servers, prefer, fighting=bool(p.last_combat))
             with self._lock:
                 self._inflight.discard(name)
                 self._pending.discard(name)
@@ -398,9 +400,11 @@ class NearbyService:
             self.stop_recording()
 
 
-def choose(cands: list[Character], hint: int | None, seen_servers: set[int], my_faction: int | None
-           ) -> Character | None:
-    """Which of the characters with this exact name is the one standing near you."""
+def choose(cands: list[Character], hint: int | None, seen_servers: set[int], my_faction: int | None,
+           fighting: bool = False) -> Character | None:
+    """Which of the characters with this exact name is the one standing near you. `my_faction` is the faction
+    to prefer (the enemy's when they're fighting you); invaders come from other servers, so for them the
+    'seen around you' check is skipped."""
     if not cands:
         return None
     if hint:
@@ -410,8 +414,10 @@ def choose(cands: list[Character], hint: int | None, seen_servers: set[int], my_
     real = [c for c in cands if c.level > 1] or cands        # level-1 namesakes are mostly reserved names
     if len(real) == 1:
         return real[0]
-    for narrow in (lambda c: c.server_id in seen_servers,     # servers already seen around you
-                   lambda c: my_faction is not None and c.race == my_faction):
+    checks = [lambda c: my_faction is not None and c.race == my_faction]
+    if not fighting:
+        checks.insert(0, lambda c: c.server_id in seen_servers)   # servers already seen around you
+    for narrow in checks:
         subset = [c for c in real if narrow(c)]
         if len(subset) == 1:
             return subset[0]

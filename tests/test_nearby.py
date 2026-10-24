@@ -184,6 +184,8 @@ class ChooseTests(unittest.TestCase):
         self.assertEqual(nb.choose(cands, None, {1104}, None).server_id, 1104)          # seen around you
         self.assertEqual(nb.choose(cands, None, set(), 2).server_id, 2101)              # your faction
         self.assertEqual(nb.choose([self.c(2103, 4), self.c(1104, 45)], None, set(), None).server_id, 1104)
+        # an invader fighting you: the enemy faction wins, even over servers seen around you
+        self.assertEqual(nb.choose(cands, None, {1104}, 2, fighting=True).server_id, 2101)
 
     def test_background_queue_identifies_off_screen_players(self):
         find = FakeNcsoft({"nae": {"Mine": [1101], "Far": [1101]}})
