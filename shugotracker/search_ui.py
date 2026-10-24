@@ -1227,8 +1227,11 @@ class SearchWindow:
         self.nearby_panel.lift()
 
     def _ensure_filters(self):
+        gap = (2, 0) if self.mode == "search" else (10, 0)     # no search box above: give the filters room
         if not self.filters.winfo_manager():
-            self.filters.pack(fill="x", pady=(2, 0))
+            self.filters.pack(fill="x", pady=gap)
+        else:
+            self.filters.pack_configure(pady=gap)
 
     def _panel_button(self, parent, text, cmd, accent=False):
         b = tk.Label(parent, text=text, bg=ACCENT if accent else SURFACE_2, fg=ACCENT_FG if accent else FG,
