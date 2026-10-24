@@ -34,6 +34,7 @@ jobs:
         shell: pwsh
         run: |
           python -m shugotracker.app --bench Luna *> bench.txt
+          Copy-Item bench.txt ui-bench.txt
           Get-Content bench.txt | Select-Object -Last 4 | ForEach-Object { Write-Output "::notice title=bench::$_" }
 
       - name: UI screenshots (demo data)

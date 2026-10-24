@@ -485,6 +485,20 @@ def _bench(name: str) -> int:
 
     run("cold (nothing cached)")
     run("warm (new app start, cached)")
+
+    # where does search time go? per region, and by page size
+    import requests as _rq
+    from .aion2api import SEARCH_URL, USER_AGENT
+    sess = _rq.Session()
+    sess.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
+    for size in (10, 30, 50):
+        parts = []
+        for r in SUB_REGIONS:
+            t = time.perf_counter()
+            sess.get(SEARCH_URL, params={"keyword": name, "page": 1, "size": size, "localeInfo": "en-US",
+                                         "region": r, "serverId": ""}, timeout=20)
+            parts.append(f"{r} {time.perf_counter() - t:.2f}s")
+        print(f"search size {size}: " + ", ".join(parts))
     return 0
 
 
