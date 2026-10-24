@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from .aion2api import REGION_LABELS, Character
 from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile
 from .search_ui import (ACCENT, ASMO, BG, BORDER, CLASS_COLORS, ELYOS, FG, FG_DIM, FG_FAINT, GRADE_COLORS, HOVER,
-                        LEGION, PAD, RED, SKEL_A, SKEL_B, SURFACE, SURFACE_2, fmt_int, round_rect)
+                        LEGION, PAD, RED, SKEL_A, SKEL_B, SURFACE, SURFACE_2, fmt_int, round_rect, ThinScrollbar)
 
 if TYPE_CHECKING:
     from .search_ui import SearchWindow
@@ -106,7 +106,7 @@ class ProfileView:
         wrap = tk.Frame(self.frame, bg=BG)
         wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(6, PAD))
         self.canvas = tk.Canvas(wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=16)
-        sb = tk.Scrollbar(wrap, orient="vertical", command=self.canvas.yview, width=10)
+        sb = ThinScrollbar(wrap, command=self.canvas.yview)
         sb.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.configure(yscrollcommand=sb.set)
@@ -459,7 +459,7 @@ class ProfileView:
         if s.value and s.effects:
             return list(s.effects), foot
         if bonuses:                                   # no points yet: the same lines, at 0%
-            return [f"{label} 0%" for label, _sign in bonuses], foot
+            return [f"{label} {sign}0%" for label, sign in bonuses], foot
         return list(s.effects), []
 
     def demo_hover_first_stat(self):

@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from . import desktop
-from .search_ui import ACCENT, ACCENT_FG, BG, BORDER, FG, FG_DIM, FG_FAINT, GREEN, PAD, RED, SURFACE, SURFACE_2
+from .search_ui import (ACCENT, ACCENT_FG, BG, BORDER, FG, FG_DIM, FG_FAINT, GREEN, PAD, RED, SURFACE, SURFACE_2,
+                        ThinScrollbar)
 from .settings import OPACITY_MIN, clamp_opacity
 
 if TYPE_CHECKING:
@@ -111,7 +112,7 @@ class SettingsView:
         wrap = tk.Frame(self.frame, bg=BG)
         wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(4, PAD))
         self.canvas = tk.Canvas(wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=16)
-        sb = tk.Scrollbar(wrap, orient="vertical", command=self.canvas.yview, width=10)
+        sb = ThinScrollbar(wrap, command=self.canvas.yview)
         sb.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.configure(yscrollcommand=sb.set)

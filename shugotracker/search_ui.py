@@ -71,6 +71,72 @@ def round_rect(cv: tk.Canvas, x0, y0, x1, y1, r, **kw):
     return cv.create_polygon(pts, smooth=True, **kw)
 
 
+class ThinScrollbar(tk.Canvas):
+    """A slim scrollbar in the app's colours (the Windows one can't be themed). Hidden when nothing scrolls."""
+
+    def __init__(self, parent, command, width: int = 8, bg: str = BG):
+        super().__init__(parent, width=width, bg=bg, highlightthickness=0, bd=0)
+        self.command = command
+        self.lo, self.hi = 0.0, 1.0
+        self._hover = False
+        self._drag_from = None
+        self.bind("<Configure>", lambda e: self._draw())
+        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Leave>", lambda e: self._set_hover(False))
+        self.bind("<ButtonPress-1>", self._press)
+        self.bind("<B1-Motion>", self._drag)
+        self.bind("<ButtonRelease-1>", lambda e: self._release())
+
+    def set(self, lo, hi):                      # called by the scrolled widget (yscrollcommand)
+        self.lo, self.hi = float(lo), float(hi)
+        self._draw()
+
+    def _set_hover(self, on):
+        self._hover = on
+        self._draw()
+
+    def _thumb(self):
+        h = max(1, self.winfo_height())
+        top = self.lo * h
+        bottom = max(top + 24, self.hi * h)     # keep it grabbable on very long lists
+        if bottom > h:
+            top, bottom = h - (bottom - top), h
+        return top, bottom
+
+    def _draw(self):
+        self.delete("all")
+        if self.hi - self.lo >= 0.999:          # everything fits: no bar
+            return
+        w = int(self["width"])
+        top, bottom = self._thumb()
+        bar_w = w - 2 if (self._hover or self._drag_from) else max(3, w - 4)
+        x0 = (w - bar_w) / 2
+        col = FG_FAINT if (self._hover or self._drag_from) else BORDER
+        r = bar_w / 2
+        self.create_rectangle(x0, top + r, x0 + bar_w, bottom - r, fill=col, outline="")
+        self.create_oval(x0, top, x0 + bar_w, top + bar_w, fill=col, outline="")
+        self.create_oval(x0, bottom - bar_w, x0 + bar_w, bottom, fill=col, outline="")
+
+    def _press(self, e):
+        if self.hi - self.lo >= 0.999:
+            return
+        top, bottom = self._thumb()
+        if top <= e.y <= bottom:
+            self._drag_from = (e.y, self.lo)
+        else:                                   # click the track: page towards it
+            self.command("scroll", -1 if e.y < top else 1, "pages")
+
+    def _drag(self, e):
+        if self._drag_from is None:
+            return
+        y0, lo0 = self._drag_from
+        self.command("moveto", max(0.0, lo0 + (e.y - y0) / max(1, self.winfo_height())))
+
+    def _release(self):
+        self._drag_from = None
+        self._draw()
+
+
 ICON_KEEP_S = 30 * 86400      # game icons never change
 PORTRAIT_KEEP_S = 86400       # character portraits can
 
@@ -373,7 +439,7 @@ class SearchWindow:
         self.list_wrap = tk.Frame(self.root, bg=BG)
         self.list_wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(0, PAD))
         self.canvas = tk.Canvas(self.list_wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=16)
-        self.scroll = tk.Scrollbar(self.list_wrap, orient="vertical", command=self._yview, width=10)
+        self.scroll = ThinScrollbar(self.list_wrap, command=self._yview)
         self.scroll.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.configure(yscrollcommand=self.scroll.set)
