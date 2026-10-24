@@ -179,7 +179,8 @@ game traffic may be against AION 2's terms of service — use it at your own ris
 
 **Everyone in render range.** Players are added when the game sends their spawn record (they come into view,
 or you load a map), removed when it sends the record that they left view, and the list is reset when you load
-a new map (the game re-sends everyone around you). A player whose leave record was missed is dropped after
+a new map (the game re-sends everyone around you). Respawning or reviving in the same map (an arena death)
+keeps everyone, and anyone on Recent who fights you again comes straight back. A player whose leave record was missed is dropped after
 15 minutes without activity.
 
 **Enemy / ally.** Since the October 2026 client, a player's spawn record carries their faction and exact

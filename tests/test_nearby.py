@@ -257,3 +257,42 @@ class RecentTests(unittest.TestCase):
         self.assertEqual([f for _s, _c, _t, f in recent], [True, False])          # Foe fought you
         feed(other_record(201, "Foe"))                                            # Foe shows up again
         self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Pal"])
+
+
+class ArenaTests(unittest.TestCase):
+    def make(self):
+        svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae"})
+        feed = lambda *b: svc.on_bytes(("a", 1, "b", 2), b"".join(frame(x) for x in b), False)  # noqa: E731
+        return svc, feed
+
+    def names(self, svc):
+        return sorted(c.name for _s, c, _p in svc.snapshot())
+
+    def test_dying_in_the_arena_keeps_everyone(self):
+        from tests.test_scout import map_load
+        svc, feed = self.make()
+        feed(map_load(61), self_record(100, "Mine", 1104), other_record(200, "Foe"), other_record(300, "Pal"))
+        self.assertEqual(self.names(svc), ["Foe", "Pal"])
+        for dec in svc._decoders.values():
+            dec._self_at.clear()
+        feed(map_load(61, count=2), self_record(100, "Mine", 1104))       # you died and respawned: same map
+        self.assertEqual(self.names(svc), ["Foe", "Pal"])
+        self.assertEqual(svc.recent(), [])
+
+    def test_a_different_map_moves_everyone_to_recent(self):
+        from tests.test_scout import map_load
+        svc, feed = self.make()
+        feed(map_load(61), self_record(100, "Mine", 1104), other_record(200, "Foe"))
+        feed(map_load(12), other_record(400, "New"))
+        self.assertEqual(self.names(svc), ["New"])
+        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Foe"])
+
+    def test_fighting_brings_a_player_back_from_recent(self):
+        from tests.test_scout import map_load
+        svc, feed = self.make()
+        feed(map_load(61), self_record(100, "Mine", 1104), other_record(200, "Foe"))
+        feed(map_load(12))                                                 # (wrongly) a new map
+        self.assertEqual(self.names(svc), [])
+        feed(damage(100, 200))                                             # but Foe hits you
+        self.assertEqual(self.names(svc), ["Foe"])
+        self.assertEqual(svc.recent(), [])

@@ -16,7 +16,7 @@ from typing import Callable
 
 from . import servers as sv
 from .aion2api import Api, Character, class_pc_ids
-from .protocol import Opcodes, SelfSeen, StreamDecoder
+from .protocol import Hit, MapLoaded, Opcodes, SelfSeen, StreamDecoder
 from .tracker import ALLY, ENEMY, UNKNOWN, Lookup, Player, Tracker
 
 NPCAP_URL = "https://npcap.com/#download"
@@ -73,6 +73,9 @@ class NearbyService:
         import collections
         self._recent: "collections.OrderedDict[str, tuple]" = collections.OrderedDict()
         self._last_players: dict[str, Player] = {}
+        self._recent_players: dict[str, Player] = {}
+        self._recent_ids: dict[int, str] = {}         # entity id -> name, for players on Recent
+        self._map_loads_seen = False
         self._my_region: str | None = cfg.get("nearby_region") or None
         self.on_region: Callable[[str], None] = lambda r: None   # remember it (set by the app)
         self.on_me: Callable[[str, int], None] = lambda n, s: None  # remember your character (set by the app)
@@ -183,11 +186,19 @@ class NearbyService:
             dec.feed(data)
 
     def _on_event(self, ev) -> None:          # called with self._lock held
-        if isinstance(ev, SelfSeen) and self.tracker.players:
-            # Your own record is sent when you load into an area (teleport, zone change, arena, rift): everyone
-            # from before is out of range now, and the game re-sends whoever is around you.
+        if isinstance(ev, MapLoaded):
+            self._map_loads_seen = True
+        elif isinstance(ev, SelfSeen) and self.tracker.players and not self._map_loads_seen:
+            # Fallback when map-load records aren't coming through: your own record is sent on every area
+            # load. (With map loads seen, those decide: same map = respawn, keep everyone.)
             self._to_recent(list(self.tracker.players.values()))
             self.tracker.clear()
+        elif isinstance(ev, Hit):
+            # someone on the Recent list is fighting right next to you: they never left
+            for eid in (ev.actor_id, ev.target_id):
+                name = self._recent_ids.get(eid)
+                if name and eid not in self.tracker.by_id and name in self._recent:
+                    self._restore(name, eid)
         before_names = set(self.tracker.players)
         before = len(before_names)
         was = (self.tracker.me.name, self.tracker.me.server)
@@ -203,6 +214,7 @@ class NearbyService:
             self.stats["players_seen"] += len(self.tracker.players) - before
         for n in set(self.tracker.players) - before_names:
             self._recent.pop(n, None)                   # back in range
+            self._recent_players.pop(n, None)
         self._last_players.update(self.tracker.players)
 
     def _to_recent(self, players: list[Player]) -> None:
@@ -211,9 +223,26 @@ class NearbyService:
             side = self.tracker.side(p)
             self._recent[p.name] = (side, self._character(p), now, bool(p.last_combat))
             self._recent.move_to_end(p.name)
+            self._recent_players[p.name] = p
+            for eid in p.entity_ids:
+                self._recent_ids[eid] = p.name
             self._last_players.pop(p.name, None)
         while len(self._recent) > RECENT_MAX:
             self._recent.popitem(last=False)
+        self._v += 1
+
+    def _restore(self, name: str, eid: int) -> None:
+        """Put a player from Recent back on the list (lock held)."""
+        old = self._recent_players.pop(name, None)
+        self._recent.pop(name, None)
+        if old is None:
+            return
+        old.entity_ids = {eid}
+        old.last_seen = time.time()
+        self.tracker.players[name] = old
+        self.tracker.by_id[eid] = name
+        self._last_players[name] = old
+        self.tracker.version += 1
         self._v += 1
 
     def recent(self) -> list[tuple[str, Character, float, bool]]:
@@ -222,6 +251,7 @@ class NearbyService:
             now = time.time()
             for name in [n for n, r in self._recent.items() if now - r[2] > RECENT_KEEP_S]:
                 del self._recent[name]
+                self._recent_players.pop(name, None)
             out = []
             for name, (side, c, left_at, fought) in reversed(self._recent.items()):
                 c = self._chars.get(name, c)            # identified after they left

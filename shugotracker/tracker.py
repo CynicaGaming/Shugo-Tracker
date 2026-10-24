@@ -131,10 +131,13 @@ class Tracker:
         elif isinstance(ev, EntityGone):
             self._on_gone(ev)
         elif isinstance(ev, MapLoaded):
+            # A load into a different map means a new area (the server re-sends whoever is there). A load into
+            # the same map is a respawn or revive (arena deaths): the players around you never left and aren't
+            # re-sent, so keep them.
             if ev.map_id != self.map_id:
                 self.log(f"map {ev.map_id}: list cleared")
+                self.clear()
             self.map_id = ev.map_id
-            self.clear()  # the server re-sends everyone in view after a load
         self.version += 1
 
     def _on_self(self, ev: SelfSeen) -> None:
