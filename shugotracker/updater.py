@@ -28,7 +28,7 @@ from ._version import __version__
 DEFAULT_REPO = "CynicaGaming/Shugo-Tracker"
 EXE_ASSET = "ShugoTracker.exe"
 SHA_ASSET = "ShugoTracker.exe.sha256"
-CHECK_EVERY_S = 6 * 3600
+CHECK_EVERY_S = 30 * 60          # automatic checks: at start-up, then every 30 minutes
 FROZEN = bool(getattr(sys, "frozen", False))
 
 

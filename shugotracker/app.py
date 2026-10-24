@@ -349,7 +349,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     log(f"data folder: {DATA}  ·  {len(favorites)} favorites")
     if screenshot:
         cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [],
-               "factions": [], "classes": [], "level_min": None, "level_max": None, "nearby_enabled": False, "pill_pos": [560, 60]}
+               "factions": [], "classes": [], "level_min": None, "level_max": None, "nearby_enabled": False}
     win = SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
                        on_update=on_update,
                        version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir)

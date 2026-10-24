@@ -242,6 +242,11 @@ def ui_icon(name: str, size: int, color: tuple, accent: tuple | None = None):
         gd.rounded_rectangle((cx - S * 0.26, S * 0.5, cx + S * 0.26, S * 0.6), radius=S * 0.04, fill=col)
         gd.line([(cx, S * 0.6), (cx, S * 0.92)], fill=col, width=int(w * 0.8))
         im = g.rotate(-40, resample=Image.BICUBIC, center=(c, c))
+    elif name == "update":                       # a tray with an arrow into it: "download update"
+        d.line([(S * 0.16, S * 0.58), (S * 0.16, S * 0.84), (S * 0.84, S * 0.84), (S * 0.84, S * 0.58)],
+               fill=col, width=w, joint="curve")
+        d.line([(c, S * 0.12), (c, S * 0.6)], fill=col, width=w)
+        d.polygon([(c - S * 0.2, S * 0.42), (c + S * 0.2, S * 0.42), (c, S * 0.66)], fill=col)
     elif name == "minimize":
         d.line([(S * 0.22, c), (S * 0.78, c)], fill=col, width=w)
     elif name == "close":

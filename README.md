@@ -36,12 +36,12 @@ windowed** mode):
 |---|---|
 | drag the title bar | move it |
 | ◢ (bottom-right corner) | resize it |
-| — | collapse to a small Shugo bubble; drag the bubble anywhere, click it to expand |
+| — | minimize to the taskbar |
 | ⚙ | settings |
 | ✕ | quit (with *Close to tray* on in ⚙: hide; a tray icon appears until you bring it back) |
 
 Starting it again while it's running (even hidden) brings the running copy forward. When an update is
-waiting, the ⚙ turns gold.
+available, a green download icon appears next to 📌: click it to download, then again to restart.
 
 ### Settings (⚙)
 
@@ -58,7 +58,7 @@ Everything is saved immediately.
 | | |
 |---|---|
 | type a name, press Enter | search (it also searches by itself after you pause typing) |
-| Region / Faction / Class chips | click to filter, click again to remove; nothing selected = everything; **Clear** resets all filters |
+| Region / Faction chips; Class and Level under *Advanced filters* | click to filter, click again to remove; nothing selected = everything; **Clear** resets all filters |
 | Lv [min] – [max] | level range; fill in either or both |
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
@@ -102,7 +102,8 @@ Delete the `cache` folder and `character_cache.json` at any time to start fresh.
 
 ## Updates
 
-The **Check for updates** button is in ⚙ Settings (the ⚙ turns gold when an update is waiting):
+The **Check for updates** button is in ⚙ Settings (a green download icon appears on the title bar when an
+update is available):
 
 | button shows | meaning / what clicking does |
 |---|---|
@@ -111,7 +112,7 @@ The **Check for updates** button is in ⚙ Settings (the ⚙ turns gold when an 
 | ⬇ Download v1.x.y | a newer version exists — click to download it (shows progress) |
 | Restart | downloaded and checksum-verified — click to switch to the new version |
 
-The app also checks quietly at start-up and every 6 hours, so the button may already say
+The app also checks quietly at start-up and every 30 minutes, so the button may already say
 **Download** when you open it; nothing is downloaded until you click. If you quit with an update
 downloaded, it's installed on exit. `config.json`, favorites and the cache are kept. Set
 `"auto_update": false` to turn off the automatic checks (the button still works).
@@ -172,7 +173,7 @@ game traffic may be against AION 2's terms of service — use it at your own ris
 | red / green edge on a card | enemy / ally |
 | Faction / Class / Level | the usual filters apply here too (Faction = Elyos or Asmodian) |
 | a card still shimmering | the game showed the player; NCSOFT hasn't identified them yet |
-| Nearby / Recent | who's around you now / who was (for an hour): players who left view, and everyone from your previous area when you teleport or change zone; ⚔ = they fought you |
+| ↺ Recent tab | who was around you in the last hour: players who left view, and everyone from your previous area when you teleport or change zone; ⚔ = they fought you |
 
 ### Who shows up, and where
 

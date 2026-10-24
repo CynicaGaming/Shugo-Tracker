@@ -12,7 +12,7 @@ SETTING_DEFAULTS = {
 OPACITY_MIN = 0.3   # never so faint that you lose the window
 
 # Keys older versions wrote that no longer mean anything (removed on load).
-RETIRED = ("overlay", "idle_opacity", "opacity", "opacity_focused", "opacity_unfocused", "opacity_full_on_hover",
+RETIRED = ("pill_pos", "overlay", "idle_opacity", "opacity", "opacity_focused", "opacity_unfocused", "opacity_full_on_hover",
            "requests_per_second", "detail_workers", "region", "faction", "max_level_only", "stat_details")
 
 

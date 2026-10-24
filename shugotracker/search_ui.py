@@ -388,6 +388,7 @@ class SearchWindow:
         self.root.geometry(f"{int(w)}x{int(h)}+{int(x)}+{int(y)}")
         self.root.attributes("-topmost", bool(cfg.get("always_on_top", True)))
         self.root.protocol("WM_DELETE_WINDOW", self.close_button)
+        self.root.bind("<Map>", self._on_map, add="+")
         self.tray_ok = False                     # tray icons work here (set by the app)
         self.tray_icon = (lambda: False, lambda: None)   # (show, remove) the tray icon; set by the app
         if self.overlay:
@@ -397,8 +398,7 @@ class SearchWindow:
         from .settings import migrate
         migrate(cfg)
         self.save_cfg: Callable[[], None] = lambda: None   # set by the app
-        self._hidden_state: str | None = None   # "window" or "pill" while hidden by hotkey / tray
-        self.pill: tk.Toplevel | None = None
+        self._hidden_state: str | None = None   # "window" while hidden to the tray
 
         fams = set(tkfont.families())
         base = "Segoe UI Variable Text" if "Segoe UI Variable Text" in fams else "Segoe UI"
@@ -455,11 +455,14 @@ class SearchWindow:
             close.pack(side="right")
             collapse = self._title_button(head, "minimize", self.collapse)
             collapse.pack(side="right")
-        self.gear = self._title_button(head, "cog", self.open_settings, hover=ACCENT, repaint=lambda: self._paint_gear())
+        self.gear = self._title_button(head, "cog", self.open_settings, hover=ACCENT)
         self.gear.pack(side="right")
         self.pin = self._title_button(head, "pin", self._toggle_pin, hover=ACCENT, repaint=lambda: self._paint_pin())
         self.pin.pack(side="right")
         self._paint_pin()
+        # update available: a green download icon left of the pin (hidden otherwise)
+        self.upd_btn = self._title_button(head, "update", self._update_click, hover=GREEN,
+                                          repaint=lambda: self._paint_gear())
         self._sync_update_button()
 
         self.top = tk.Frame(self.root, bg=BG)
@@ -477,6 +480,8 @@ class SearchWindow:
         self.tab_search.bind("<Button-1>", lambda e: self._set_mode("search"))
         self.tab_fav.bind("<Button-1>", lambda e: self._set_mode("favorites"))
         self.tab_near.bind("<Button-1>", lambda e: self._set_mode("nearby"))
+        self.tab_recent = tk.Label(tabs, font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
+        self.tab_recent.bind("<Button-1>", lambda e: self._set_mode("recent"))
         self.tab_line = tk.Frame(self.top, bg=BORDER, height=1)
         self.tab_line.pack(fill="x")
 
@@ -502,23 +507,23 @@ class SearchWindow:
         go.pack(side="right", padx=4, pady=4)
         go.bind("<Button-1>", lambda e: self._start_search(now=True))
 
-        # Nearby tab: who's around you now, or who was recently
-        self.nearby_bar = tk.Frame(self.top, bg=BG)
-        self.view_chips = [(k, self._chip(self.nearby_bar, label, lambda k=k: self._set_nearby_view(k)))
-                           for k, label in (("nearby", "Nearby"), ("recent", "Recent"))]
-
         # filters, one labelled row each; chips toggle and nothing selected means "all"
         self.filters = tk.Frame(self.top, bg=BG)
         self.filters.pack(fill="x", pady=(2, 0))
         self.filters.columnconfigure(1, weight=1)
 
-        def row(r, title):
+        self._advanced_rows: list[tk.Widget] = []
+
+        def row(r, title, advanced=False):
             gap = 0 if r == 0 else 5
             # same font and padding as a chip, so it lines up with the first row of chips
-            tk.Label(self.filters, text=title, bg=BG, fg=FG_FAINT, font=self.f_small, anchor="w", width=8,
-                     pady=3).grid(row=r, column=0, sticky="nw", pady=(gap, 0))
+            lb = tk.Label(self.filters, text=title, bg=BG, fg=FG_FAINT, font=self.f_small, anchor="w", width=8,
+                          pady=3)
+            lb.grid(row=r, column=0, sticky="nw", pady=(gap, 0))
             flow = FlowFrame(self.filters, bg=BG, height=1)
             flow.grid(row=r, column=1, sticky="ew", pady=(gap, 0))
+            if advanced:
+                self._advanced_rows += [lb, flow]
             return flow
 
         regions = row(0, "Region")
@@ -527,19 +532,28 @@ class SearchWindow:
         factions = row(1, "Faction")
         self.faction_chips = [(f, factions.add(self._chip(factions, label, lambda k=f: self._toggle_faction(k),
                                                           pack=False))) for f, label in FACTIONS]
-        classes = row(2, "Class")
+        # Advanced filters (class, level) fold away to keep the window minimal
+        bar = tk.Frame(self.filters, bg=BG)
+        bar.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        self.adv_toggle = tk.Label(bar, bg=BG, fg=FG_DIM, font=self.f_small, cursor="hand2", pady=3)
+        self.adv_toggle.pack(side="left")
+        self.adv_toggle.bind("<Button-1>", lambda e: self._toggle_advanced())
+        self.clear_chip = tk.Label(bar, text="Clear", bg=ACCENT, fg=ACCENT_FG, font=self.f_small,
+                                   cursor="hand2", padx=12, pady=3)
+        self.clear_chip.bind("<Button-1>", lambda e: self._clear_filters())
+        classes = row(3, "Class", advanced=True)
         self.class_chips = [(name, classes.add(self._chip(classes, name, lambda k=name: self._toggle_class(k),
                                                           pack=False))) for name in CLASSES]
-        tk.Label(self.filters, text="Level", bg=BG, fg=FG_FAINT, font=self.f_small, anchor="w", width=8).grid(
-            row=3, column=0, sticky="w", pady=(5, 0))
+        lv_label = tk.Label(self.filters, text="Level", bg=BG, fg=FG_FAINT, font=self.f_small, anchor="w", width=8)
+        lv_label.grid(row=4, column=0, sticky="w", pady=(5, 0))
         lv = tk.Frame(self.filters, bg=BG)
-        lv.grid(row=3, column=1, sticky="ew", pady=(5, 0))
+        lv.grid(row=4, column=1, sticky="ew", pady=(5, 0))
+        self._advanced_rows += [lv_label, lv]
         self.level_min_var = self._level_box(lv, "min", self.level_min)       # either, both or neither
         tk.Label(lv, text="–", bg=BG, fg=FG_FAINT, font=self.f_small).pack(side="left", padx=6)
         self.level_max_var = self._level_box(lv, "max", self.level_max)
-        self.clear_chip = tk.Label(lv, text="Clear", bg=ACCENT, fg=ACCENT_FG, font=self.f_small,
-                                   cursor="hand2", padx=12, pady=3)
-        self.clear_chip.bind("<Button-1>", lambda e: self._clear_filters())
+        self.advanced_open = bool(cfg.get("advanced_filters", False))
+        self._paint_advanced()
         self._paint_chips()
         self._paint_tabs()
 
@@ -632,13 +646,25 @@ class SearchWindow:
             self.clear_chip.pack(side="right")
         else:
             self.clear_chip.pack_forget()
+        if hasattr(self, "adv_toggle"):
+            self._paint_advanced()
 
     def _paint_tabs(self):
         n = len(self.favorites)
         self.tab_fav.config(text=f"★ Favorites{f'  {n}' if n else ''}")
         near = len(self._nearby_rows) if self._nearby_on() else 0
         self.tab_near.config(text=f"◉ Nearby{f'  {near}' if near else ''}")
-        for tab, mode in ((self.tab_search, "search"), (self.tab_fav, "favorites"), (self.tab_near, "nearby")):
+        rec = len(self._recent_rows) if self._nearby_on() else 0
+        self.tab_recent.config(text=f"↺ Recent{f'  {rec}' if rec else ''}")
+        if self._nearby_on():                    # Recent only means something with Nearby on
+            if not self.tab_recent.winfo_manager():
+                self.tab_recent.pack(side="left", padx=(18, 0))
+        elif self.tab_recent.winfo_manager():
+            self.tab_recent.pack_forget()
+            if self.mode == "recent":
+                self.root.after_idle(lambda: self._set_mode("nearby"))
+        for tab, mode in ((self.tab_search, "search"), (self.tab_fav, "favorites"), (self.tab_near, "nearby"),
+                          (self.tab_recent, "recent")):
             tab.config(fg=ACCENT if self.mode == mode else FG_DIM)
 
     def _paint_pin(self):
@@ -663,14 +689,13 @@ class SearchWindow:
         if mode == self.mode:
             return
         self.mode = mode
-        self.nearby_bar.pack_forget()
+        self.nearby_view = "recent" if mode == "recent" else "nearby"
         self._ensure_filters()
         if mode == "favorites":
             self.box.pack_forget()
             self.fav_chars = self.favorites.characters()
-        elif mode == "nearby":
+        elif mode in ("nearby", "recent"):
             self.box.pack_forget()
-            self.nearby_bar.pack(fill="x", pady=(10, 0), before=self.filters)
             self._refresh_nearby(force=True)
         else:
             self.box.pack(fill="x", pady=(10, 8), before=self.filters)
@@ -689,6 +714,22 @@ class SearchWindow:
         self.factions ^= {k}
         self.cfg["factions"] = sorted(self.factions)
         self._filters_changed()
+
+    def _toggle_advanced(self):
+        self.advanced_open = not self.advanced_open
+        self.cfg["advanced_filters"] = self.advanced_open
+        self._paint_advanced()
+
+    def _paint_advanced(self):
+        for w in self._advanced_rows:
+            if self.advanced_open:
+                w.grid()
+            else:
+                w.grid_remove()
+        n = len(self.classes) + (self.level_min is not None or self.level_max is not None)
+        hidden = f" ({n})" if n and not self.advanced_open else ""
+        self.adv_toggle.config(text=f"Advanced filters{hidden}  {'▴' if self.advanced_open else '▾'}",
+                               fg=ACCENT if hidden else FG_DIM)
 
     def _toggle_class(self, k):
         self.classes ^= {k}
@@ -863,7 +904,7 @@ class SearchWindow:
 
     # ═════ list rendering ═════
     def _source(self) -> list[Character]:
-        if self.mode == "nearby":
+        if self.mode in ("nearby", "recent"):
             if not self._nearby_on():
                 return []
             if self.nearby_view == "recent":
@@ -896,11 +937,11 @@ class SearchWindow:
             if self.nearby is not None and now - getattr(self, "_nearby_poll", 0) > 0.3:
                 self._nearby_poll = now
                 self._refresh_nearby()
-                if self.mode == "nearby" and self.nearby_view == "recent" and \
+                if self.mode in ("nearby", "recent") and self.nearby_view == "recent" and \
                         now - getattr(self, "_ago_tick", 0) > 15:
                     self._ago_tick = now
                     self._mark()
-                if self.mode == "nearby" and (self.nearby.recording() or getattr(self, "_rec_done_at", 0) is None
+                if self.mode in ("nearby", "recent") and (self.nearby.recording() or getattr(self, "_rec_done_at", 0) is None
                                               or time.time() - (getattr(self, "_rec_done_at", 0) or 0) < 11):
                     self._mark()                   # keep the recording countdown / saved note current
             if self.profile_view is None:
@@ -947,7 +988,7 @@ class SearchWindow:
                 continue
             c = view[i]
             if not c.char_id:
-                if self.mode == "nearby" and self.nearby is not None:
+                if self.mode in ("nearby", "recent") and self.nearby is not None:
                     self.nearby.want(c.name)        # on screen: ask NCSOFT who this is
             elif c.status == "none" or c.stale:
                 self.api.want(c, lambda ch: self.inbox.put(("detail",)))
@@ -961,7 +1002,7 @@ class SearchWindow:
         return has_skel
 
     def _draw_empty(self, cv, width):
-        if self.mode == "nearby":
+        if self.mode in ("nearby", "recent"):
             msg, sub = self._nearby_empty_text()
             if not msg:
                 return
@@ -1008,7 +1049,7 @@ class SearchWindow:
             cv.create_text(px + PORTRAIT / 2, py + PORTRAIT / 2, text=(c.class_name[:1] or "?"), fill=col,
                            font=self.f_name, tags="card")
         tx = 72
-        if self.mode == "nearby":
+        if self.mode in ("nearby", "recent"):
             side = self._nearby_side.get(c.name)
             if side in ("enemy", "ally"):          # a slim marker on the left edge: red enemy, green ally
                 round_rect(cv, 0, y + 10, 4, y + CARD_H - 10, 2, fill=RED if side == "enemy" else GREEN,
@@ -1039,7 +1080,7 @@ class SearchWindow:
         region = REGION_LABELS.get(c.region, c.region.upper())
         where = (f"{c.server_name} ({region})" if region else c.server_name) if c.server_name else ""
         rest = (f"  ·  Lv {c.level}" if c.level else "") + (f"  ·  {where}" if where else "")
-        if self.mode == "nearby" and self.nearby_view == "recent":
+        if self.mode in ("nearby", "recent") and self.nearby_view == "recent":
             left_at, fought = getattr(self, "_recent_info", {}).get(c.name, (None, False))
             if left_at:
                 rest += f"  ·  {'⚔ ' if fought else ''}{ago(time.time() - left_at)}"
@@ -1074,7 +1115,7 @@ class SearchWindow:
         return True
 
     def _update_status(self, view):
-        if self.mode == "nearby":
+        if self.mode in ("nearby", "recent"):
             self.status.config(text=self._nearby_status_text(view), fg=FG_DIM)
             return
         if self.mode == "favorites":
@@ -1153,21 +1194,6 @@ class SearchWindow:
         self._mark()
 
     # ═════ nearby ═════
-    def _set_nearby_view(self, view: str):
-        if view != self.nearby_view:
-            self.nearby_view = view
-            self._paint_view_chips()
-            self.canvas.yview_moveto(0)
-            self._mark()
-
-    def _paint_view_chips(self):
-        counts = {"nearby": len(self._nearby_rows), "recent": len(self._recent_rows)}
-        for key, lb in self.view_chips:
-            on = key == self.nearby_view
-            label = "Nearby" if key == "nearby" else "Recent"
-            lb.config(text=f"{label}  {counts[key]}" if counts[key] else label,
-                      bg=ACCENT if on else SURFACE, fg=ACCENT_FG if on else FG_DIM)
-
     def _nearby_on(self) -> bool:
         return self.nearby is not None and bool(self.cfg.get("nearby_enabled"))
 
@@ -1184,16 +1210,15 @@ class SearchWindow:
         self._nearby_side = {c.name: side for side, c, _t, _f in self._recent_rows}
         self._nearby_side.update({c.name: side for side, c in self._nearby_rows})
         self._recent_info = {c.name: (t, f) for _s, c, t, f in self._recent_rows}
-        self._paint_view_chips()
         self._paint_tabs()
         self._paint_nearby_panel()
-        if self.mode == "nearby":
+        if self.mode in ("nearby", "recent"):
             self._mark()
 
     def _nearby_record(self):
         """Shift+click on the Live line: save 60 s of game traffic for fixing the decoder."""
         from .nearby import CAPTURING
-        if self.mode == "nearby" and self._nearby_on() and self.nearby.state == CAPTURING \
+        if self.mode in ("nearby", "recent") and self._nearby_on() and self.nearby.state == CAPTURING \
                 and not self.nearby.recording():
             self.nearby.start_recording(60)
             self._mark()
@@ -1242,7 +1267,7 @@ class SearchWindow:
     def _paint_nearby_panel(self):
         """The opt-in card (Nearby off) or the Npcap card, placed over the list."""
         from .nearby import NO_LIBS, NO_NPCAP
-        if self.mode != "nearby" or self.nearby is None:
+        if self.mode not in ("nearby", "recent") or self.nearby is None:
             key = None
         elif not self.cfg.get("nearby_enabled"):
             key = "optin"
@@ -1257,11 +1282,8 @@ class SearchWindow:
             w.destroy()
         if key is None:                            # filters do nothing behind the opt-in / Npcap card
             self._ensure_filters()
-            if self.mode == "nearby" and not self.nearby_bar.winfo_manager():
-                self.nearby_bar.pack(fill="x", pady=(10, 0), before=self.filters)
-        elif self.mode == "nearby":
+        elif self.mode in ("nearby", "recent"):
             self.filters.pack_forget()
-            self.nearby_bar.pack_forget()
         if key is None:
             self.nearby_panel.place_forget()
             return
@@ -1476,77 +1498,43 @@ class SearchWindow:
             activate(self._hwnd())
         self.root.focus_force()
 
-    # collapse to a small bubble
+    # minimize to the taskbar. A frameless window can't be minimized as it is, so it briefly gets its normal
+    # frame back, minimizes, and goes frameless again when it's restored.
     def collapse(self):
-        if not self.overlay:
-            self.root.iconify()
-            return
         self._save_geometry()
         self._hide_tooltips()
-        self.root.withdraw()
-        self._show_pill()
+        if self.overlay:
+            self._minimized = True
+            self.root.overrideredirect(False)
+        self.root.iconify()
+
+    def _on_map(self, _e=None):
+        if getattr(self, "_minimized", False) and self.root.state() == "normal":
+            self._minimized = False
+            self.root.after(10, self._restore_frameless)
+
+    def _restore_frameless(self):
+        self.root.overrideredirect(True)
+        w, h = self.cfg.get("window_size", [560, 760])
+        x, y = self.cfg.get("window_pos", [80, 80])
+        self.root.geometry(f"{int(w)}x{int(h)}+{int(x)}+{int(y)}")
+        self._hwnd_cache = None                  # the window was re-created
+        self._style_window()
+        self.root.attributes("-topmost", bool(self.cfg.get("always_on_top", True)))
+        self.root.lift()
+        self._lift_chrome()
+        self._mark()
 
     def expand(self):
-        if self.pill is not None:
-            self.cfg["pill_pos"] = [self.pill.winfo_x(), self.pill.winfo_y()]
-            self.pill.withdraw()
         self.root.deiconify()
         self.root.attributes("-topmost", bool(self.cfg.get("always_on_top", True)))
         self.apply_opacity()
         self.root.lift()
         self._mark()
 
-    def _show_pill(self):
-        if self.pill is None:
-            size = 46
-            self.pill = tk.Toplevel(self.root)
-            self.pill.overrideredirect(True)
-            self.pill.configure(bg=BG)
-            try:
-                self.pill.attributes("-transparentcolor", "#010203")
-                self.pill.configure(bg="#010203")
-            except tk.TclError:
-                pass
-            cv = tk.Canvas(self.pill, width=size, height=size, bg=self.pill["bg"], highlightthickness=0,
-                           cursor="hand2")
-            cv.pack()
-            try:
-                from PIL import ImageTk
-                from .desktop import make_bubble_image
-                self._icons["bubble"] = ImageTk.PhotoImage(make_bubble_image(size))
-                cv.create_image(size / 2, size / 2, image=self._icons["bubble"])
-            except Exception:  # noqa: BLE001
-                cv.create_oval(2, 2, size - 2, size - 2, fill=ACCENT, outline="")
-            cv.bind("<ButtonPress-1>", self._pill_press)
-            cv.bind("<B1-Motion>", self._pill_drag)
-            cv.bind("<ButtonRelease-1>", self._pill_release)
-            self._pill_canvas = cv
-        x, y = self.cfg.get("pill_pos") or [self.root.winfo_x() + self.root.winfo_width() - 60, self.root.winfo_y()]
-        self.pill.geometry(f"+{int(x)}+{int(y)}")
-        self.pill.deiconify()
-        self.pill.attributes("-topmost", True)
-        self.pill.lift()
-
-    def _pill_press(self, e):
-        self._pill_drag_from = (e.x_root, e.y_root, self.pill.winfo_x(), self.pill.winfo_y())
-        self._pill_moved = False
-
-    def _pill_drag(self, e):
-        x0, y0, px, py = self._pill_drag_from
-        if abs(e.x_root - x0) + abs(e.y_root - y0) > 3:
-            self._pill_moved = True
-        self.pill.geometry(f"+{px + e.x_root - x0}+{py + e.y_root - y0}")
-
-    def _pill_release(self, e):
-        self.cfg["pill_pos"] = [self.pill.winfo_x(), self.pill.winfo_y()]
-        if not self._pill_moved:
-            self.expand()
-
-    # hide / show everything (hotkey, tray, second launch)
+    # hide / show everything (tray, second launch)
     def is_visible(self) -> bool:
-        if self.root.state() != "withdrawn":
-            return True
-        return self.pill is not None and self.pill.state() != "withdrawn"
+        return self.root.state() not in ("withdrawn", "iconic")
 
     def toggle_visible(self):
         if self.is_visible():
@@ -1555,24 +1543,20 @@ class SearchWindow:
             self.show()
 
     def hide(self):
-        self._hidden_state = "pill" if (self.pill is not None and self.pill.state() != "withdrawn") else "window"
-        self._save_geometry()
+        self._hidden_state = "window"
+        if self.root.state() != "iconic":
+            self._save_geometry()
         self._hide_tooltips()
-        if self.pill is not None:
-            self.pill.withdraw()
         self.root.withdraw()
 
     def show(self, focus: bool = True):
         self.tray_icon[1]()                      # back on screen: no tray icon
-        if self._hidden_state == "pill":
-            self._show_pill()
-        else:
-            self.expand()
-            if focus:
-                self.root.focus_force()
-                if self.profile_view is None and self.settings_view is None and self.mode == "search":
-                    self.search_entry.focus_set()
-                    self.search_entry.select_range(0, "end")
+        self.expand()
+        if focus:
+            self.root.focus_force()
+            if self.profile_view is None and self.settings_view is None and self.mode == "search":
+                self.search_entry.focus_set()
+                self.search_entry.select_range(0, "end")
         self._hidden_state = None
 
     def _hide_tooltips(self):
@@ -1581,7 +1565,7 @@ class SearchWindow:
 
     # ═════ updates (the button lives in Settings; the gear turns gold when one is waiting) ═════
     def _sync_update_button(self):
-        if self.updater is None or not hasattr(self, "gear"):
+        if self.updater is None or not hasattr(self, "upd_btn"):
             return
         look = self.updater.button()
         if look == self._update_look:
@@ -1590,9 +1574,29 @@ class SearchWindow:
         self._paint_gear()
 
     def _paint_gear(self):
-        waiting = self.updater is not None and self.updater.state in ("available", "ready")
-        self._set_icon(self.gear, "cog", FG_DIM, accent=ACCENT if waiting else None)
+        self._set_icon(self.gear, "cog", FG_DIM)
         self.gear.config(bg=BG)
+        st = self.updater.state if self.updater is not None else None
+        if st in ("available", "downloading", "ready"):
+            self._set_icon(self.upd_btn, "update", FG_DIM if st == "downloading" else GREEN)
+            self.upd_btn.config(bg=BG, cursor="watch" if st == "downloading" else "hand2")
+            if not self.upd_btn.winfo_manager():
+                self.upd_btn.pack(side="right", before=self.pin)
+        elif self.upd_btn.winfo_manager():
+            self.upd_btn.pack_forget()
+
+    def _demo_update_state(self, state):
+        """Screenshots only: show how the title bar looks with an update waiting."""
+        if self.updater is None:
+            return
+        if state:
+            self._saved_update = (self.updater.state, self.updater.latest)
+            self.updater.state, self.updater.latest = state, "9.9.9"
+        elif getattr(self, "_saved_update", None):
+            self.updater.state, self.updater.latest = self._saved_update
+        self._update_look = None
+        self._sync_update_button()
+        self.root.update_idletasks()
 
     def _update_click(self):
         if self.updater is None:
@@ -1635,6 +1639,7 @@ class SearchWindow:
             self._apply_levels()
         steps += [
             (t, self.close_profile),
+            (t + 100, lambda: self.advanced_open or self._toggle_advanced()),
             (t + 200, lambda: self._toggle_class("Cleric")),
             (t + 400, lambda: set_levels("40", "45")),
             (t + 3500, lambda: self._grab(f"{base}-filters.png")),
@@ -1647,9 +1652,9 @@ class SearchWindow:
             (t + 1000, lambda: self.set_nearby_enabled(True)),
             (t + 4500, lambda: self._grab(f"{base}-nearby.png")),
             (t + 4600, lambda: self.nearby and self.nearby.state == "capturing" and self.demo_teleport()),
-            (t + 5200, lambda: self._set_nearby_view("recent")),
+            (t + 5200, lambda: self._set_mode("recent")),
             (t + 5800, lambda: self._grab(f"{base}-nearby-recent.png")),
-            (t + 6000, lambda: self._set_nearby_view("nearby")),
+            (t + 6000, lambda: self._set_mode("nearby")),
             (t + 6100, lambda: self.set_nearby_enabled(False)),
             (t + 6300, lambda: self._set_mode("search")),
         ]
@@ -1661,8 +1666,10 @@ class SearchWindow:
             (t + 2700, self.open_settings),
             (t + 3500, lambda: self._grab(f"{base}-settings.png")),
             (t + 3700, self.close_settings),
+            (t + 3750, lambda: self._demo_update_state("available")),
+            (t + 3850, lambda: self._grab(f"{base}-update-available.png")),
+            (t + 3880, lambda: self._demo_update_state(None)),
             (t + 3900, self.collapse),
-            (t + 4700, lambda: self._grab_area(f"{base}-pill.png", self.pill, pad=30)),
             (t + 4900, self.expand),
             (t + 5500, lambda: self._grab(f"{base}-expanded.png")),
             (t + 6100, self.close),
@@ -1710,7 +1717,7 @@ class SearchWindow:
 
     # ═════ lifecycle ═════
     def _save_geometry(self):
-        if self.root.state() == "withdrawn":
+        if self.root.state() in ("withdrawn", "iconic"):
             return
         try:
             self.cfg["window_size"] = [self.root.winfo_width(), self.root.winfo_height()]
@@ -1729,8 +1736,6 @@ class SearchWindow:
         if getattr(self, "_closed", False):
             return
         self._closed = True
-        if self.pill is not None and self.pill.state() != "withdrawn":
-            self.cfg["pill_pos"] = [self.pill.winfo_x(), self.pill.winfo_y()]
         self._save_geometry()
         self.favorites.save()
         self.images.close()
