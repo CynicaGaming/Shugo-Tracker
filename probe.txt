@@ -1,0 +1,12 @@
+char <strong>Luna</strong> 2509 mFC9Ig2KG-dcUWaabYra9qLZVt_SAY9Nfa_Ac7G32Rs=
+skill keys ['acquired', 'category', 'equip', 'icon', 'id', 'name', 'needLevel', 'skillLevel']
+sample skill {"acquired": 1, "category": "Active", "equip": 1, "icon": "https://assets.playnccdn.com/static-aion2-gamedata/resources/ICON_EL_SKILL_001.png", "id": 16010000, "name": "Cold Shock", "needLevel": 1, "skillLevel": 14}
+page https://aion2.plaync.com/en-us/characters/index 200 2
+page https://aion2.plaync.com/en-us/characters/server/2509/mFC9Ig2KG-dcUWaabYra9qLZVt_SAY9Nfa_Ac7G32Rs%3D 404 477
+JS files scanned: 0
+TRY character/skill 404 {"detail":"No static resource api/character/skill.","instance":"/api/character/skill","status":404,"title":"Not Found"}
+TRY character/skillDetail 404 {"detail":"No static resource api/character/skillDetail.","instance":"/api/character/skillDetail","status":404,"title":"Not Found"}
+TRY character/skill/detail 404 {"detail":"No static resource api/character/skill/detail.","instance":"/api/character/skill/detail","status":404,"title":"Not Found"}
+TRY skill/detail 404 {"instance":"/api/skill/detail","status":404,"title":"Not Found","result":{"exceptionClassName":"NoResourceFoundException","message":"No static resource api/skill/detail for request '/api/skill/detail'.","displayableMessage":false,"errorCode":null,"errorMessageArgs":null,"field":null,"object":null}}
+TRY gamedata/skill 404 {"instance":"/api/gamedata/skill","status":404,"title":"Not Found","result":{"exceptionClassName":"NoResourceFoundException","message":"No static resource api/gamedata/skill for request '/api/gamedata/skill'.","displayableMessage":false,"errorCode":null,"errorMessageArgs":null,"field":null,"object":null}}
+TRY character/equipment/item 404 {"detail":"Resource not found","instance":"/api/character/equipment/item","status":404,"title":"Not Found","type":"https://www.plaync.com/error/resource.not_found","code":"resource.not_found","timestamp":"2026-10-24T09:10:50.769411224+09:00"}
