@@ -222,3 +222,17 @@ class LiveLayoutTests(unittest.TestCase):
         svc.on_bytes(("a", 1, "b", 2), frame(self.WOODOO) + frame(self.SHAGRA), False)
         sides = {c.name: side for side, c, _p in svc.snapshot()}
         self.assertEqual(sides, {"Woodoo": "enemy", "Shagra": "ally"})
+
+
+class CapturePaddingTests(unittest.TestCase):
+    def test_ethernet_padding_is_not_payload(self):
+        try:
+            from scapy.layers.inet import IP, TCP
+            from scapy.packet import Padding, Raw
+        except ImportError:
+            self.skipTest("no scapy here")
+        from shugotracker.capture import tcp_payload
+        ack = IP(bytes(IP(src="1.1.1.1", dst="2.2.2.2") / TCP(sport=13328, dport=5000, flags="A")) + b"\0" * 6)
+        self.assertEqual(tcp_payload(ack[IP], ack[TCP]), b"")
+        data = IP(bytes(IP(src="1.1.1.1", dst="2.2.2.2") / TCP(sport=13328, dport=5000) / Raw(b"\x0e\x00\x36")))
+        self.assertEqual(tcp_payload(data[IP], data[TCP]), b"\x0e\x00\x36")

@@ -47,6 +47,24 @@ def bpf_for(conns: set[tuple[str, int, str, int]]) -> str:
     return "tcp and (" + " or ".join(parts) + ")"
 
 
+def tcp_payload(ip, tcp) -> bytes:
+    """
+    The TCP segment's real data. Ethernet pads frames shorter than 60 bytes with zeros, and scapy hands that
+    padding back as part of the payload: for a bare ACK that's 6 zero bytes at the next sequence number, which
+    the reassembler would then keep instead of the real bytes. Cut to the length the IP header states.
+    """
+    raw = bytes(tcp.payload)
+    try:
+        header = int(tcp.dataofs or 5) * 4
+        if getattr(ip, "version", 4) == 6:
+            size = int(ip.plen) - header
+        else:
+            size = int(ip.len) - int(ip.ihl or 5) * 4 - header
+    except (TypeError, ValueError, AttributeError):
+        return raw
+    return raw[:max(0, size)]
+
+
 class GameCapture:
     """
     Calls on_bytes(flow, data, gap) with in-order server->client bytes.
@@ -145,7 +163,7 @@ class GameCapture:
         if ip is None:
             return
         tcp = pkt[TCP]
-        data = bytes(tcp.payload)
+        data = tcp_payload(ip, tcp)
         if not data:
             return
         key: FlowKey = (ip.src, int(tcp.sport), ip.dst, int(tcp.dport))
@@ -172,7 +190,7 @@ def replay_pcap(path: str, on_bytes: Callable[[FlowKey, bytes, bool], None],
             tcp, ip = pkt[TCP], pkt[IP]
             if server_ports and int(tcp.sport) not in server_ports:
                 continue
-            data = bytes(tcp.payload)
+            data = tcp_payload(ip, tcp)
             if not data:
                 continue
             ts = float(pkt.time)
