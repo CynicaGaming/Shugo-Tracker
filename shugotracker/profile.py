@@ -151,7 +151,8 @@ class Profile:
 
 
 def _item(d: dict | None, slot: str | None = None) -> Item | None:
-    if not d:
+    # NCSOFT sends an empty placeholder (no name, no icon) for things a character doesn't have
+    if not d or not (d.get("name") or d.get("icon")):
         return None
     return Item(slot=slot or d.get("slotPosName") or "", name=d.get("name") or "?", grade=d.get("grade") or "Common",
                 enchant=int(d.get("enchantLevel") or 0), exceed=int(d.get("exceedLevel") or 0),

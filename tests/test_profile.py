@@ -285,3 +285,15 @@ class ReuseCardInfoTests(unittest.TestCase):
         self.assertTrue(fin.wait(5))
         self.assertEqual(sess.calls.count(a.INFO_URL), 1)      # the card's info was reused
         self.assertEqual(sess.calls.count(EQUIPMENT_URL), 1)
+
+
+class EmptyItemTests(unittest.TestCase):
+    def test_placeholder_wing_appearance_is_dropped(self):
+        import copy
+        from shugotracker.profile import parse_profile
+        data = json.load(open(os.path.join(os.path.dirname(__file__), "fixtures", "profile_sample.json"), encoding="utf-8"))
+        eq = copy.deepcopy(data["equipment"])
+        eq["petwing"]["wingSkin"] = {"id": 0, "name": "", "grade": "", "icon": "", "enchantLevel": 0}
+        p = parse_profile(data["info"], eq)
+        self.assertIsNone(p.wing_skin)
+        self.assertIsNotNone(p.wing)
