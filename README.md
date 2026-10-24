@@ -186,10 +186,11 @@ fighting you counts as an enemy until their server is known. Your own character 
 record sent when you log in or load a map; if you turn Nearby on mid-session, load a map once (or set
 `"my_server"`).
 
-Players are listed as soon as the game sends their spawn record. Only cards on screen are looked up: one
-NCSOFT search per player for the exact name in your region (nearby players share it), which gives their real
-server and faction. The server read from the game is only used to choose between namesakes. Your region is
-found once from your own name and remembered.
+Players are listed as soon as the game sends their spawn record, and every one is identified in the
+background (cards on screen first): one NCSOFT search for the exact name and class in your region, which gives
+their real server and faction. Names are only unique per server, so between namesakes the app uses, in order,
+the server named by the game, ignores level-1 characters (mostly reserved names), prefers servers already seen
+around you, then your faction, then the highest level. Your region and character are remembered.
 
 ### Troubleshooting
 

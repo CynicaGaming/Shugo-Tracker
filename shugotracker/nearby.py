@@ -46,7 +46,7 @@ class NearbyService:
 
     def __init__(self, api: Api, cfg: dict | None = None, log: Callable[[str], None] | None = None,
                  on_change: Callable[[], None] | None = None, data_dir: str | None = None,
-                 find: Callable[[str, str], list[Character]] | None = None):
+                 find: Callable[..., list[Character]] | None = None):
         cfg = cfg or {}
         self.api = api
         self._find = find or api.find_by_name
@@ -65,7 +65,9 @@ class NearbyService:
         self._lookups: queue.PriorityQueue = queue.PriorityQueue()
         self._seq = itertools.count()
         self._pending: set[str] = set()
-        self._failed: dict[str, str] = {}             # name -> "notfound" | "several"
+        self._failed: dict[str, tuple] = {}           # name -> (reason, when)
+        self._background: set[str] = set()
+        self._inflight: set[str] = set()
         self._my_region: str | None = cfg.get("nearby_region") or None
         self.on_region: Callable[[str], None] = lambda r: None   # remember it (set by the app)
         self.on_me: Callable[[str, int], None] = lambda n, s: None  # remember your character (set by the app)
@@ -151,6 +153,7 @@ class NearbyService:
             self._set_state(WAITING, "waiting for AION 2")
             with self._lock:
                 self.tracker.clear()
+                self._background.clear()
         elif "error" in low:
             self._set_state(ERROR, msg)
 
@@ -190,10 +193,15 @@ class NearbyService:
     # with one search per player for the exact name across your region. NCSOFT's answer gives the real server
     # and faction; the server read from the game is only used to choose between namesakes.
     def _request(self, name: str, prio: int, servers: list[int], guessed: bool) -> None:
-        """Tracker callback: nothing is queued until the player's card is on screen (see want())."""
+        """Tracker callback (lock held): every player is identified in the background; cards on screen
+        jump the queue (see want())."""
+        if name == self.tracker.me.name or name in self._chars or name in self._background:
+            return
+        self._background.add(name)
+        self._lookups.put((2 + prio, next(self._seq), name, None))
 
     def want(self, name: str) -> None:
-        """The UI shows this player's card: identify them (newest requests first)."""
+        """The UI shows this player's card: identify them next (newest requests first)."""
         with self._lock:
             failed = self._failed.get(name)
             if name in self._chars or name in self._pending or (failed and time.time() - failed[1] < RETRY_FAILED_S):
@@ -256,28 +264,37 @@ class NearbyService:
                 continue
             with self._lock:
                 p = self.tracker.players.get(name)
-                if p is None:
-                    self._pending.discard(name)
+                busy = name in self._inflight
+                failed = self._failed.get(name)
+                if p is None or name in self._chars or busy or (failed and time.time() - failed[1] < RETRY_FAILED_S):
+                    if not busy:
+                        self._pending.discard(name)
                     continue
+                self._inflight.add(name)
                 hint = p.server if p.server_source in ("record", "owner") else None
-            err, pick = None, None
+                cls = WIRE_CLASS.get(p.class_name or "", p.class_name or "")
+                seen_servers = {c.server_id for c in self._chars.values()}
+                my_faction = self.tracker.me.faction
+            err, cands = None, []
             try:
-                cands = self._find(name, region)
+                if cls:
+                    cands = self._find(name, region, [cls])     # the class the game reported narrows namesakes
+                if not cands:
+                    cands = self._find(name, region)
             except Exception as e:  # noqa: BLE001
-                cands, err = [], f"{e.__class__.__name__}: {e}"
-            if hint:
-                pick = next((c for c in cands if c.server_id == hint), None)
-            if pick is None and len(cands) == 1:
-                pick = cands[0]
+                err = f"{e.__class__.__name__}: {e}"
+            pick = choose(cands, hint, seen_servers, my_faction)
             with self._lock:
+                self._inflight.discard(name)
                 self._pending.discard(name)
                 if pick:
                     self._chars[name] = pick
                     res = Lookup(status="ok", server=pick.server_id, level=pick.level,
                                  class_name=pick.class_name, faction=pick.race or None)
                 else:
-                    self._failed[name] = ("several" if len(cands) > 1 else "notfound" if not err else "error",
-                                          time.time())
+                    # a network error is retried within seconds; "not on NCSOFT" after RETRY_FAILED_S
+                    self._failed[name] = ("error", time.time() - RETRY_FAILED_S + 15) if err else \
+                        ("notfound", time.time())
                     res = Lookup(status="error" if err else "notfound", error=err)
                 self.tracker.apply_lookup(name, res, [])
                 self._v += 1
@@ -379,6 +396,28 @@ class NearbyService:
             f.write(data)
         except (OSError, ValueError):
             self.stop_recording()
+
+
+def choose(cands: list[Character], hint: int | None, seen_servers: set[int], my_faction: int | None
+           ) -> Character | None:
+    """Which of the characters with this exact name is the one standing near you."""
+    if not cands:
+        return None
+    if hint:
+        exact = [c for c in cands if c.server_id == hint]
+        if exact:
+            return exact[0]
+    real = [c for c in cands if c.level > 1] or cands        # level-1 namesakes are mostly reserved names
+    if len(real) == 1:
+        return real[0]
+    for narrow in (lambda c: c.server_id in seen_servers,     # servers already seen around you
+                   lambda c: my_faction is not None and c.race == my_faction):
+        subset = [c for c in real if narrow(c)]
+        if len(subset) == 1:
+            return subset[0]
+        if subset:
+            real = subset
+    return max(real, key=lambda c: c.level)
 
 
 def replay_recording(path: str, on_bytes: Callable[[tuple, bytes, bool], None]) -> int:

@@ -21,7 +21,7 @@ class FakeNcsoft:
     def __init__(self, world):
         self.world, self.calls, self.lock = world, [], threading.Lock()
 
-    def __call__(self, name, region):
+    def __call__(self, name, region, classes=None):
         with self.lock:
             self.calls.append((name, region))
         return [char(name, sid) for sid in self.world.get(region, {}).get(name, [])]
@@ -52,14 +52,11 @@ class NearbyServiceTests(unittest.TestCase):
             if not c.char_id:
                 svc.want(c.name)
 
-    def test_listed_at_once_identified_only_when_shown(self):
+    def test_listed_at_once_then_identified(self):
         svc, find = self.make({"nae": {"Mine": [1101], "Foe": [2101], "Friend": [1101]}})
         self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Foe"), other_record(300, "Friend"),
                   damage(100, 200))
         self.assertEqual({c.name for _s, c, _p in svc.snapshot()}, {"Foe", "Friend"})   # instantly
-        time.sleep(0.2)
-        self.assertEqual([n for n, _r in find.calls if n != "Mine"], [])            # nobody looked up yet
-        self.show_all(svc)
         self.assertTrue(wait_for(lambda: all(c.char_id for _s, c, _p in svc.snapshot())))
         sides = {c.name: side for side, c, _p in svc.snapshot()}
         self.assertEqual(sides, {"Foe": "enemy", "Friend": "ally"})
@@ -82,17 +79,22 @@ class NearbyServiceTests(unittest.TestCase):
         self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].char_id))
         self.assertEqual(svc.snapshot()[0][1].server_id, 2101)
 
-    def test_ambiguous_namesake_stops_loading(self):
+    def test_namesakes_without_a_hint_still_resolve(self):
         svc, _ = self.make({"nae": {"Mine": [1101], "Ash": [1101, 2101]}})
         self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Ash"))
-        self.show_all(svc)
+        self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].char_id))
+        self.assertEqual(svc.snapshot()[0][1].server_id, 1101)        # your faction wins a tie
+
+    def test_not_on_ncsoft_stops_loading(self):
+        svc, _ = self.make({"nae": {"Mine": [1101]}})
+        self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Nobody"))
         self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].status == "unresolved"))   # no endless shimmer
 
     def test_lookups_run_in_parallel(self):
         world = {"nae": {"Mine": [1101], **{f"P{i}": [1101] for i in range(8)}}}
         slow = FakeNcsoft(world)
 
-        def find(name, region):
+        def find(name, region, classes=None):
             time.sleep(0.2)
             return slow(name, region)
         svc = nb.NearbyService(object(), find=find, cfg={"nearby_region": "nae"})
@@ -165,6 +167,31 @@ class NearbyServiceTests(unittest.TestCase):
         svc = nb.NearbyService(object(), find=lambda n, r: [])
         svc.start()
         self.assertEqual(svc.state, nb.NO_NPCAP)
+
+
+class ChooseTests(unittest.TestCase):
+    def c(self, sid, level, race=None):
+        x = char("Ivaldi", sid)
+        x.level = level
+        return x
+
+    def test_real_namesakes_and_reserved_names(self):
+        # live data for "Ivaldi" (Sorcerer) in NA East: 12 level-1 reservations and two real characters
+        cands = [self.c(s, 1) for s in (1101, 1102, 1103, 1105, 1106, 1107, 1108, 2104, 2105, 2106, 2107, 2108)]
+        cands += [self.c(2101, 45), self.c(1104, 45)]
+        self.assertIsNone(nb.choose([], None, set(), None))
+        self.assertEqual(nb.choose(cands, 1104, set(), None).server_id, 1104)          # trusted game record
+        self.assertEqual(nb.choose(cands, None, {1104}, None).server_id, 1104)          # seen around you
+        self.assertEqual(nb.choose(cands, None, set(), 2).server_id, 2101)              # your faction
+        self.assertEqual(nb.choose([self.c(2103, 4), self.c(1104, 45)], None, set(), None).server_id, 1104)
+
+    def test_background_queue_identifies_off_screen_players(self):
+        find = FakeNcsoft({"nae": {"Mine": [1101], "Far": [1101]}})
+        svc = nb.NearbyService(object(), find=find, cfg={"nearby_region": "nae"})
+        svc.start_lookups()
+        self.addCleanup(svc.stop)
+        svc.on_bytes(("a", 1, "b", 2), frame(self_record(100, "Mine", 1101)) + frame(other_record(200, "Far")), False)
+        self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].char_id))                # never asked for by the UI
 
 
 if __name__ == "__main__":
