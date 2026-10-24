@@ -267,7 +267,7 @@ def _wire_demo(app: App) -> None:
 
 
 def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | None = None,
-                screenshot: str | None = None, after_update: bool = False) -> int:
+                screenshot: str | None = None, after_update: bool = False, selftest: str | None = None) -> int:
     from .aion2api import Api
     from .search_ui import SearchWindow
     from .updater import Updater
@@ -337,7 +337,8 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         return True
 
     from .favorites import Favorites
-    favorites = Favorites(None if (demo or screenshot) else os.path.join(DATA, "favorites.json"))
+    favorites = Favorites(None if (demo or screenshot) else os.path.join(DATA, "favorites.json"), log=log)
+    log(f"data folder: {DATA}  ·  {len(favorites)} favorites")
     if screenshot:
         cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [],
                "factions": [], "classes": [], "level_min": None, "level_max": None, "pill_pos": [560, 60]}
@@ -373,6 +374,20 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         if tray.start():
             extras["tray"] = tray
             win.tray_ok = True
+    if selftest:
+        def check():
+            if len(favorites):
+                result = f"loaded {len(favorites)}"
+            elif win._view:
+                win.toggle_favorite(win._view[0])
+                result = "added" if os.path.exists(os.path.join(DATA, "favorites.json")) else \
+                    f"add failed: {favorites.last_error}"
+            else:
+                result = "no search results"
+            with open(selftest, "w", encoding="utf-8") as f:
+                f.write(f"{result} | {DATA}")
+            win.root.after(500, win.close)
+        win.root.after(9000, check)
     win.run()
     return 0
 
@@ -530,6 +545,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--after-update", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--selftest-relaunch", metavar="FILE", help=argparse.SUPPRESS)
     ap.add_argument("--selftest-child", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--selftest-favorites", metavar="FILE", help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
     if args.selftest_relaunch:
         return _selftest_relaunch(args.selftest_relaunch, child=args.selftest_child)
@@ -549,8 +565,9 @@ def main(argv: list[str] | None = None) -> int:
         return _bench(args.bench)
     nearby = args.nearby or args.replay or args.console
     if not nearby:
-        code = _run_search(cfg, args.config, demo=args.demo, query=args.query, screenshot=args.screenshot,
-                           after_update=args.after_update)
+        code = _run_search(cfg, args.config, demo=args.demo, query=args.query or (
+                           "Luna" if args.selftest_favorites else None), screenshot=args.screenshot,
+                           after_update=args.after_update, selftest=args.selftest_favorites)
         if FROZEN:
             os._exit(code)              # don't let a leftover background thread keep the process alive
         return code

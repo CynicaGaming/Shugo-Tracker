@@ -10,8 +10,10 @@ _KEEP = ("char_id", "name", "race", "pc_id", "level", "server_id", "server_name"
 
 
 class Favorites:
-    def __init__(self, path: str | None):
+    def __init__(self, path: str | None, log=None):
         self.path = path
+        self.log = log or (lambda s: None)
+        self.last_error: str | None = None
         self._items: dict[str, dict] = {}
         self._load()
 
@@ -24,8 +26,14 @@ class Favorites:
             for d in data if isinstance(data, list) else []:
                 if isinstance(d, dict) and d.get("char_id") and d.get("server_id"):
                     self._items[f"{d['server_id']}:{d['char_id']}"] = {k: d.get(k) for k in _KEEP}
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as e:
+            self.last_error = f"load: {e}"
+            self.log(f"favorites: couldn't read {self.path}: {e}")
+            # keep the unreadable file instead of overwriting it on the next save
+            try:
+                os.replace(self.path, self.path + ".broken")
+            except OSError:
+                pass
 
     def merge_from(self, path: str) -> int:
         """Add favorites from another favorites.json (keeps ours on conflicts). Returns how many were added."""
@@ -41,12 +49,23 @@ class Favorites:
         if not self.path:
             return
         try:
+            os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
             tmp = self.path + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(list(self._items.values()), f, ensure_ascii=False, indent=1)
-            os.replace(tmp, self.path)
-        except OSError:
-            pass
+            for attempt in range(5):         # another program (antivirus, backup) may hold the file briefly
+                try:
+                    os.replace(tmp, self.path)
+                    break
+                except PermissionError:
+                    if attempt == 4:
+                        raise
+                    import time
+                    time.sleep(0.1)
+            self.last_error = None
+        except (OSError, TypeError, ValueError) as e:
+            self.last_error = f"save: {e}"
+            self.log(f"favorites: couldn't save {self.path}: {e}")
 
     def __len__(self) -> int:
         return len(self._items)

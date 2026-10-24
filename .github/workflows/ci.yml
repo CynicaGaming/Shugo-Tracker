@@ -43,6 +43,29 @@ jobs:
         continue-on-error: true
         run: python -m shugotracker.app --query Luna --screenshot ui-live.png
 
+      - name: Packaged exe keeps favorites (start, star, quit, start again from another folder)
+        shell: pwsh
+        run: |
+          python -m pip install pyinstaller
+          Set-Content -Path shugotracker/_version.py -Value '__version__ = "0.0.1"'
+          python -m PyInstaller --noconfirm --clean ShugoTracker.spec *> build.txt
+          git checkout -- shugotracker/_version.py
+          $fav = Join-Path $env:APPDATA "ShugoTracker\favorites.json"
+          Remove-Item $fav -ErrorAction SilentlyContinue
+          $r1 = Join-Path $env:RUNNER_TEMP "fav1.txt"; $r2 = Join-Path $env:RUNNER_TEMP "fav2.txt"
+          Start-Process dist\ShugoTracker.exe -ArgumentList "--selftest-favorites", "`"$r1`"" -Wait
+          New-Item -ItemType Directory -Force moved | Out-Null
+          Copy-Item dist\ShugoTracker.exe moved\ShugoTracker.exe
+          Start-Process moved\ShugoTracker.exe -ArgumentList "--selftest-favorites", "`"$r2`"" -Wait
+          $a = Get-Content $r1 -ErrorAction SilentlyContinue; $b = Get-Content $r2 -ErrorAction SilentlyContinue
+          Write-Output "::notice title=favorites::first run: $a"
+          Write-Output "::notice title=favorites::second run: $b"
+          "first: $a`nsecond: $b" | Set-Content ui-favorites-check.txt
+          if (Test-Path $fav) { Get-Content $fav | Set-Content ui-favorites-file.txt }
+          $log = Join-Path $env:APPDATA "ShugoTracker\shugo-tracker.log"
+          if (Test-Path $log) { Get-Content $log | Set-Content ui-favorites-log.txt }
+          if (-not ($b -like "loaded*")) { Write-Error "favorites did not survive a restart"; exit 1 }
+
       - name: App log (update / api lines)
         if: always()
         shell: pwsh
@@ -72,9 +95,10 @@ jobs:
         if: always() && github.event_name != 'pull_request'
         shell: pwsh
         run: |
-          if (-not (Test-Path ui-demo.png)) { exit 0 }
+          if (-not (Test-Path ui-*)) { exit 0 }
           New-Item -ItemType Directory -Force shots | Out-Null
-          Copy-Item ui-*.png shots\
+          Copy-Item ui-*.png shots\ -ErrorAction SilentlyContinue
+          Copy-Item ui-*.txt shots\ -ErrorAction SilentlyContinue
           Set-Location shots
           git init -q -b ci-screenshots
           git config user.name "github-actions"
