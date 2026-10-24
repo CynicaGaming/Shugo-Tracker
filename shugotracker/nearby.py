@@ -27,6 +27,7 @@ OFF, STARTING, NO_NPCAP, NO_LIBS, WAITING, CAPTURING, ERROR = (
     "off", "starting", "no_npcap", "no_libs", "waiting", "capturing", "error")
 
 WIRE_CLASS = {"Elementalist": "Spiritmaster"}   # the wire table predates the Global class names
+GUESS_DELAY_S = 2.5    # a player's server record usually follows their spawn: wait this long before guessing
 
 
 def npcap_installed() -> bool:
@@ -161,6 +162,13 @@ class NearbyService:
     def _on_event(self, ev) -> None:          # called with self._lock held
         before = len(self.tracker.players)
         self.tracker.handle(ev)
+        name = getattr(ev, "name", None)
+        p = self.tracker.players.get(name) if name else None
+        if p is not None and p.server and p.server_source in ("record", "owner"):
+            c = self._chars.get(name)
+            if c is not None and c.server_id != p.server:       # a guess matched a namesake elsewhere
+                del self._chars[name]
+                self.tracker.retry(name)
         self.stats["events"] += 1
         if len(self.tracker.players) > before:
             self.stats["players_seen"] += len(self.tracker.players) - before
@@ -171,17 +179,26 @@ class NearbyService:
         if name in self._chars:
             return
         self._pending.add(name)
-        self._lookups.put((prio, next(self._seq), name, list(servers)))
+        not_before = time.time() + GUESS_DELAY_S if guessed else 0.0
+        self._lookups.put((prio, next(self._seq), name, (list(servers), not_before)))
 
     def _lookup_loop(self) -> None:
         while not self._stop.is_set():
-            prio, _, name, servers = self._lookups.get()
+            prio, seq, name, job = self._lookups.get()
             if name is None:
                 return
+            servers, not_before = job
             with self._lock:
                 if name in self._chars or (name not in self.tracker.players and name != self.tracker.me.name):
                     self._pending.discard(name)
                     continue
+                p = self.tracker.players.get(name)
+                if p is not None and p.server and p.server_source in ("record", "owner"):
+                    servers, not_before = [p.server], 0.0        # the real server arrived meanwhile
+            if not_before > time.time():
+                self._lookups.put((prio, seq, name, (servers, not_before)))
+                self._stop.wait(0.2)
+                continue
             found, tried, err = None, [], None
             for sid in servers:
                 tried.append(sid)

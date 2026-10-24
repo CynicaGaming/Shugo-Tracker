@@ -90,3 +90,25 @@ class NearbyServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GuessTests(unittest.TestCase):
+    def test_namesake_on_my_server_is_not_mistaken_for_the_player(self):
+        calls = []
+
+        def find(name, sid):
+            calls.append((name, sid))
+            # "Ash" exists on my server (1101) AND on the enemy server (2101)
+            return Character(char_id=f"{name}-{sid}", name=name, race=sid // 1000, pc_id=10, level=45,
+                             server_id=sid, server_name="S", region="nae")
+        svc = nb.NearbyService(FakeApi(), find=find)
+        svc.start_lookups()
+        self.addCleanup(svc.stop)
+        feed = lambda *b: svc.on_bytes(("a", 1, "b", 2), b"".join(frame(x) for x in b), False)  # noqa: E731
+        feed(self_record(100, "Mine", 1101), other_record(200, "Ash"))       # server not known yet
+        time.sleep(0.3)
+        feed(ownership(5000, 200, 2101, "Ash"))                               # ...and here it is
+        self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].char_id != "", timeout=5))
+        side, c, _ = svc.snapshot()[0]
+        self.assertEqual((side, c.server_id), (ENEMY, 2101))
+        self.assertEqual([sid for n, sid in calls if n == "Ash"], [2101])       # never guessed on 1101

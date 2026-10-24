@@ -1227,6 +1227,11 @@ class SearchWindow:
         self._nearby_panel_key = key
         for w in self.nearby_panel.winfo_children():
             w.destroy()
+        for _k, chip in self.side_chips:           # side toggles only mean something while Nearby runs
+            if key is None:
+                chip.pack(side="left", padx=(0, 6), before=self.nearby_state)
+            else:
+                chip.pack_forget()
         if key is None:
             self.nearby_panel.place_forget()
             return

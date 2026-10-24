@@ -105,6 +105,8 @@ class DemoSession:
 
 
 # ───── nearby (made-up game traffic, decoded by the real decoder) ─────
+DEMO_NEARBY = [("Kraeg", 2101, 6), ("Vexa", 2101, 26), ("Morrow", 2102, 18), ("Sable", 2101, 34),
+               ("Aria", 1101, 10), ("Tamsin", 1102, 22), ("Oren", 1101, 46), ("Ilsa", 1101, 14)]
 def _frame(body: bytes) -> bytes:
     from .protocol import encode_varint
     return encode_varint(len(body) + 4) + body
@@ -120,8 +122,7 @@ def feed_nearby(service) -> None:
     from .protocol import encode_varint
     frames = [b"\x33\x36" + encode_varint(100) + b"\x00" * 4 + _name("Luna") + struct.pack("<HIBI", 1101, 30, 0, 45)
               + b"\x00" * 24]
-    people = [("Kraeg", 2101, 6), ("Vexa", 2101, 26), ("Morrow", 2102, 18), ("Sable", 2101, 34),
-              ("Aria", 1101, 10), ("Tamsin", 1102, 22), ("Oren", 1101, 46), ("Ilsa", 1101, 14)]
+    people = DEMO_NEARBY
     for i, (nm, server, cls) in enumerate(people):
         eid = 200 + i
         frames.append(b"\x45\x36" + encode_varint(eid) + b"\x10\x00\x00\x00" + _name(nm) + struct.pack("<I", cls))
@@ -140,7 +141,12 @@ def find_nearby(session):
     from .aion2api import Character, class_pc_ids
     from . import servers as sv
 
+    home = {n: srv for n, srv, _ in DEMO_NEARBY}
+    home["Luna"] = 1101
+
     def find(name: str, server_id: int):
+        if home.get(name) != server_id:          # like NCSOFT: only the real server has them
+            return None
         r = random.Random(name)
         cls = r.choice(["Gladiator", "Templar", "Ranger", "Assassin", "Spiritmaster", "Sorcerer", "Cleric",
                         "Chanter", "Brawler"])
