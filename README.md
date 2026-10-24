@@ -58,7 +58,7 @@ Everything is saved immediately.
 | | |
 |---|---|
 | type a name, press Enter | search (it also searches by itself after you pause typing) |
-| region / faction / class chips | click to filter, click again to remove; nothing selected = everything |
+| Region / Faction / Class chips | click to filter, click again to remove; nothing selected = everything; **Clear** resets all filters |
 | Lv [min] – [max] | level range; fill in either or both |
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
