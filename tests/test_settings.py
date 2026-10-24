@@ -82,3 +82,13 @@ class ClearCacheTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EmptyFavoritesTests(unittest.TestCase):
+    def test_empty_store_is_not_falsy(self):
+        # v1.10 and earlier: `favorites or Favorites(None)` replaced an empty store with one that never saved
+        from shugotracker.favorites import Favorites
+        with tempfile.TemporaryDirectory() as d:
+            f = Favorites(os.path.join(d, "favorites.json"))
+            self.assertEqual(len(f), 0)
+            self.assertTrue(f)

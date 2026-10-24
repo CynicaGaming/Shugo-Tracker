@@ -70,6 +70,10 @@ class Favorites:
     def __len__(self) -> int:
         return len(self._items)
 
+    def __bool__(self) -> bool:
+        # An empty list is still a real, saving favorites store: never let `favorites or ...` swap it out.
+        return True
+
     def __contains__(self, key: str) -> bool:
         return key in self._items
 

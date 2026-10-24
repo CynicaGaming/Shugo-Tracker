@@ -272,7 +272,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     from .search_ui import SearchWindow
     from .updater import Updater
 
-    from .desktop import SingleInstance, Tray, folder_size
+    from .desktop import SingleInstance, Tray, folder_size, tray_supported
     from .settings import migrate
     from .settings_ui import SettingsServices
 
@@ -370,10 +370,11 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     if instance:
         instance.on_show = lambda: post(("show",))
     if not screenshot:
-        tray = Tray(on_toggle=lambda: post(("toggle",)), on_quit=lambda: post(("quit",)))
-        if tray.start():
-            extras["tray"] = tray
-            win.tray_ok = True
+        # The tray icon only exists while the window is tucked away by ✕ with "Close to tray" on.
+        tray = Tray(on_toggle=lambda: post(("show",)), on_quit=lambda: post(("quit",)))
+        extras["tray"] = tray
+        win.tray_ok = tray_supported()
+        win.tray_icon = (tray.start, tray.stop)
     if selftest:
         def check():
             if len(favorites):

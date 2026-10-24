@@ -316,7 +316,7 @@ class SearchWindow:
         self.on_close_cb = on_close
         self.updater = updater                  # Updater or None
         self.on_update = on_update              # installs the downloaded update and relaunches
-        self.favorites = favorites or Favorites(None)
+        self.favorites = favorites if favorites is not None else Favorites(None)
 
         self.mode = "search"          # search | favorites
         self.results: list[Character] = []
@@ -354,7 +354,8 @@ class SearchWindow:
         self.root.geometry(f"{int(w)}x{int(h)}+{int(x)}+{int(y)}")
         self.root.attributes("-topmost", bool(cfg.get("always_on_top", True)))
         self.root.protocol("WM_DELETE_WINDOW", self.close_button)
-        self.tray_ok = False                     # set by the app once the tray icon is up
+        self.tray_ok = False                     # tray icons work here (set by the app)
+        self.tray_icon = (lambda: False, lambda: None)   # (show, remove) the tray icon; set by the app
         if self.overlay:
             self.root.overrideredirect(True)   # our own title bar replaces the Windows frame
         else:
@@ -1277,6 +1278,7 @@ class SearchWindow:
         self.root.withdraw()
 
     def show(self, focus: bool = True):
+        self.tray_icon[1]()                      # back on screen: no tray icon
         if self._hidden_state == "pill":
             self._show_pill()
         else:
@@ -1417,7 +1419,7 @@ class SearchWindow:
 
     def close_button(self):
         """✕: quit, or tuck away into the tray when "Close to tray" is on."""
-        if self.cfg.get("close_to_tray") and self.tray_ok:
+        if self.cfg.get("close_to_tray") and self.tray_ok and self.tray_icon[0]():
             self.hide()
         else:
             self.close()

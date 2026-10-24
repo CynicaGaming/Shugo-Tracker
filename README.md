@@ -38,8 +38,7 @@ windowed** mode):
 | ◢ (bottom-right corner) | resize it |
 | — | collapse to a small Shugo bubble; drag the bubble anywhere, click it to expand |
 | ⚙ | settings |
-| tray icon | Show / hide, Quit |
-| ✕ | quit |
+| ✕ | quit (with *Close to tray* on in ⚙: hide; a tray icon appears until you bring it back) |
 
 Starting it again while it's running (even hidden) brings the running copy forward. When an update is
 waiting, the ⚙ turns gold.

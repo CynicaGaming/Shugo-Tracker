@@ -212,6 +212,14 @@ def save_ico(path: str) -> None:
     make_icon_image(256).save(path, sizes=[(s, s) for s in (16, 20, 24, 32, 40, 48, 64, 128, 256)])
 
 
+def tray_supported() -> bool:
+    try:
+        import pystray  # noqa: F401
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 class Tray:
     """System-tray icon with Show/Hide and Quit (pystray). All callbacks run on pystray's thread."""
 
@@ -221,13 +229,15 @@ class Tray:
         self.icon = None
 
     def start(self) -> bool:
+        if self.icon is not None:
+            return True
         try:
             import pystray
         except Exception:  # noqa: BLE001
             return False
         try:
             menu = pystray.Menu(
-                pystray.MenuItem("Show / hide", lambda icon, item: self.on_toggle(), default=True),
+                pystray.MenuItem("Show", lambda icon, item: self.on_toggle(), default=True),
                 pystray.MenuItem("Quit", lambda icon, item: self.on_quit()),
             )
             self.icon = pystray.Icon("ShugoTracker", make_icon_image(64), "Shugo Tracker", menu)
