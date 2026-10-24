@@ -346,6 +346,13 @@ class SearchWindow:
         self.level_min: int | None = _level_or_none(cfg.get("level_min"))
         self.level_max: int | None = _level_or_none(cfg.get("level_max"))
         self._query_filters: dict = {}         # what the current search asked NCSOFT to filter
+        self.nearby = None                     # NearbyService, set by the app
+        self.set_nearby_enabled: Callable[[bool], None] = lambda on: None   # set by the app
+        self.nearby_sides: set[str] = {x for x in cfg.get("nearby_sides", []) if x in ("enemy", "ally")}
+        self._nearby_rows: list = []
+        self._nearby_side: dict[str, str] = {}
+        self._nearby_seen = None
+        self._nearby_panel_key = None
         self._level_job = None
         self.inbox: queue.Queue = queue.Queue()
         self.hover_index = -1
@@ -454,8 +461,11 @@ class SearchWindow:
         self.tab_search.pack(side="left")
         self.tab_fav = tk.Label(tabs, font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
         self.tab_fav.pack(side="left", padx=(18, 0))
+        self.tab_near = tk.Label(tabs, font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
+        self.tab_near.pack(side="left", padx=(18, 0))
         self.tab_search.bind("<Button-1>", lambda e: self._set_mode("search"))
         self.tab_fav.bind("<Button-1>", lambda e: self._set_mode("favorites"))
+        self.tab_near.bind("<Button-1>", lambda e: self._set_mode("nearby"))
         self.tab_line = tk.Frame(self.top, bg=BORDER, height=1)
         self.tab_line.pack(fill="x")
 
@@ -480,6 +490,13 @@ class SearchWindow:
                       cursor="hand2")
         go.pack(side="right", padx=4, pady=4)
         go.bind("<Button-1>", lambda e: self._start_search(now=True))
+
+        # Nearby: which sides to show (nothing selected = both) and what the capture is doing
+        self.nearby_bar = tk.Frame(self.top, bg=BG)
+        self.side_chips = [(k, self._chip(self.nearby_bar, label, lambda k=k: self._toggle_side(k)))
+                           for k, label in (("enemy", "Enemies"), ("ally", "Allies"))]
+        self.nearby_state = tk.Label(self.nearby_bar, bg=BG, fg=FG_FAINT, font=self.f_small, anchor="e")
+        self.nearby_state.pack(side="right")
 
         # filters, one labelled row each; chips toggle and nothing selected means "all"
         self.filters = tk.Frame(self.top, bg=BG)
@@ -537,6 +554,8 @@ class SearchWindow:
         self.canvas.bind("<Leave>", lambda e: self._set_hover(-1, False))
         self.canvas.bind("<Button-1>", self._click)
         self.canvas.bind("<Button-3>", self._right_click)
+
+        self.nearby_panel = tk.Frame(self.list_wrap, bg=BG)
 
         if self.overlay:
             self.grip = tk.Label(self.root, text="◢", bg=BG, fg=FG_FAINT, font=self.f_tiny, cursor="size_nw_se")
@@ -608,7 +627,9 @@ class SearchWindow:
     def _paint_tabs(self):
         n = len(self.favorites)
         self.tab_fav.config(text=f"★ Favorites{f'  {n}' if n else ''}")
-        for tab, mode in ((self.tab_search, "search"), (self.tab_fav, "favorites")):
+        near = len(self._nearby_rows) if self._nearby_on() else 0
+        self.tab_near.config(text=f"◉ Nearby{f'  {near}' if near else ''}")
+        for tab, mode in ((self.tab_search, "search"), (self.tab_fav, "favorites"), (self.tab_near, "nearby")):
             tab.config(fg=ACCENT if self.mode == mode else FG_DIM)
 
     def _paint_pin(self):
@@ -633,12 +654,18 @@ class SearchWindow:
         if mode == self.mode:
             return
         self.mode = mode
+        self.nearby_bar.pack_forget()
         if mode == "favorites":
             self.box.pack_forget()
             self.fav_chars = self.favorites.characters()
+        elif mode == "nearby":
+            self.box.pack_forget()
+            self.nearby_bar.pack(fill="x", pady=(10, 6), before=self.filters)
+            self._refresh_nearby(force=True)
         else:
             self.box.pack(fill="x", pady=(10, 8), before=self.filters)
             self.search_entry.focus_set()
+        self._paint_nearby_panel()
         self._paint_tabs()
         self.canvas.yview_moveto(0)
         self._mark()
@@ -826,6 +853,10 @@ class SearchWindow:
 
     # ═════ list rendering ═════
     def _source(self) -> list[Character]:
+        if self.mode == "nearby":
+            if not self._nearby_on():
+                return []
+            return [c for side, c in self._nearby_rows if not self.nearby_sides or side in self.nearby_sides]
         return self.fav_chars if self.mode == "favorites" else self.results
 
     def _visible(self) -> list[Character]:
@@ -850,6 +881,9 @@ class SearchWindow:
             self._drain()
             self._sync_update_button()
             now = time.monotonic()
+            if self.nearby is not None and now - getattr(self, "_nearby_poll", 0) > 0.3:
+                self._nearby_poll = now
+                self._refresh_nearby()
             if self.profile_view is None:
                 if self._dirty:
                     self._render()
@@ -905,7 +939,11 @@ class SearchWindow:
         return has_skel
 
     def _draw_empty(self, cv, width):
-        if self.mode == "favorites":
+        if self.mode == "nearby":
+            msg, sub = self._nearby_empty_text()
+            if not msg:
+                return
+        elif self.mode == "favorites":
             if len(self.favorites):
                 msg, sub = "No favorites match these filters", "Clear the filters to see them all."
             else:
@@ -948,6 +986,11 @@ class SearchWindow:
             cv.create_text(px + PORTRAIT / 2, py + PORTRAIT / 2, text=(c.class_name[:1] or "?"), fill=col,
                            font=self.f_name, tags="card")
         tx = 72
+        if self.mode == "nearby":
+            side = self._nearby_side.get(c.name)
+            if side in ("enemy", "ally"):          # a slim marker on the left edge: red enemy, green ally
+                round_rect(cv, 0, y + 10, 4, y + CARD_H - 10, 2, fill=RED if side == "enemy" else GREEN,
+                           outline="", tags="card")
         fac_col = ELYOS if c.race == 1 else ASMO if c.race == 2 else FG_DIM
         pill_w = self.f_tiny.measure(c.faction) + 12
         # line 1 must stop before the CP number: the legion gives way first, then the name
@@ -971,7 +1014,8 @@ class SearchWindow:
         cls_col = CLASS_COLORS.get(c.class_name, FG_DIM)
         cid = cv.create_text(tx, y + 49, text=c.class_name or "Unknown", fill=cls_col, font=self.f_small,
                              anchor="w", tags="card")
-        rest = f"  ·  Lv {c.level}  ·  {c.server_name} ({REGION_LABELS.get(c.region, c.region.upper())})"
+        where = f"{c.server_name} ({REGION_LABELS.get(c.region, c.region.upper())})" if c.server_name else "server unknown"
+        rest = (f"  ·  Lv {c.level}" if c.level else "") + f"  ·  {where}"
         rx2 = cv.bbox(cid)[2]
         rest = elide(self.f_small, rest, x1 - 44 - self.f_small.measure("GS 0,000") - 12 - rx2)
         cv.create_text(rx2, y + 49, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
@@ -1000,6 +1044,9 @@ class SearchWindow:
         return True
 
     def _update_status(self, view):
+        if self.mode == "nearby":
+            self.status.config(text=self._nearby_status_text(view), fg=FG_DIM)
+            return
         if self.mode == "favorites":
             n = len(self.fav_chars)
             self.status.config(text=f"{len(view):,} of {n:,} favorites" if n else "", fg=FG_DIM)
@@ -1058,6 +1105,8 @@ class SearchWindow:
         if i < 0:
             return
         c = self._view[i]
+        if not c.char_id:                          # a nearby player NCSOFT hasn't identified (yet)
+            return
         if on_star:
             self.toggle_favorite(c)
         else:
@@ -1083,6 +1132,143 @@ class SearchWindow:
         c.status = "none"
         self.api.forget(c)
         self._mark()
+
+    # ═════ nearby ═════
+    def _nearby_on(self) -> bool:
+        return self.nearby is not None and bool(self.cfg.get("nearby_enabled"))
+
+    def _toggle_side(self, k):
+        self.nearby_sides ^= {k}
+        self.cfg["nearby_sides"] = sorted(self.nearby_sides)
+        self._paint_side_chips()
+        self.canvas.yview_moveto(0)
+        self._mark()
+
+    def _paint_side_chips(self):
+        counts = {"enemy": 0, "ally": 0}
+        for side, _c in self._nearby_rows:
+            if side in counts:
+                counts[side] += 1
+        for key, lb in self.side_chips:
+            on = key in self.nearby_sides
+            label = "Enemies" if key == "enemy" else "Allies"
+            lb.config(text=f"{label}  {counts[key]}", bg=ACCENT if on else SURFACE, fg=ACCENT_FG if on else FG_DIM)
+
+    def _refresh_nearby(self, force: bool = False):
+        if self.nearby is None:
+            return
+        v = (self.nearby.version(), bool(self.cfg.get("nearby_enabled")))
+        if v == self._nearby_seen and not force:
+            return
+        self._nearby_seen = v
+        rows = self.nearby.snapshot() if self._nearby_on() else []
+        self._nearby_rows = [(side, c) for side, c, _p in rows]
+        self._nearby_side = {c.name: side for side, c in self._nearby_rows}
+        self._paint_tabs()
+        self._paint_side_chips()
+        self._paint_nearby_panel()
+        if self.mode == "nearby":
+            self.nearby_state.config(text=self._nearby_state_text())
+            self._mark()
+
+    def _nearby_state_text(self) -> str:
+        if not self._nearby_on():
+            return ""
+        from .nearby import CAPTURING, STARTING, WAITING
+        name, server = self.nearby.me()
+        st = self.nearby.state
+        if st == CAPTURING:
+            return f"● Live  ·  {name}" if name else "● Live"
+        if st == WAITING:
+            return "Waiting for AION 2"
+        if st == STARTING:
+            return "Starting…"
+        return ""
+
+    def _nearby_status_text(self, view) -> str:
+        if not self._nearby_on() or not self._nearby_rows:
+            return ""
+        unknown = sum(1 for side, _c in self._nearby_rows if side not in ("enemy", "ally"))
+        parts = [f"{len(view):,} shown"]
+        if unknown:
+            parts.append(f"{unknown} not identified yet")
+        return "  ·  ".join(parts)
+
+    def _nearby_empty_text(self) -> tuple[str, str]:
+        if not self._nearby_on():
+            return "", ""
+        from .nearby import CAPTURING, ERROR, STARTING, WAITING
+        st = self.nearby.state
+        if st == WAITING:
+            return "Waiting for AION 2", "Players show up here once you're in the game."
+        if st == STARTING:
+            return "Starting…", ""
+        if st == ERROR:
+            return "Couldn't read game traffic", self.nearby.detail
+        if st == CAPTURING and self._nearby_rows:
+            return "No players match these filters", "Clear the filters to see everyone nearby."
+        if st == CAPTURING:
+            return "No players nearby yet", "Players appear as the game shows them to you."
+        return "", ""
+
+    def _paint_nearby_panel(self):
+        """The opt-in card (Nearby off) or the Npcap card, placed over the list."""
+        from .nearby import NO_LIBS, NO_NPCAP
+        if self.mode != "nearby" or self.nearby is None:
+            key = None
+        elif not self.cfg.get("nearby_enabled"):
+            key = "optin"
+        elif self.nearby.state in (NO_NPCAP, NO_LIBS):
+            key = self.nearby.state
+        else:
+            key = None
+        if key == self._nearby_panel_key:
+            return
+        self._nearby_panel_key = key
+        for w in self.nearby_panel.winfo_children():
+            w.destroy()
+        if key is None:
+            self.nearby_panel.place_forget()
+            return
+        box = tk.Frame(self.nearby_panel, bg=SURFACE, padx=22, pady=20)
+        box.pack(fill="x", pady=(10, 0))
+        wrap = 440
+
+        def text(t, font, fg, pady=(0, 0)):
+            tk.Label(box, text=t, bg=SURFACE, fg=fg, font=font, justify="left", anchor="w", wraplength=wrap).pack(
+                fill="x", pady=pady)
+
+        buttons = tk.Frame(box, bg=SURFACE)
+        if key == "optin":
+            text("See who's around you", self.f_name, FG)
+            text("Lists the players near your character, split into enemies and allies, with their gear score "
+                 "and combat power.", self.f_body, FG_DIM, (8, 0))
+            text("To do this, Shugo Tracker reads AION 2's network traffic on this PC through Npcap (a free "
+                 "packet-capture driver). It only listens: nothing is sent to the game or changed, and the only "
+                 "lookups are the usual NCSOFT character searches. You can turn it off any time in Settings.",
+                 self.f_small, FG_DIM, (8, 0))
+            text("Reading game traffic may be against AION 2's terms of service. Use it at your own risk.",
+                 self.f_small, FG_FAINT, (8, 0))
+            self._panel_button(buttons, "Turn on Nearby", lambda: self.set_nearby_enabled(True), accent=True)
+        else:
+            text("Npcap is needed", self.f_name, FG)
+            text("Nearby reads the game's traffic through Npcap, which isn't installed on this PC. Install it "
+                 "(free, keep the default options), then check again." if key == NO_NPCAP else
+                 f"The packet-capture part of Shugo Tracker couldn't load: {self.nearby.detail}",
+                 self.f_body, FG_DIM, (8, 0))
+            if key == NO_NPCAP:
+                from .nearby import NPCAP_URL
+                self._panel_button(buttons, "Get Npcap ↗", lambda: webbrowser.open(NPCAP_URL), accent=True)
+            self._panel_button(buttons, "Check again", self.nearby.retry)
+        buttons.pack(fill="x", pady=(14, 0))
+        self.nearby_panel.place(x=0, y=0, relwidth=1, relheight=1)
+        self.nearby_panel.lift()
+
+    def _panel_button(self, parent, text, cmd, accent=False):
+        b = tk.Label(parent, text=text, bg=ACCENT if accent else SURFACE_2, fg=ACCENT_FG if accent else FG,
+                     font=self.f_body, padx=14, pady=5, cursor="hand2")
+        b.pack(side="left", padx=(0, 8))
+        b.bind("<Button-1>", lambda e: cmd())
 
     def toggle_favorite(self, c: Character):
         self.favorites.toggle(c)
@@ -1412,6 +1598,15 @@ class SearchWindow:
             (t + 3700, self._clear_filters),
         ]
         t += 4000
+        steps += [
+            (t, lambda: self._set_mode("nearby")),
+            (t + 800, lambda: self._grab(f"{base}-nearby-optin.png")),
+            (t + 1000, lambda: self.set_nearby_enabled(True)),
+            (t + 4500, lambda: self._grab(f"{base}-nearby.png")),
+            (t + 4700, lambda: self.set_nearby_enabled(False)),
+            (t + 4900, lambda: self._set_mode("search")),
+        ]
+        t += 5200
         steps += [
             (t, lambda: self._set_mode("favorites")),
             (t + 600, lambda: self._toggle_faction("2")),

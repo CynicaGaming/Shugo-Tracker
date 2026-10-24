@@ -102,3 +102,49 @@ class DemoSession:
                 "petwing": {"pet": {"name": "Crasaur", "level": 3}, "wing": {"name": "Forest Spirit Wings",
                                                                              "grade": "Unique"}},
                 "skill": {"skillList": skills}}
+
+
+# ───── nearby (made-up game traffic, decoded by the real decoder) ─────
+def _frame(body: bytes) -> bytes:
+    from .protocol import encode_varint
+    return encode_varint(len(body) + 4) + body
+
+
+def _name(name: str) -> bytes:
+    b = name.encode()
+    return bytes([0x01, len(b)]) + b
+
+
+def feed_nearby(service) -> None:
+    import struct
+    from .protocol import encode_varint
+    frames = [b"\x33\x36" + encode_varint(100) + b"\x00" * 4 + _name("Luna") + struct.pack("<HIBI", 1101, 30, 0, 45)
+              + b"\x00" * 24]
+    people = [("Kraeg", 2101, 6), ("Vexa", 2101, 26), ("Morrow", 2102, 18), ("Sable", 2101, 34),
+              ("Aria", 1101, 10), ("Tamsin", 1102, 22), ("Oren", 1101, 46), ("Ilsa", 1101, 14)]
+    for i, (nm, server, cls) in enumerate(people):
+        eid = 200 + i
+        frames.append(b"\x45\x36" + encode_varint(eid) + b"\x10\x00\x00\x00" + _name(nm) + struct.pack("<I", cls))
+        nb = nm.encode()
+        frames.append(b"\x04\x8d" + encode_varint(5000 + i) + b"\x01\x02\x03\x04" + encode_varint(eid)
+                      + struct.pack("<H", server) + bytes([len(nb)]) + nb + b"\x00" * 4)
+    # Kraeg is hitting you
+    frames.append(b"\x04\x38" + encode_varint(100) + encode_varint(0x05) + encode_varint(0) + encode_varint(200)
+                  + struct.pack("<I", 12010000) + b"\x00" * 20)
+    service.on_bytes(("demo", 0, "demo", 0), b"".join(_frame(f) for f in frames), False)
+
+
+def find_nearby(session):
+    """find_player for --demo: every nearby name exists, with demo numbers."""
+    import random
+    from .aion2api import Character, class_pc_ids
+    from . import servers as sv
+
+    def find(name: str, server_id: int):
+        r = random.Random(name)
+        cls = r.choice(["Gladiator", "Templar", "Ranger", "Assassin", "Spiritmaster", "Sorcerer", "Cleric",
+                        "Chanter", "Brawler"])
+        return Character(char_id=f"demo-{name}", name=name, race=sv.race_of(server_id),
+                         pc_id=class_pc_ids([cls])[0], level=45, server_id=server_id,
+                         server_name=sv.name_of(server_id), region=sv.REGION_PREFIX.get(sv.region_of(server_id), ""))
+    return find

@@ -1,6 +1,7 @@
 """Settings page (opened with ⚙): window, startup, updates, data."""
 from __future__ import annotations
 
+import os
 import tkinter as tk
 import webbrowser
 from dataclasses import dataclass
@@ -178,6 +179,16 @@ class SettingsView:
         Switch(r, bool(cfg["close_to_tray"]) and a.tray_ok, lambda on: self._set("close_to_tray", on),
                enabled=a.tray_ok).pack()
 
+        if a.nearby is not None:
+            card = self._section("Nearby players")
+            r, _ = self._row(card, "Show nearby players", "Reads AION 2's network traffic on this PC through Npcap")
+            Switch(r, bool(cfg.get("nearby_enabled")), self._nearby).pack()
+            r, self._rec_sub = self._row(card, "Troubleshooting recording",
+                                         "Saves 60 seconds of game traffic to send in if Nearby misses players")
+            self.rec_btn = self._button(r, "Record", self._record)
+            self.rec_btn.pack()
+            self._sync_record()
+
         card = self._section("Startup & updates")
         r, _ = self._row(card, "Start with Windows",
                          None if desktop.autostart_supported() else "Available in the installed app")
@@ -218,6 +229,34 @@ class SettingsView:
         self.app.apply_opacity()
         if final:
             self._save()
+
+    def _nearby(self, on: bool):
+        self.app.set_nearby_enabled(on)
+        self._sync_record()
+
+    def _record(self):
+        nb = self.app.nearby
+        if nb is None or nb.recording():
+            return
+        from .nearby import CAPTURING
+        if nb.state != CAPTURING:
+            self._rec_sub.config(text="Start AION 2 with Nearby on first")
+            return
+        nb.start_recording(60)
+        self._sync_record()
+
+    def _sync_record(self):
+        if not self.frame.winfo_exists() or self.app.nearby is None:
+            return
+        nb = self.app.nearby
+        left = nb.recording()
+        if left:
+            self.rec_btn.config(text=f"Recording… {int(left)}s", bg=SURFACE_2, fg=ACCENT)
+            self.app.root.after(500, self._sync_record)
+        else:
+            self.rec_btn.config(text="Record", bg=SURFACE_2, fg=FG)
+            if nb.record_path:
+                self._rec_sub.config(text=f"Saved {os.path.basename(nb.record_path)} in the diagnostics folder")
 
     def _always_on_top(self, on: bool):
         self._set("always_on_top", on)

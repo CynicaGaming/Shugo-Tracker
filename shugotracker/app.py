@@ -318,6 +318,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
                 extras[k].stop()
         if instance:
             instance.release()          # free the single-instance port before the new copy starts
+        nearby.stop()
         updater.stop()
         api.close()
         if not screenshot:
@@ -336,12 +337,19 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         restart["pending"] = True
         return True
 
+    from .nearby import NearbyService
+    nearby_find = None
+    if demo:
+        from .demo import find_nearby
+        nearby_find = find_nearby(session)
+    nearby = NearbyService(api, cfg, log=log, data_dir=DATA, find=nearby_find)
+
     from .favorites import Favorites
     favorites = Favorites(None if (demo or screenshot) else os.path.join(DATA, "favorites.json"), log=log)
     log(f"data folder: {DATA}  ·  {len(favorites)} favorites")
     if screenshot:
         cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [],
-               "factions": [], "classes": [], "level_min": None, "level_max": None, "pill_pos": [560, 60]}
+               "factions": [], "classes": [], "level_min": None, "level_max": None, "nearby_enabled": False, "pill_pos": [560, 60]}
     win = SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
                        on_update=on_update,
                        version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir)
@@ -375,6 +383,25 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         extras["tray"] = tray
         win.tray_ok = tray_supported()
         win.tray_icon = (tray.start, tray.stop)
+    def set_nearby_enabled(on: bool):
+        cfg["nearby_enabled"] = bool(on)
+        if on:
+            if demo:
+                from .demo import feed_nearby
+                nearby.start_demo(feed_nearby)
+            else:
+                nearby.start()
+        else:
+            nearby.stop()
+        if not screenshot:
+            save_config(config_path, cfg)
+        win._refresh_nearby(force=True)
+
+    win.nearby = nearby
+    win.set_nearby_enabled = set_nearby_enabled
+    if cfg.get("nearby_enabled"):
+        set_nearby_enabled(True)
+
     if selftest:
         def check():
             if len(favorites):
@@ -544,6 +571,36 @@ def _selftest_relaunch(path: str, child: bool) -> int:
     return 0
 
 
+def _replay_bin(path: str) -> int:
+    """Print every event the decoder finds in a Nearby recording, then the resulting player list."""
+    from collections import Counter
+    from .nearby import replay_recording
+    from .protocol import Opcodes, StreamDecoder
+    from .tracker import Tracker
+    tracker = Tracker(request_lookup=lambda *a: None)
+    kinds: Counter = Counter()
+    decoders: dict = {}
+
+    def emit(ev):
+        kinds[type(ev).__name__] += 1
+        print(repr(ev))
+        tracker.handle(ev)
+
+    def on_bytes(flow, data, gap):
+        dec = decoders.get(flow)
+        if dec is None:
+            dec = decoders[flow] = StreamDecoder(emit=emit, known_servers=sv.KNOWN_SERVERS, opcodes=Opcodes())
+        if gap:
+            dec.reset()
+        dec.feed(data)
+    n = replay_recording(path, on_bytes)
+    print(f"\n{n} chunks, {len(decoders)} connection(s); events: {dict(kinds)}")
+    print(f"you: {tracker.me.name} on {tracker.me.server}")
+    for side, players in tracker.groups().items():
+        print(f"{side}: " + ", ".join(f"{p.name}@{p.server}" for p in players))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Shugo Tracker: AION 2 character search with gear score & combat power")
     ap.add_argument("--config", default=os.path.join(DATA, "config.json"))
@@ -564,7 +621,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--selftest-relaunch", metavar="FILE", help=argparse.SUPPRESS)
     ap.add_argument("--selftest-child", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--selftest-favorites", metavar="FILE", help=argparse.SUPPRESS)
+    ap.add_argument("--replay-bin", metavar="FILE", help="decode a Nearby troubleshooting recording and print it")
     args = ap.parse_args(argv)
+    if args.replay_bin:
+        return _replay_bin(args.replay_bin)
     if args.selftest_relaunch:
         return _selftest_relaunch(args.selftest_relaunch, child=args.selftest_child)
 

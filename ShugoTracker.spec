@@ -1,13 +1,18 @@
 # PyInstaller spec for ShugoTracker.exe  —  build with:  pyinstaller --noconfirm --clean ShugoTracker.spec
-# The experimental packet-capture mode (--nearby) runs from source only: leaving scapy / psutil / lz4 out of
-# the exe makes it much smaller, and a one-file exe unpacks everything it carries on every start.
-hidden = ["PIL.ImageTk", "pystray._win32"]
+from PyInstaller.utils.hooks import collect_submodules
+
+# Nearby players (opt-in) captures through Npcap with scapy; psutil finds the game's connections.
+hidden = (
+    collect_submodules("scapy.layers")
+    + collect_submodules("scapy.arch")
+    + ["scapy.all", "scapy.sendrecv", "scapy.utils", "lz4.block", "PIL.ImageTk", "pystray._win32", "psutil"]
+)
 
 a = Analysis(
     ["shugo_tracker.py"],
     pathex=["."],
     hiddenimports=hidden,
-    excludes=["matplotlib", "numpy", "IPython", "scapy", "psutil", "lz4", "PyQt5", "PySide2", "PySide6"],
+    excludes=["matplotlib", "numpy", "IPython", "PyQt5", "PySide2", "PySide6"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)

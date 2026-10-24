@@ -151,98 +151,68 @@ Working locally:
 | `auto_update` | `true` | check for new releases at start-up and every 6 hours |
 | `update_repo` | `"CynicaGaming/Shugo-Tracker"` | GitHub repo the updater follows |
 
-The remaining keys belong to the experimental nearby overlay below.
+| `nearby_enabled` | `false` | Nearby players is on (opt-in, see below) |
+| `my_server` | `""` | Nearby: your server until the game reveals it: `"nae-siel"`, `"eu-ludra"` or `1101` |
+| `opcodes` | | Nearby: packet opcodes — see *After a game patch* |
 
-## Experimental: nearby players overlay
+## Nearby players (opt-in)
 
-Not part of the normal app yet — it will come back as an add-on. Run `ShugoTracker.exe --nearby`
-**as administrator** with [Npcap](https://npcap.com) installed ("WinPcap API-compatible Mode") to get an
-overlay that reads the game's network traffic and lists players in render range as Enemies / Allies.
-It is read-only (no injection, no memory reading), but it is unproven against live play and does not yet
-scale to crowded areas. Third-party tools may be against AION 2's terms of service; use at your own risk.
+The **◉ Nearby** tab lists the players around your character, split into **Enemies** and **Allies**, with the
+same cards (gear score, combat power, profile on click) as search. It is off until you turn it on in the tab
+(or in ⚙ Settings → *Nearby players*), and it can be turned off there at any time.
 
-### Who shows up, and where
-
-**Everyone in render range.** Players are added when the server sends their spawn record (they come into
-view, or you load a map), removed when it sends the record that they left view, marked ✝ when they die,
-and the whole list is reset when you load a new map (the server re-sends everyone around you). A player
-whose leave record was missed is dropped after `forget_after_s` without activity.
-
-**Enemy / ally.** AION 2 Global server ids encode faction: `race × 1000 + region × 100 + n`
-(race 1 = Elyos, 2 = Asmodian; region 1 NA-East, 2 NA-West, 3 EU, 4 Latin America, 5 Asia). A player is:
-
-- an **enemy** if their server or their Shugo.GG profile is the other faction, or they hit you / you hit
-  them (⚡ for 15 s);
-- an **ally** if their server or profile is your faction;
-- **unidentified** until one of those is known.
-
-Your own character and server come from the record sent when you log in or load a map. If you start the
-tracker mid-session, load a map once or set `"my_server"` in `config.json` (e.g. `"nae-siel"`).
-
-Spawn records usually carry name and class but not always the server. Then the tracker tries your server,
-then the opposite-faction server paired with it (Siel ↔ Israphel), then `extra_enemy_servers` (enemy
-servers first if they're fighting you). The Shugo profile's faction then settles enemy vs ally. A profile
-found this way is marked **`?`**; hover to see which server was used, right-click → *Retry lookup*.
-
-### Overlay controls
+It needs **[Npcap](https://npcap.com/#download)** (free; the default install options are fine). Shugo Tracker
+then reads the game's own downstream traffic on this PC: only AION2.exe's connections, found in the Windows
+connection table. It never sends anything to the game or changes anything; the only network requests are the
+normal NCSOFT character searches (one per player, name + server, inside the app's 6-per-second limit). Reading
+game traffic may be against AION 2's terms of service — use it at your own risk.
 
 | | |
 |---|---|
-| drag the title bar | move (remembered) |
-| click a section header | collapse / expand Enemies, Allies or Unidentified (remembered) |
-| mouse wheel | scroll when the list is taller than `max_height` |
-| left-click a player | open their Shugo.GG profile |
-| right-click a player | open / retry lookup / copy name |
-| hover a player | level, server, legion, hits on you in the footer |
-| ⟲ / – / ✕ | clear list / minimise to the title bar / quit |
+| Enemies / Allies chips | show only that side (nothing selected = both); the counts are live |
+| red / green edge on a card | enemy / ally |
+| Region / Faction / Class / Level | the usual filters apply here too |
+| a card without numbers | the game showed the player but NCSOFT hasn't identified them yet |
 
-CP colours (enemies only) compare against **your** combat power, looked up once your character is seen.
+### Who shows up, and where
 
-### Nearby overlay settings (config.json)
+**Everyone in render range.** Players are added when the game sends their spawn record (they come into view,
+or you load a map), removed when it sends the record that they left view, and the list is reset when you load
+a new map (the game re-sends everyone around you). A player whose leave record was missed is dropped after
+15 minutes without activity.
 
-| key | default | meaning |
-|---|---|---|
-| `my_server` | `""` | your server until the stream reveals it: `"nae-siel"`, `"eu-ludra"` or `1101` |
-| `lookup_allies` | `true` | look up allies too. `false` = only enemies and unidentified players |
-| `lookup_interval_s` | `2.0` | minimum seconds between Shugo.GG requests (floor 1.0) |
-| `forget_after_s` | `900` | drop a player with no activity for this long (0 = never) |
-| `collapsed_sections` | `[]` | sections collapsed at start: `"enemy"`, `"ally"`, `"unknown"` |
-| `max_height` | `520` | list height in pixels before it scrolls |
-| `extra_enemy_servers` | `[]` | more servers to try for players with no server, e.g. `["nae-zikel"]` |
-| `kr_tw_region` | `"kr"` | Shugo path for Korean/Taiwanese server ids (`"kr"` or `"tw"`) |
-| `interfaces` | `[]` | Npcap adapters to sniff; empty = all, including the loopback adapter (ExitLag etc.) |
-| `auto_update` | `true` | download and install new releases (see *Automatic updates*) |
-| `update_repo` | `"CynicaGaming/shugo-tracker"` | GitHub repo the updater follows |
-| `opcodes` | | packet opcodes — see *After a game patch* |
+**Enemy / ally.** AION 2 Global server ids encode faction (`race × 1000 + region × 100 + n`; race 1 = Elyos,
+2 = Asmodian), so a player on the other faction's server is an enemy and one on yours an ally. Someone
+fighting you counts as an enemy until their server is known. Your own character and server come from the
+record sent when you log in or load a map; if you turn Nearby on mid-session, load a map once (or set
+`"my_server"`).
 
-### Being polite to Shugo.GG
+Spawn records usually carry name and class but not always the server; then the app tries your server, then
+the opposite-faction server paired with it (Siel ↔ Israphel), and NCSOFT's answer settles the side.
 
-Lookups go one at a time, at most one every `lookup_interval_s`, in this order: players fighting you,
-enemies, unidentified, allies. Results are cached for 30 minutes (misses for 15) and HTTP 429/5xx backs off.
-In a crowded town the queue grows (≈30 lookups a minute) — set `lookup_allies` to `false` if you mostly
-care about enemies.
+### Troubleshooting
+
+⚙ Settings → *Nearby players* → **Record** saves 60 seconds of the game's downstream traffic to
+`%APPDATA%\ShugoTracker\diagnostics\nearby-….bin`. If players are missing or wrong, record while standing
+near other players and send that file in an issue: it lets the decoder be checked against the live game. It
+contains what the game sent you in that minute (including chat), so only share it if you're comfortable with
+that. From source, `python -m shugotracker.app --replay-bin FILE` prints what was decoded.
 
 ### After a game patch
 
 Patches sometimes renumber opcodes (the June 2026 patch shifted the `xx 36` family by one). If names stop
-appearing or players never leave the list, update the `opcodes` block in `config.json` from the open-source
-meters' latest releases. To check a Wireshark capture (filter `tcp.port == 13328`, saved as `.pcapng`), from
-source run:
+appearing or players never leave the list, the `opcodes` block in `config.json` needs updating (a recording,
+see above, is the quickest way to find the new values).
 
-```
-python -m shugotracker.app --replay fight.pcapng --port 13328 --no-lookup --debug --console
-```
-
-The despawn (`42 36` / `35 36`) and map-load (`21 36`) records are the least battle-tested part: the meters
-this is based on use them for NPCs and world objects; using them for players is new here.
+The wire layout comes from the community DPS-meter projects (A2Tools-DPS-Meter, AIon2-Dps-Meter,
+aion2-dps-meter, Aion2DPSMeter — all GPL-3.0). The despawn and map-load records are the least battle-tested
+part: those meters use them for NPCs and world objects; using them for players is new here.
 
 ### Limitations
 
-- Player names only arrive with spawn records. Someone already in range when you start the tracker stays
-  invisible until they re-enter view or you load a map.
-- Shugo.GG only has what NCSOFT's public character API has; new characters or a site outage show `n/a` / `err`.
-- Third-party tools may be against AION 2's terms of service. This one is read-only, like the DPS meters,
-  but use it at your own risk.
+- Player names only arrive with spawn records. Someone already in range when Nearby starts stays invisible
+  until they re-enter view or you load a map.
+- NCSOFT's search only knows characters it lists; a brand-new character may stay unidentified for a while.
 
 ## Credits & licence
 
