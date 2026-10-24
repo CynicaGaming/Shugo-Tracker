@@ -16,7 +16,7 @@ from typing import Callable
 
 from . import servers as sv
 from .aion2api import Api, Character, class_pc_ids
-from .protocol import Opcodes, StreamDecoder
+from .protocol import Opcodes, SelfSeen, StreamDecoder
 from .tracker import ALLY, ENEMY, UNKNOWN, Lookup, Player, Tracker
 
 NPCAP_URL = "https://npcap.com/#download"
@@ -29,6 +29,8 @@ OFF, STARTING, NO_NPCAP, NO_LIBS, WAITING, CAPTURING, ERROR = (
 WIRE_CLASS = {"Elementalist": "Spiritmaster"}   # the wire table predates the Global class names
 LOOKUP_WORKERS = 4      # parallel NCSOFT searches (the shared rate limit still caps requests per second)
 RETRY_FAILED_S = 300    # someone NCSOFT couldn't find is tried again after this long
+RECENT_MAX = 150        # players kept on the Recent list
+RECENT_KEEP_S = 3600    # ...for up to an hour after they left
 
 
 def npcap_installed() -> bool:
@@ -68,6 +70,9 @@ class NearbyService:
         self._failed: dict[str, tuple] = {}           # name -> (reason, when)
         self._background: set[str] = set()
         self._inflight: set[str] = set()
+        import collections
+        self._recent: "collections.OrderedDict[str, tuple]" = collections.OrderedDict()
+        self._last_players: dict[str, Player] = {}
         self._my_region: str | None = cfg.get("nearby_region") or None
         self.on_region: Callable[[str], None] = lambda r: None   # remember it (set by the app)
         self.on_me: Callable[[str, int], None] = lambda n, s: None  # remember your character (set by the app)
@@ -178,15 +183,50 @@ class NearbyService:
             dec.feed(data)
 
     def _on_event(self, ev) -> None:          # called with self._lock held
-        before = len(self.tracker.players)
+        if isinstance(ev, SelfSeen) and self.tracker.players:
+            # Your own record is sent when you load into an area (teleport, zone change, arena, rift): everyone
+            # from before is out of range now, and the game re-sends whoever is around you.
+            self._to_recent(list(self.tracker.players.values()))
+            self.tracker.clear()
+        before_names = set(self.tracker.players)
+        before = len(before_names)
         was = (self.tracker.me.name, self.tracker.me.server)
         self.tracker.handle(ev)
+        left = before_names - set(self.tracker.players)
+        if left:
+            self._to_recent([self._last_players[n] for n in left if n in self._last_players])
         now_me = (self.tracker.me.name, self.tracker.me.server)
         if now_me != was and all(now_me):
             self.on_me(*now_me)
         self.stats["events"] += 1
         if len(self.tracker.players) > before:
             self.stats["players_seen"] += len(self.tracker.players) - before
+        for n in set(self.tracker.players) - before_names:
+            self._recent.pop(n, None)                   # back in range
+        self._last_players.update(self.tracker.players)
+
+    def _to_recent(self, players: list[Player]) -> None:
+        now = time.time()
+        for p in players:
+            side = self.tracker.side(p)
+            self._recent[p.name] = (side, self._character(p), now, bool(p.last_combat))
+            self._recent.move_to_end(p.name)
+            self._last_players.pop(p.name, None)
+        while len(self._recent) > RECENT_MAX:
+            self._recent.popitem(last=False)
+        self._v += 1
+
+    def recent(self) -> list[tuple[str, Character, float, bool]]:
+        """[(side, character, left_at, fought_you)] newest first."""
+        with self._lock:
+            now = time.time()
+            for name in [n for n, r in self._recent.items() if now - r[2] > RECENT_KEEP_S]:
+                del self._recent[name]
+            out = []
+            for name, (side, c, left_at, fought) in reversed(self._recent.items()):
+                c = self._chars.get(name, c)            # identified after they left
+                out.append((side, c, left_at, fought))
+            return out
 
     # ───── lookups ─────
     # Players are listed straight from the game's records; NCSOFT is only asked about cards on screen (want()),
@@ -312,7 +352,11 @@ class NearbyService:
         with self._lock:
             if now - self._last_expire > 5:
                 self._last_expire = now
+                before = set(self.tracker.players)
                 self.tracker.expire(now)
+                gone = before - set(self.tracker.players)
+                if gone:
+                    self._to_recent([self._last_players[n] for n in gone if n in self._last_players])
             me = self.tracker.me
             if not me.server:
                 # Until the game names you: the side most players around you are on is almost always yours.

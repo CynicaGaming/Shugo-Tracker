@@ -236,3 +236,24 @@ class CapturePaddingTests(unittest.TestCase):
         self.assertEqual(tcp_payload(ack[IP], ack[TCP]), b"")
         data = IP(bytes(IP(src="1.1.1.1", dst="2.2.2.2") / TCP(sport=13328, dport=5000) / Raw(b"\x0e\x00\x36")))
         self.assertEqual(tcp_payload(data[IP], data[TCP]), b"\x0e\x00\x36")
+
+
+class RecentTests(unittest.TestCase):
+    def test_new_area_moves_everyone_to_recent(self):
+        from tests.test_scout import gone
+        svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae"})
+        feed = lambda *b: svc.on_bytes(("a", 1, "b", 2), b"".join(frame(x) for x in b), False)  # noqa: E731
+        feed(self_record(100, "Mine", 1101), other_record(200, "Foe"), other_record(300, "Pal"), damage(100, 200))
+        self.assertEqual(len(svc.snapshot()), 2)
+        feed(gone(300))                                            # Pal walks out of view
+        self.assertEqual([c.name for _s, c, _p in svc.snapshot()], ["Foe"])
+        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Pal"])
+        for dec in svc._decoders.values():
+            dec._self_at.clear()                                   # (the next teleport is more than 2 s later)
+        feed(self_record(100, "Mine", 1101), other_record(400, "New"))   # teleport: your record is re-sent
+        self.assertEqual([c.name for _s, c, _p in svc.snapshot()], ["New"])
+        recent = svc.recent()
+        self.assertEqual([c.name for _s, c, _t, _f in recent], ["Foe", "Pal"])    # newest first
+        self.assertEqual([f for _s, _c, _t, f in recent], [True, False])          # Foe fought you
+        feed(other_record(201, "Foe"))                                            # Foe shows up again
+        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Pal"])

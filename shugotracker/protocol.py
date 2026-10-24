@@ -302,6 +302,7 @@ class StreamDecoder:
         self._buf = b""
         # Identity records are often repeated in several places; dedupe recent ones.
         self._recent: dict[tuple, None] = {}
+        self._self_at: dict[tuple, float] = {}
 
     # ---- stream entry ----
     def feed(self, data: bytes) -> None:
@@ -488,6 +489,16 @@ class StreamDecoder:
             source = "scan" if server else None
 
         key = (is_self, eid, name, server, cls, race)
+        if is_self:
+            # your record repeats on every area load, and that repeat matters (it means "new area"); only
+            # copies within the same burst are duplicates
+            import time as _time
+            now = _time.monotonic()
+            if now - self._self_at.get(key, -10.0) < 2.0:
+                return o
+            self._self_at[key] = now
+            self.emit(SelfSeen(eid, name, server, cls, level))
+            return o
         if key not in self._recent:
             self._recent[key] = None
             if len(self._recent) > 4096:

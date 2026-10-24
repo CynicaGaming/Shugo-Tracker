@@ -135,6 +135,20 @@ def feed_nearby(service) -> None:
     service.on_bytes(("demo", 0, "demo", 0), b"".join(_frame(f) for f in frames), False)
 
 
+def feed_teleport(service) -> None:
+    """--demo: you load into a new area; the old crowd moves to Recent."""
+    import struct
+    from .protocol import encode_varint
+    for dec in service._decoders.values():
+        dec._self_at.clear()
+    frames = [b"\x33\x36" + encode_varint(100) + b"\x00" * 4 + _name("Luna") + struct.pack("<HIBI", 1101, 30, 0, 45)
+              + b"\x00" * 24]
+    for i, (nm, server, cls) in enumerate([("Aria", 1101, 10), ("Kraeg", 2101, 6)]):
+        eid = 900 + i
+        frames.append(b"\x45\x36" + encode_varint(eid) + b"\x10\x00\x00\x00" + _name(nm) + struct.pack("<I", cls))
+    service.on_bytes(("demo", 0, "demo", 0), b"".join(_frame(f) for f in frames), False)
+
+
 def find_nearby(session):
     """find_by_name for --demo: like NCSOFT, the exact name in that region."""
     import random

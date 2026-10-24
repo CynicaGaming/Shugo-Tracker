@@ -172,6 +172,7 @@ game traffic may be against AION 2's terms of service — use it at your own ris
 | red / green edge on a card | enemy / ally |
 | Faction / Class / Level | the usual filters apply here too (Faction = Elyos or Asmodian) |
 | a card still shimmering | the game showed the player; NCSOFT hasn't identified them yet |
+| Nearby / Recent | who's around you now / who was (for an hour): players who left view, and everyone from your previous area when you teleport or change zone; ⚔ = they fought you |
 
 ### Who shows up, and where
 

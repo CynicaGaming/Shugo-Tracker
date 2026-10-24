@@ -66,6 +66,15 @@ def fmt_int(n: int | None) -> str:
     return "—" if n is None else f"{n:,}"
 
 
+def ago(seconds: float) -> str:
+    s = int(max(0, seconds))
+    if s < 60:
+        return "just now"
+    if s < 3600:
+        return f"{s // 60}m ago"
+    return f"{s // 3600}h ago"
+
+
 def elide(font, text: str, max_w: float) -> str:
     """text, cut with "…" so it fits in max_w pixels."""
     if max_w <= 0:
@@ -348,7 +357,10 @@ class SearchWindow:
         self._query_filters: dict = {}         # what the current search asked NCSOFT to filter
         self.nearby = None                     # NearbyService, set by the app
         self.set_nearby_enabled: Callable[[bool], None] = lambda on: None   # set by the app
+        self.demo_teleport: Callable[[], None] = lambda: None              # --demo only
         self._nearby_rows: list = []
+        self._recent_rows: list = []                # (side, character, left_at, fought_you)
+        self.nearby_view = "nearby"                 # nearby | recent
         self._nearby_side: dict[str, str] = {}
         self._nearby_seen = None
         self._nearby_panel_key = None
@@ -489,6 +501,11 @@ class SearchWindow:
                       cursor="hand2")
         go.pack(side="right", padx=4, pady=4)
         go.bind("<Button-1>", lambda e: self._start_search(now=True))
+
+        # Nearby tab: who's around you now, or who was recently
+        self.nearby_bar = tk.Frame(self.top, bg=BG)
+        self.view_chips = [(k, self._chip(self.nearby_bar, label, lambda k=k: self._set_nearby_view(k)))
+                           for k, label in (("nearby", "Nearby"), ("recent", "Recent"))]
 
         # filters, one labelled row each; chips toggle and nothing selected means "all"
         self.filters = tk.Frame(self.top, bg=BG)
@@ -646,12 +663,14 @@ class SearchWindow:
         if mode == self.mode:
             return
         self.mode = mode
+        self.nearby_bar.pack_forget()
         self._ensure_filters()
         if mode == "favorites":
             self.box.pack_forget()
             self.fav_chars = self.favorites.characters()
         elif mode == "nearby":
             self.box.pack_forget()
+            self.nearby_bar.pack(fill="x", pady=(10, 0), before=self.filters)
             self._refresh_nearby(force=True)
         else:
             self.box.pack(fill="x", pady=(10, 8), before=self.filters)
@@ -847,6 +866,8 @@ class SearchWindow:
         if self.mode == "nearby":
             if not self._nearby_on():
                 return []
+            if self.nearby_view == "recent":
+                return [c for _side, c, _t, _f in self._recent_rows]
             return [c for _side, c in self._nearby_rows]
         return self.fav_chars if self.mode == "favorites" else self.results
 
@@ -875,6 +896,10 @@ class SearchWindow:
             if self.nearby is not None and now - getattr(self, "_nearby_poll", 0) > 0.3:
                 self._nearby_poll = now
                 self._refresh_nearby()
+                if self.mode == "nearby" and self.nearby_view == "recent" and \
+                        now - getattr(self, "_ago_tick", 0) > 15:
+                    self._ago_tick = now
+                    self._mark()
                 if self.mode == "nearby" and (self.nearby.recording() or getattr(self, "_rec_done_at", 0) is None
                                               or time.time() - (getattr(self, "_rec_done_at", 0) or 0) < 11):
                     self._mark()                   # keep the recording countdown / saved note current
@@ -1014,6 +1039,10 @@ class SearchWindow:
         region = REGION_LABELS.get(c.region, c.region.upper())
         where = (f"{c.server_name} ({region})" if region else c.server_name) if c.server_name else ""
         rest = (f"  ·  Lv {c.level}" if c.level else "") + (f"  ·  {where}" if where else "")
+        if self.mode == "nearby" and self.nearby_view == "recent":
+            left_at, fought = getattr(self, "_recent_info", {}).get(c.name, (None, False))
+            if left_at:
+                rest += f"  ·  {'⚔ ' if fought else ''}{ago(time.time() - left_at)}"
         rx2 = cv.bbox(cid)[2]
         rest = elide(self.f_small, rest, x1 - 44 - self.f_small.measure("GS 0,000") - 12 - rx2)
         cv.create_text(rx2, y + 49, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
@@ -1124,6 +1153,21 @@ class SearchWindow:
         self._mark()
 
     # ═════ nearby ═════
+    def _set_nearby_view(self, view: str):
+        if view != self.nearby_view:
+            self.nearby_view = view
+            self._paint_view_chips()
+            self.canvas.yview_moveto(0)
+            self._mark()
+
+    def _paint_view_chips(self):
+        counts = {"nearby": len(self._nearby_rows), "recent": len(self._recent_rows)}
+        for key, lb in self.view_chips:
+            on = key == self.nearby_view
+            label = "Nearby" if key == "nearby" else "Recent"
+            lb.config(text=f"{label}  {counts[key]}" if counts[key] else label,
+                      bg=ACCENT if on else SURFACE, fg=ACCENT_FG if on else FG_DIM)
+
     def _nearby_on(self) -> bool:
         return self.nearby is not None and bool(self.cfg.get("nearby_enabled"))
 
@@ -1136,7 +1180,11 @@ class SearchWindow:
         self._nearby_seen = v
         rows = self.nearby.snapshot() if self._nearby_on() else []
         self._nearby_rows = [(side, c) for side, c, _p in rows]
-        self._nearby_side = {c.name: side for side, c in self._nearby_rows}
+        self._recent_rows = self.nearby.recent() if self._nearby_on() else []
+        self._nearby_side = {c.name: side for side, c, _t, _f in self._recent_rows}
+        self._nearby_side.update({c.name: side for side, c in self._nearby_rows})
+        self._recent_info = {c.name: (t, f) for _s, c, t, f in self._recent_rows}
+        self._paint_view_chips()
         self._paint_tabs()
         self._paint_nearby_panel()
         if self.mode == "nearby":
@@ -1156,6 +1204,8 @@ class SearchWindow:
         from .nearby import CAPTURING
         if self.nearby.state != CAPTURING:
             return ""
+        if self.nearby_view == "recent":
+            return f"{len(view):,} recently nearby" if view else ""
         left = self.nearby.recording()
         if left:
             self._rec_done_at = None
@@ -1171,6 +1221,10 @@ class SearchWindow:
     def _nearby_empty_text(self) -> tuple[str, str]:
         if not self._nearby_on():
             return "", ""
+        if self.nearby_view == "recent":
+            if self._recent_rows:
+                return "No players match these filters", "Clear the filters to see them all."
+            return "No one yet", "Players you leave behind show up here."
         from .nearby import CAPTURING, ERROR, STARTING, WAITING
         st = self.nearby.state
         if st == WAITING:
@@ -1203,8 +1257,11 @@ class SearchWindow:
             w.destroy()
         if key is None:                            # filters do nothing behind the opt-in / Npcap card
             self._ensure_filters()
+            if self.mode == "nearby" and not self.nearby_bar.winfo_manager():
+                self.nearby_bar.pack(fill="x", pady=(10, 0), before=self.filters)
         elif self.mode == "nearby":
             self.filters.pack_forget()
+            self.nearby_bar.pack_forget()
         if key is None:
             self.nearby_panel.place_forget()
             return
@@ -1589,10 +1646,14 @@ class SearchWindow:
             (t + 800, lambda: self._grab(f"{base}-nearby-optin.png")),
             (t + 1000, lambda: self.set_nearby_enabled(True)),
             (t + 4500, lambda: self._grab(f"{base}-nearby.png")),
-            (t + 4700, lambda: self.set_nearby_enabled(False)),
-            (t + 4900, lambda: self._set_mode("search")),
+            (t + 4600, lambda: self.nearby and self.nearby.state == "capturing" and self.demo_teleport()),
+            (t + 5200, lambda: self._set_nearby_view("recent")),
+            (t + 5800, lambda: self._grab(f"{base}-nearby-recent.png")),
+            (t + 6000, lambda: self._set_nearby_view("nearby")),
+            (t + 6100, lambda: self.set_nearby_enabled(False)),
+            (t + 6300, lambda: self._set_mode("search")),
         ]
-        t += 5200
+        t += 6600
         steps += [
             (t, lambda: self._set_mode("favorites")),
             (t + 600, lambda: self._toggle_faction("2")),
