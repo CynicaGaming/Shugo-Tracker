@@ -235,3 +235,27 @@ class RankStabilityTests(unittest.TestCase):
     def test_same_results_in_any_arrival_order(self):
         chars, _ = a.parse_search(SEARCH_JSON)
         self.assertEqual([c.key for c in a.rank(chars, "luna")], [c.key for c in a.rank(chars[::-1], "luna")])
+
+
+class FilterTests(unittest.TestCase):
+    def test_server_side_filters(self):
+        self.assertEqual(a.search_filters(), {})
+        self.assertEqual(a.search_filters(classes=["Templar"]), {"pcId": "9,10,11,12"})
+        self.assertEqual(a.search_filters(factions=["2"]), {"race": 2})
+        self.assertEqual(a.search_filters(factions=["1", "2"]), {})          # both = everyone
+        self.assertEqual(a.search_filters(level_min=45), {"level": 45})       # 45 is the cap
+        self.assertEqual(a.search_filters(level_min=30, level_max=30), {"level": 30})
+        self.assertEqual(a.search_filters(level_min=40, level_max=45), {})   # ranges are filtered locally
+        self.assertEqual(a.search_filters(level_max=20), {})
+
+    def test_filters_are_sent_and_cached_separately(self):
+        sess = FakeSession(default_handler)
+        api = a.Api(session=sess, rate=1000)
+        self.addCleanup(api.close)
+        api.search_region("Luna", "nae")
+        api.search_region("Luna", "nae", filters={"pcId": "9,10,11,12"})
+        api.search_region("Luna", "nae", filters={"pcId": "9,10,11,12"})
+        calls = [p for u, p in sess.calls if u == a.SEARCH_URL]
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1]["pcId"], "9,10,11,12")
+        self.assertNotIn("pcId", calls[0])

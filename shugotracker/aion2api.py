@@ -42,6 +42,40 @@ CLASS_RANGES = [
 ]
 
 
+CLASSES = [name for _lo, _hi, name in CLASS_RANGES]
+LEVEL_CAP = 45
+
+
+def class_pc_ids(names) -> list[int]:
+    """Class names -> the pcIds NCSOFT's search filters on (each class has four)."""
+    wanted = set(names)
+    return [i for lo, hi, name in CLASS_RANGES if name in wanted for i in range(lo, hi + 1)]
+
+
+def search_filters(classes=(), factions=(), level_min: int | None = None, level_max: int | None = None) -> dict:
+    """The part of the filters NCSOFT can apply itself (so totals are right and nothing is over-fetched)."""
+    f: dict = {}
+    if classes:
+        f["pcId"] = ",".join(str(i) for i in class_pc_ids(classes))
+    if len(set(factions)) == 1:
+        f["race"] = int(next(iter(factions)))
+    exact = level_exact(level_min, level_max)
+    if exact is not None:
+        f["level"] = exact
+    return f
+
+
+def level_exact(level_min: int | None, level_max: int | None) -> int | None:
+    """NCSOFT only filters on one exact level: when the range is a single level, use it."""
+    if level_min is not None and level_max is not None and level_min == level_max:
+        return level_min
+    if level_min is not None and level_min >= LEVEL_CAP and (level_max is None or level_max >= LEVEL_CAP):
+        return LEVEL_CAP
+    if level_max is not None and level_max <= 1 and level_min in (None, 1):
+        return 1
+    return None
+
+
 def class_name(pc_id: int) -> str:
     for lo, hi, name in CLASS_RANGES:
         if lo <= pc_id <= hi:
@@ -234,14 +268,17 @@ class Api:
         raise RuntimeError("server busy (rate limited)")
 
     # ───── search ─────
-    def search_region(self, keyword: str, region: str, page: int = 1, size: int = 30) -> tuple[list[Character], int]:
-        key = (keyword.casefold(), region, page, size)
+    def search_region(self, keyword: str, region: str, page: int = 1, size: int = 30,
+                      filters: dict | None = None) -> tuple[list[Character], int]:
+        """filters: extra search parameters NCSOFT understands: pcId ("9,10,11,12"), race (1/2), level (exact)."""
+        filters = {k: v for k, v in (filters or {}).items() if v not in (None, "")}
+        key = (keyword.casefold(), region, page, size, tuple(sorted(filters.items())))
         hit = self._search_cache.get(key)
         if hit and time.time() - hit[0] < SEARCH_KEEP_S:
             data = hit[1]
         else:
             data = self._get_json(SEARCH_URL, {"keyword": keyword, "page": page, "size": size,
-                                               "localeInfo": "en-US", "region": region, "serverId": ""})
+                                               "localeInfo": "en-US", "region": region, "serverId": "", **filters})
             self._search_cache[key] = (time.time(), data)
             if len(self._search_cache) > 400:
                 oldest = min(self._search_cache, key=lambda k: self._search_cache[k][0])
@@ -252,11 +289,12 @@ class Api:
         return chars, total
 
     def search(self, keyword: str, regions: list[str], page: int = 1, size: int = 30,
-               on_done: Callable[[str, list[Character], int, str | None], None] | None = None):
+               on_done: Callable[[str, list[Character], int, str | None], None] | None = None,
+               filters: dict | None = None):
         """Runs one request per region in parallel; on_done(region, chars, total, error) per region."""
         def run(region):
             try:
-                chars, total = self.search_region(keyword, region, page, size)
+                chars, total = self.search_region(keyword, region, page, size, filters)
                 on_done(region, chars, total, None)
             except Exception as e:  # noqa: BLE001
                 on_done(region, [], 0, f"{e.__class__.__name__}: {e}")

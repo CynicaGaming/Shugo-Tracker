@@ -15,7 +15,8 @@ from typing import Callable
 
 import requests
 
-from .aion2api import REGION_LABELS, SUB_REGIONS, USER_AGENT, Api, Character, rank
+from .aion2api import (CLASSES, REGION_LABELS, SUB_REGIONS, USER_AGENT, Api, Character, rank,
+                       search_filters)
 from .favorites import Favorites
 
 try:  # images are optional
@@ -47,6 +48,7 @@ CARD_GAP = 8
 PAD = 14
 PORTRAIT = 48
 PAGE_SIZE = 30
+LOCAL_FILTER_PAGES = 20       # with a level range, look through at most this many pages per region
 
 CLASS_COLORS = {
     "Gladiator": "#e0864a", "Templar": "#d8b44a", "Ranger": "#7fc06a", "Assassin": "#c96ad6",
@@ -69,6 +71,50 @@ def round_rect(cv: tk.Canvas, x0, y0, x1, y1, r, **kw):
     pts = [x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r, x1, y1 - r, x1, y1, x1 - r, y1,
            x0 + r, y1, x0, y1, x0, y1 - r, x0, y0 + r, x0, y0]
     return cv.create_polygon(pts, smooth=True, **kw)
+
+
+def _level_or_none(v) -> int | None:
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    return n if 1 <= n <= 99 else None
+
+
+class FlowFrame(tk.Frame):
+    """Lays its children out left to right and wraps them onto new rows when the window is narrow."""
+
+    def __init__(self, parent, gap_x: int = 6, gap_y: int = 6, **kw):
+        super().__init__(parent, **kw)
+        self.gap_x, self.gap_y = gap_x, gap_y
+        self.items: list[tk.Widget] = []
+        self._width = 0
+        self.bind("<Configure>", self._on_configure)
+
+    def add(self, w: tk.Widget) -> tk.Widget:
+        self.items.append(w)
+        self.after_idle(self._layout)
+        return w
+
+    def _on_configure(self, e):
+        if e.width != self._width:
+            self._width = e.width
+            self._layout()
+
+    def _layout(self):
+        width = max(self.winfo_width(), 1)
+        x = y = row_h = 0
+        for w in self.items:
+            ww, wh = w.winfo_reqwidth(), w.winfo_reqheight()
+            if x and x + ww > width:
+                x, y = 0, y + row_h + self.gap_y
+                row_h = 0
+            w.place(x=x, y=y)
+            x += ww + self.gap_x
+            row_h = max(row_h, wh)
+        h = y + row_h
+        if int(self["height"]) != h:
+            self.configure(height=h)
 
 
 class ThinScrollbar(tk.Canvas):
@@ -280,6 +326,11 @@ class SearchWindow:
         self.region_state: dict[str, dict] = {}
         self.regions: set[str] = {r for r in cfg.get("regions", []) if r in SUB_REGIONS}
         self.factions: set[str] = {f for f in cfg.get("factions", []) if f in ("1", "2")}
+        self.classes: set[str] = {c for c in cfg.get("classes", []) if c in CLASSES}
+        self.level_min: int | None = _level_or_none(cfg.get("level_min"))
+        self.level_max: int | None = _level_or_none(cfg.get("level_max"))
+        self._query_filters: dict = {}         # what the current search asked NCSOFT to filter
+        self._level_job = None
         self.inbox: queue.Queue = queue.Queue()
         self.hover_index = -1
         self.hover_star = False
@@ -425,9 +476,21 @@ class SearchWindow:
         row2.pack(fill="x", pady=(6, 0))
         self.faction_chips = [(f, self._chip(row2, label, lambda k=f: self._toggle_faction(k)))
                               for f, label in FACTIONS]
+        # level range: [min] – [max], either or both
+        lv = tk.Frame(row2, bg=BG)
+        lv.pack(side="left", padx=(8, 0))
+        tk.Label(lv, text="Lv", bg=BG, fg=FG_DIM, font=self.f_small).pack(side="left", padx=(0, 5))
+        self.level_min_var = self._level_box(lv, "min", self.level_min)
+        tk.Label(lv, text="–", bg=BG, fg=FG_FAINT, font=self.f_small).pack(side="left", padx=4)
+        self.level_max_var = self._level_box(lv, "max", self.level_max)
         self.clear_chip = tk.Label(row2, text="Clear filters", bg=BG, fg=FG_FAINT, font=self.f_small,
                                    cursor="hand2", padx=6)
         self.clear_chip.bind("<Button-1>", lambda e: self._clear_filters())
+        self.class_row = FlowFrame(self.filters, bg=BG, height=1)
+        self.class_row.pack(fill="x", pady=(6, 0))
+        self.class_chips = [(name, self.class_row.add(self._chip(self.class_row, name,
+                                                                 lambda k=name: self._toggle_class(k), pack=False)))
+                            for name in CLASSES]
         self._paint_chips()
         self._paint_tabs()
 
@@ -477,11 +540,35 @@ class SearchWindow:
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
         self._menu_char: Character | None = None
 
-    def _chip(self, parent, text, cmd):
+    def _chip(self, parent, text, cmd, pack: bool = True):
         lb = tk.Label(parent, text=text, font=self.f_small, padx=10, pady=3, cursor="hand2")
-        lb.pack(side="left", padx=(0, 6))
+        if pack:
+            lb.pack(side="left", padx=(0, 6))
         lb.bind("<Button-1>", lambda e: cmd())
         return lb
+
+    def _level_box(self, parent, hint: str, value: int | None) -> tk.StringVar:
+        box = tk.Frame(parent, bg=SURFACE, highlightthickness=1, highlightbackground=SURFACE, highlightcolor=ACCENT)
+        box.pack(side="left")
+        var = tk.StringVar(value=str(value) if value else "")
+        ok = (self.root.register(lambda new: new == "" or (new.isdigit() and len(new) <= 2)), "%P")
+        ent = tk.Entry(box, textvariable=var, width=3, justify="center", bg=SURFACE, fg=FG, insertbackground=FG,
+                       relief="flat", font=self.f_small, highlightthickness=0, validate="key", validatecommand=ok)
+        ent.pack(ipady=3, padx=4)
+        ph = tk.Label(box, text=hint, bg=SURFACE, fg=FG_FAINT, font=self.f_small)
+
+        def paint(*_):
+            if var.get():
+                ph.place_forget()
+            else:
+                ph.place(relx=0.5, rely=0.5, anchor="center")
+        ph.bind("<Button-1>", lambda e: ent.focus_set())
+        ent.bind("<Return>", lambda e: self._apply_levels())
+        ent.bind("<FocusOut>", lambda e: self._apply_levels())
+        ent.bind("<Escape>", lambda e: var.set(""))
+        var.trace_add("write", lambda *a: (paint(), self._levels_typed()))
+        paint()
+        return var
 
     def _paint_chips(self):
         for key, lb in self.region_chips:
@@ -491,7 +578,10 @@ class SearchWindow:
             on = key in self.factions
             col = ELYOS if key == "1" else ASMO
             lb.config(bg=col if on else SURFACE, fg=BG if on else FG_DIM)
-        if self.regions or self.factions:
+        for key, lb in self.class_chips:
+            on = key in self.classes
+            lb.config(bg=CLASS_COLORS.get(key, ACCENT) if on else SURFACE, fg=BG if on else FG_DIM)
+        if self.regions or self.factions or self.classes or self.level_min or self.level_max:
             self.clear_chip.pack(side="right")
         else:
             self.clear_chip.pack_forget()
@@ -544,15 +634,57 @@ class SearchWindow:
         self.cfg["factions"] = sorted(self.factions)
         self._filters_changed()
 
+    def _toggle_class(self, k):
+        self.classes ^= {k}
+        self.cfg["classes"] = sorted(self.classes)
+        self._filters_changed()
+
+    def _levels_typed(self):
+        if self._level_job:
+            self.root.after_cancel(self._level_job)
+        self._level_job = self.root.after(600, self._apply_levels)
+
+    def _apply_levels(self):
+        if self._level_job:
+            self.root.after_cancel(self._level_job)
+            self._level_job = None
+        lo, hi = _level_or_none(self.level_min_var.get()), _level_or_none(self.level_max_var.get())
+        if lo is not None and hi is not None and lo > hi:
+            lo, hi = hi, lo
+        if (lo, hi) == (self.level_min, self.level_max):
+            return
+        self.level_min, self.level_max = lo, hi
+        self.cfg["level_min"], self.cfg["level_max"] = lo, hi
+        self._filters_changed()
+
     def _clear_filters(self):
         self.regions.clear()
         self.factions.clear()
-        self.cfg["regions"], self.cfg["factions"] = [], []
+        self.classes.clear()
+        self.level_min = self.level_max = None
+        self.cfg["regions"], self.cfg["factions"], self.cfg["classes"] = [], [], []
+        self.cfg["level_min"] = self.cfg["level_max"] = None
+        for var in (self.level_min_var, self.level_max_var):
+            if var.get():
+                var.set("")
+        if self._level_job:
+            self.root.after_cancel(self._level_job)
+            self._level_job = None
         self._filters_changed()
+
+    def _level_range_local(self) -> bool:
+        """A level range NCSOFT can't filter on (it only does exact levels): we filter what's loaded."""
+        return (self.level_min is not None or self.level_max is not None) and \
+            "level" not in self._query_filters
+
+    def _server_filters(self) -> dict:
+        return search_filters(self.classes, self.factions, self.level_min, self.level_max)
 
     def _filters_changed(self):
         self._paint_chips()
         self.canvas.yview_moveto(0)
+        if self.mode == "search" and self.keyword and self._server_filters() != self._query_filters:
+            self._run_search(self.keyword)       # NCSOFT applies class / faction / exact level itself
         self._mark()
 
     def _toggle_pin(self):
@@ -584,7 +716,11 @@ class SearchWindow:
         if self.mode != "search":
             self._set_mode("search")
         self.close_profile()
+        self._run_search(kw)
+
+    def _run_search(self, kw: str):
         self.keyword = kw
+        self._query_filters = self._server_filters()
         self.generation += 1
         self.api.new_generation()
         self.results = []
@@ -595,12 +731,12 @@ class SearchWindow:
         self._mark()
 
     def _fetch_pages(self, regions):
-        gen, kw = self.generation, self.keyword
+        gen, kw, filters = self.generation, self.keyword, dict(self._query_filters)
         for r in regions:
             st = self.region_state[r]
             st["loading"] = True
             page = st["page"] + 1
-            self.api.search(kw, [r], page=page, size=PAGE_SIZE,
+            self.api.search(kw, [r], page=page, size=PAGE_SIZE, filters=filters,
                             on_done=lambda region, chars, total, err, g=gen, p=page:
                             self.inbox.put(("search", g, region, p, chars, total, err)))
 
@@ -610,7 +746,8 @@ class SearchWindow:
         wanted = self.regions or set(SUB_REGIONS)
         more = [r for r, st in self.region_state.items()
                 if r in wanted and not st["loading"] and st["error"] is None and st["total"] is not None
-                and st["page"] * PAGE_SIZE < st["total"]]
+                and st["page"] * PAGE_SIZE < st["total"]
+                and not (self._level_range_local() and st["page"] >= LOCAL_FILTER_PAGES)]
         if more:
             self._fetch_pages(more)
 
@@ -678,6 +815,12 @@ class SearchWindow:
             out = [c for c in out if c.region in self.regions]
         if self.factions:
             out = [c for c in out if str(c.race) in self.factions]
+        if self.classes:
+            out = [c for c in out if c.class_name in self.classes]
+        if self.level_min is not None:
+            out = [c for c in out if c.level >= self.level_min]
+        if self.level_max is not None:
+            out = [c for c in out if c.level <= self.level_max]
         return out
 
     def _mark(self):
@@ -843,6 +986,11 @@ class SearchWindow:
         parts = [f"{len(view):,} shown" + (f" of {grand:,} matches" if grand else "")]
         if loading:
             parts.append("searching…")
+        elif self._level_range_local():
+            checked = sum(min(st["total"] or 0, st["page"] * PAGE_SIZE)
+                          for r, st in self.region_state.items() if r in wanted)
+            if checked < grand:
+                parts[0] = f"{len(view):,} in level range among the first {checked:,} of {grand:,} matches"
         if errors:
             parts.append("failed: " + ", ".join(errors))
         self.status.config(text="  ·  ".join(parts), fg=RED if errors and not grand else FG_DIM)
@@ -1190,6 +1338,19 @@ class SearchWindow:
             (t + 1300, lambda: self._grab(f"{base}-profile-stats-hover.png")),
         ]
         t += 3000
+
+        def set_levels(lo, hi):
+            self.level_min_var.set(lo)
+            self.level_max_var.set(hi)
+            self._apply_levels()
+        steps += [
+            (t, self.close_profile),
+            (t + 200, lambda: self._toggle_class("Cleric")),
+            (t + 400, lambda: set_levels("40", "45")),
+            (t + 3500, lambda: self._grab(f"{base}-filters.png")),
+            (t + 3700, self._clear_filters),
+        ]
+        t += 4000
         steps += [
             (t, lambda: self._set_mode("favorites")),
             (t + 600, lambda: self._toggle_faction("2")),
