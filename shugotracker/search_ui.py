@@ -473,7 +473,6 @@ class SearchWindow:
                             activeforeground=FG, bd=0)
         self.menu.add_command(label="View profile", command=lambda: self._menu(self.open_profile))
         self.menu.add_command(label="Add / remove favorite", command=lambda: self._menu(self.toggle_favorite))
-        self.menu.add_command(label="Open on Shugo.GG", command=lambda: self._menu(lambda c: webbrowser.open(c.shugo_url)))
         self.menu.add_command(label="Copy name", command=lambda: self._menu(self._copy_name))
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
         self._menu_char: Character | None = None

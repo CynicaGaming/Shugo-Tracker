@@ -4,7 +4,6 @@ from __future__ import annotations
 import time
 from dataclasses import asdict
 import tkinter as tk
-import webbrowser
 from typing import TYPE_CHECKING
 
 from .aion2api import REGION_LABELS, Character
@@ -52,9 +51,6 @@ class ProfileView:
         self.star = tk.Label(bar, bg=BG, font=f.f_small, cursor="hand2", padx=6)
         self.star.pack(side="right")
         self.star.bind("<Button-1>", lambda e: f.toggle_favorite(self.char))
-        shugo = tk.Label(bar, text="Shugo.GG ↗", bg=BG, fg=FG_DIM, font=f.f_small, cursor="hand2", padx=6)
-        shugo.pack(side="right")
-        shugo.bind("<Button-1>", lambda e: webbrowser.open(self.char.shugo_url))
         refresh = tk.Label(bar, text="⟳ Refresh", bg=BG, fg=FG_DIM, font=f.f_small, cursor="hand2", padx=6)
         refresh.pack(side="right")
         refresh.bind("<Button-1>", lambda e: self.reload())

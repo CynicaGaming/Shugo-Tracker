@@ -1,8 +1,8 @@
 # Shugo Tracker
 
 A fast, modern **AION 2 (Global) character search**. Type a name and get every matching character across
-all Global regions — class, level, server, faction, **gear score** and **combat power** — with one click to
-open their [Shugo.GG](https://shugo.gg) profile.
+all Global regions — class, level, server, faction, **gear score** and **combat power** — and open a full
+profile in the app.
 
 - Searches NA East, NA West, Europe, Latin America and Asia at the same time.
 - Results appear instantly as skeleton cards; gear score and combat power fill in for the cards you can see,
@@ -13,8 +13,8 @@ open their [Shugo.GG](https://shugo.gg) profile.
 - Toggle region and faction filters on and off instantly. Pin the window on top of the game.
 - Updates itself from this repo's releases.
 
-*Shugo Tracker is an independent fan tool. It reads the same public NCSOFT character endpoints Shugo.GG uses
-and links to Shugo.GG profiles, but it is not made by or affiliated with Shugo.GG or NCSOFT.*
+*Shugo Tracker is an independent fan tool. It reads NCSOFT's public AION 2 character data and is not made by
+or affiliated with NCSOFT or Shugo.GG.*
 
 ## Install & run
 
@@ -62,13 +62,13 @@ Everything is saved immediately.
 | region / faction chips | click to filter, click again to remove; nothing selected = everything |
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add / remove a favorite (see the **★ Favorites** tab) |
-| right-click a card | profile / favorite / open on Shugo.GG / copy name / refresh |
+| right-click a card | profile / favorite / copy name / refresh |
 | 📌 | keep the window above other windows |
 
 The profile has tabs for **Gear** (equipment, accessories and Arcana with grade and enchant level),
 **Skills** (Active, Passive and Stigma, equipped first), **Daevanion** (board progress), **Stats** (primary and
 deity stats with their effects), **Cosmetics** (wings, wing appearance, pet, outfit) and **Titles**, plus the
-character's legion and a link to their Shugo.GG page. Per-item stat rolls aren't part of NCSOFT's public
+character's legion. Per-item stat rolls aren't part of NCSOFT's public
 data, so items show name, grade and enchant level.
 
 Search matches anywhere in the name (“luna” also finds “Aluna”); exact matches and higher levels come first.

@@ -205,7 +205,7 @@ class SettingsView:
                         cursor="hand2")
         link.pack(anchor="w")
         link.bind("<Button-1>", lambda e: webbrowser.open(REPO_URL))
-        tk.Label(about, text="Data from NCSOFT's AION 2 site  ·  profiles link to Shugo.GG",
+        tk.Label(about, text="Character data from NCSOFT's public AION 2 site",
                  bg=BG, fg=FG_FAINT, font=self.app.f_tiny).pack(anchor="w", pady=(2, 0))
 
     # ───── actions ─────
