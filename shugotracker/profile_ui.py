@@ -305,6 +305,33 @@ class ProfileView:
         self._set_image(lb, url, size)
         return box
 
+    def _fit_label(self, parent, text: str, font, tip: bool = True, **kw) -> tk.Label:
+        """A label that never pushes its neighbours out: long text is cut to the space it gets, with "…",
+        and the full text shows on hover."""
+        lb = tk.Label(parent, text=text, font=font, width=1, anchor="w", **kw)
+        state = {"cut": False}
+
+        def fit(e):
+            avail = e.width - 2
+            if font.measure(text) <= avail:
+                shown, state["cut"] = text, False
+            else:
+                lo, hi = 0, len(text)
+                while lo < hi:                       # longest prefix that fits with the ellipsis
+                    mid = (lo + hi + 1) // 2
+                    if font.measure(text[:mid].rstrip() + "…") <= avail:
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                shown, state["cut"] = text[:lo].rstrip() + "…", True
+            if lb.cget("text") != shown:
+                lb.config(text=shown)
+        lb.bind("<Configure>", fit, add="+")
+        if tip:
+            lb.bind("<Enter>", lambda e: state["cut"] and self._show_tip(lb, text, []), add="+")
+            lb.bind("<Leave>", lambda e: state["cut"] and self._hide_tip(), add="+")
+        return lb
+
     def _item_row(self, parent, item: Item | None, label: str):
         row = tk.Frame(parent, bg=SURFACE, padx=8, pady=6)
         row.pack(fill="x", pady=2)
@@ -316,15 +343,15 @@ class ProfileView:
             return
         col = GRADE_COLORS.get(item.grade, FG)
         self._icon(row, item.icon, border=col).pack(side="left")
-        txt = tk.Frame(row, bg=SURFACE)
-        txt.pack(side="left", fill="x", expand=True, padx=8)
-        tk.Label(txt, text=item.name, bg=SURFACE, fg=col, font=self.app.f_bold, anchor="w").pack(fill="x")
-        sub = f"{label}  ·  {item.grade}" + (f"  ·  Lv {item.level}" if item.level else "")
-        tk.Label(txt, text=sub, bg=SURFACE, fg=FG_FAINT, font=self.app.f_tiny, anchor="w").pack(fill="x")
-        if item.enchant or item.exceed:
+        if item.enchant or item.exceed:            # packed first so a long name can't push it out
             ench = f"+{item.enchant}" + (f"  ✦{item.exceed}" if item.exceed else "")
             tk.Label(row, text=ench, bg=SURFACE, fg=ACCENT if item.enchant >= 10 else FG, font=self.app.f_bold).pack(
-                side="right")
+                side="right", padx=(6, 0))
+        txt = tk.Frame(row, bg=SURFACE)
+        txt.pack(side="left", fill="x", expand=True, padx=(8, 0))
+        self._fit_label(txt, item.name, self.app.f_bold, bg=SURFACE, fg=col).pack(fill="x")
+        sub = f"{label}  ·  {item.grade}" + (f"  ·  Lv {item.level}" if item.level else "")
+        self._fit_label(txt, sub, self.app.f_tiny, bg=SURFACE, fg=FG_FAINT).pack(fill="x")
 
     def _columns(self):
         cols = tk.Frame(self.body, bg=BG)
@@ -337,7 +364,7 @@ class ProfileView:
     # ───── tabs ─────
     def _tab_gear(self, p: Profile):
         if p.equipment_error:
-            tk.Label(self.body, text="Gear couldn't be loaded — try Refresh.", bg=BG, fg=RED,
+            tk.Label(self.body, text="Couldn't load gear.", bg=BG, fg=RED,
                      font=self.app.f_small).pack(anchor="w", pady=8)
             return
         left, right = self._columns()
@@ -358,7 +385,7 @@ class ProfileView:
 
     def _tab_skills(self, p: Profile):
         if p.equipment_error:
-            tk.Label(self.body, text="Skills couldn't be loaded — try Refresh.", bg=BG, fg=RED,
+            tk.Label(self.body, text="Couldn't load skills.", bg=BG, fg=RED,
                      font=self.app.f_small).pack(anchor="w", pady=8)
             return
         for cat, title in SKILL_CATEGORIES:
@@ -378,8 +405,8 @@ class ProfileView:
                 self._icon(cell, s.icon, 30, border=ACCENT if s.equipped else BORDER).pack(side="left")
                 txt = tk.Frame(cell, bg=SURFACE)
                 txt.pack(side="left", fill="x", expand=True, padx=8)
-                tk.Label(txt, text=s.name, bg=SURFACE, fg=FG if s.acquired else FG_FAINT, font=self.app.f_small,
-                         anchor="w").pack(fill="x")
+                self._fit_label(txt, s.name, self.app.f_small, bg=SURFACE,
+                                fg=FG if s.acquired else FG_FAINT).pack(fill="x")
                 sub = ("Not learned" if not s.acquired else f"Lv {s.level}" if s.level else "Learned") + \
                       ("  ·  Equipped" if s.equipped else "")
                 tk.Label(txt, text=sub, bg=SURFACE, fg=ACCENT if s.equipped and s.acquired else FG_FAINT,
@@ -401,9 +428,9 @@ class ProfileView:
             mid.pack(side="left", fill="x", expand=True, padx=10)
             top = tk.Frame(mid, bg=SURFACE)
             top.pack(fill="x")
-            tk.Label(top, text=b.name, bg=SURFACE, fg=FG, font=self.app.f_bold).pack(side="left")
             tk.Label(top, text=f"{b.opened}/{b.total}  ·  {b.percent}%", bg=SURFACE, fg=FG_DIM,
                      font=self.app.f_small).pack(side="right")
+            self._fit_label(top, b.name, self.app.f_bold, bg=SURFACE, fg=FG).pack(side="left", fill="x", expand=True)
             bar = tk.Canvas(mid, height=8, bg=SURFACE, highlightthickness=0)
             bar.pack(fill="x", pady=(5, 0))
             bar.bind("<Configure>", lambda e, cv=bar, pct=b.percent: self._bar(cv, e.width, pct))
@@ -434,11 +461,11 @@ class ProfileView:
                           padx=(0 if col == 0 else 3, 0 if col == cols - 1 else 3), pady=2)
                 top = tk.Frame(cell, bg=SURFACE)
                 top.pack(fill="x")
-                name = tk.Label(top, text=s.name, bg=SURFACE, fg=FG, font=self.app.f_small, anchor="w")
-                name.pack(side="left")
                 val = tk.Label(top, text=str(s.value), bg=SURFACE, fg=ACCENT if s.value else FG_FAINT,
                                font=self.app.f_bold)
                 val.pack(side="right")
+                name = self._fit_label(top, s.name, self.app.f_small, tip=False, bg=SURFACE, fg=FG)
+                name.pack(side="left", fill="x", expand=True)
                 lines, foot = self._stat_tip(s)
                 if lines or foot:
                     self._hover_tip([cell, top, name, val], s.name, lines, foot)
@@ -523,7 +550,7 @@ class ProfileView:
 
     def _tab_cosmetics(self, p: Profile):
         if p.equipment_error:
-            tk.Label(self.body, text="Cosmetics couldn't be loaded — try Refresh.", bg=BG, fg=RED,
+            tk.Label(self.body, text="Couldn't load cosmetics.", bg=BG, fg=RED,
                      font=self.app.f_small).pack(anchor="w", pady=8)
             return
         self._section(self.body, "Wings & pet")
@@ -551,7 +578,7 @@ class ProfileView:
             tk.Label(top, text=t.category, bg=SURFACE_2, fg=FG_DIM, font=self.app.f_tiny, padx=6).pack(
                 side="left", padx=8)
             if t.owned_percent is not None:
-                tk.Label(top, text=f"{t.owned_percent}% of players own", bg=SURFACE, fg=FG_FAINT,
+                tk.Label(top, text=f"Owned by {t.owned_percent}% of players", bg=SURFACE, fg=FG_FAINT,
                          font=self.app.f_tiny).pack(side="right")
             for eff in t.effects:
                 tk.Label(card, text=f"•  {eff}", bg=SURFACE, fg=FG_DIM, font=self.app.f_small, anchor="w").pack(

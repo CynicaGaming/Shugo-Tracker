@@ -51,6 +51,9 @@ jobs:
           Set-Content -Path shugotracker/_version.py -Value '__version__ = "0.0.1"'
           python -m PyInstaller --noconfirm --clean ShugoTracker.spec *> build.txt
           git checkout -- shugotracker/_version.py
+          $mb = [math]::Round((Get-Item dist\ShugoTracker.exe).Length / 1MB, 1)
+          Write-Output "::notice title=exe::ShugoTracker.exe is $mb MB"
+          "exe size: $mb MB" | Set-Content ui-exe-size.txt
           $fav = Join-Path $env:APPDATA "ShugoTracker\favorites.json"
           Remove-Item $fav -ErrorAction SilentlyContinue
           $r1 = Join-Path $env:RUNNER_TEMP "fav1.txt"; $r2 = Join-Path $env:RUNNER_TEMP "fav2.txt"

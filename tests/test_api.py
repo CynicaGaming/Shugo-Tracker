@@ -259,3 +259,26 @@ class FilterTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertEqual(calls[1]["pcId"], "9,10,11,12")
         self.assertNotIn("pcId", calls[0])
+
+
+class RateLimiterTests(unittest.TestCase):
+    def test_burst_then_ceiling(self):
+        lim = a.RateLimiter(rate=6, max_rate=6)
+        t0 = time.monotonic()
+        for _ in range(6):
+            lim.wait()
+        self.assertLess(time.monotonic() - t0, 0.1)          # a search's region requests go out together
+        lim.wait()                                             # the 7th waits for the window
+        self.assertGreaterEqual(time.monotonic() - t0, 0.95)
+
+    def test_never_more_than_rate_in_any_second(self):
+        lim = a.RateLimiter(rate=6, max_rate=6)
+        stamps = []
+        threads = [threading.Thread(target=lambda: (lim.wait(), stamps.append(time.monotonic()))) for _ in range(14)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        stamps.sort()
+        for i in range(len(stamps) - 6):
+            self.assertGreaterEqual(stamps[i + 6] - stamps[i], 0.99)

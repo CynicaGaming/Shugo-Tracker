@@ -251,7 +251,7 @@ class Updater:
         if st == "ready":
             return "Restart", "accent"
         if st == "error":
-            return "Update failed · retry", "error"
+            return "Update failed · Retry", "error"
         recent = time.time() - self.checked_at < 5
         if st == "uptodate" and recent:
             return "✓ Up to date", "ok"

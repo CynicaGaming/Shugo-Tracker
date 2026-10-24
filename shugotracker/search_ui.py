@@ -66,6 +66,22 @@ def fmt_int(n: int | None) -> str:
     return "—" if n is None else f"{n:,}"
 
 
+def elide(font, text: str, max_w: float) -> str:
+    """text, cut with "…" so it fits in max_w pixels."""
+    if max_w <= 0:
+        return ""
+    if font.measure(text) <= max_w:
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if font.measure(text[:mid].rstrip() + "…") <= max_w:
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "…" if lo else ""
+
+
 def round_rect(cv: tk.Canvas, x0, y0, x1, y1, r, **kw):
     r = max(0, min(r, (x1 - x0) / 2, (y1 - y0) / 2))
     pts = [x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r, x1, y1 - r, x1, y1, x1 - r, y1,
@@ -397,6 +413,7 @@ class SearchWindow:
         head.pack(fill="x", padx=(PAD, 6), pady=(8, 0))
         logo = tk.Canvas(head, width=20, height=20, bg=BG, highlightthickness=0)
         self._icons = {}
+        self._icon_cache: dict = {}
         try:
             from PIL import ImageTk
             from .desktop import make_icon_image
@@ -416,16 +433,14 @@ class SearchWindow:
                 w.bind("<ButtonPress-1>", self._drag_start)
                 w.bind("<B1-Motion>", self._drag_move)
                 w.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
-            close = self._title_button(head, "✕", self.close_button, hover=RED)
+            close = self._title_button(head, "close", self.close_button, hover=RED)
             close.pack(side="right")
-            collapse = self._title_button(head, "—", self.collapse)
+            collapse = self._title_button(head, "minimize", self.collapse)
             collapse.pack(side="right")
-        self.gear = self._title_button(head, "⚙", self.open_settings, hover=ACCENT)
-        self.gear.bind("<Leave>", lambda e: self._paint_gear(), add="")
+        self.gear = self._title_button(head, "cog", self.open_settings, hover=ACCENT, repaint=lambda: self._paint_gear())
         self.gear.pack(side="right")
-        self.pin = tk.Label(head, bg=BG, font=self.f_small, cursor="hand2", padx=6)
-        self.pin.pack(side="right", padx=(0, 2))
-        self.pin.bind("<Button-1>", lambda e: self._toggle_pin())
+        self.pin = self._title_button(head, "pin", self._toggle_pin, hover=ACCENT, repaint=lambda: self._paint_pin())
+        self.pin.pack(side="right")
         self._paint_pin()
         self._sync_update_button()
 
@@ -457,7 +472,7 @@ class SearchWindow:
         self.search_entry.bind("<Return>", lambda e: self._start_search(now=True))
         self.search_entry.bind("<Escape>", lambda e: self.search_var.set(""))
         self.search_var.trace_add("write", lambda *a: self._on_type())
-        self.placeholder = tk.Label(self.box, text="Search character name…", bg=SURFACE_2, fg=FG_FAINT,
+        self.placeholder = tk.Label(self.box, text="Search by character name…", bg=SURFACE_2, fg=FG_FAINT,
                                     font=self.f_input)
         self.placeholder.place(x=36, rely=0.5, anchor="w")
         self.placeholder.bind("<Button-1>", lambda e: self.search_entry.focus_set())
@@ -495,7 +510,7 @@ class SearchWindow:
         self._paint_chips()
         self._paint_tabs()
 
-        self.status = tk.Label(self.root, text="Type a character name and press Enter.", bg=BG, fg=FG_DIM,
+        self.status = tk.Label(self.root, text="", bg=BG, fg=FG_DIM,
                                font=self.f_small, anchor="w", padx=PAD)
         self.status.pack(fill="x", pady=(4, 4))
 
@@ -536,7 +551,7 @@ class SearchWindow:
         self.menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
                             activeforeground=FG, bd=0)
         self.menu.add_command(label="View profile", command=lambda: self._menu(self.open_profile))
-        self.menu.add_command(label="Add / remove favorite", command=lambda: self._menu(self.toggle_favorite))
+        self.menu.add_command(label="Add to favorites", command=lambda: self._menu(self.toggle_favorite))
         self.menu.add_command(label="Copy name", command=lambda: self._menu(self._copy_name))
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
         self._menu_char: Character | None = None
@@ -595,7 +610,7 @@ class SearchWindow:
 
     def _paint_pin(self):
         on = bool(self.root.attributes("-topmost"))
-        self.pin.config(text="📌", fg=ACCENT if on else FG_FAINT)
+        self._set_icon(self.pin, "pin", ACCENT if on else FG_FAINT)
 
     def _dark_titlebar(self):
         try:  # Windows 10/11 immersive dark title bar
@@ -705,7 +720,7 @@ class SearchWindow:
             self.root.after_cancel(self._debounce)
             self._debounce = None
         if len(text.strip()) >= 2:
-            self._debounce = self.root.after(500, lambda: self._start_search(now=False))
+            self._debounce = self.root.after(350, lambda: self._start_search(now=False))
 
     def _start_search(self, now: bool):
         if self._debounce:
@@ -891,12 +906,12 @@ class SearchWindow:
             if len(self.favorites):
                 msg, sub = "No favorites match these filters", "Clear the filters to see them all."
             else:
-                msg, sub = "No favorites yet", "Click ☆ on any search result to keep it here."
+                msg, sub = "No favorites yet", "Characters you star appear here."
         elif not self.keyword:
             msg, sub = "Find any AION 2 character", "Search every Global region at once."
         elif any(st["error"] for st in self.region_state.values()):
             msg, sub = "Search failed", "Check your connection and try again."
-        elif self.results:
+        elif self.results or self._query_filters:
             msg, sub = "No matches with these filters", "Clear the filters to see all results."
         else:
             msg, sub = f"No characters match “{self.keyword}”", "Try a different spelling."
@@ -930,21 +945,33 @@ class SearchWindow:
             cv.create_text(px + PORTRAIT / 2, py + PORTRAIT / 2, text=(c.class_name[:1] or "?"), fill=col,
                            font=self.f_name, tags="card")
         tx = 72
-        name_id = cv.create_text(tx, y + 23, text=c.name, fill=FG, font=self.f_name, anchor="w", tags="card")
-        bx = cv.bbox(name_id)[2] + 8
-        if c.legion:
-            leg_id = cv.create_text(bx - 2, y + 24, text=f"<{c.legion}>", fill=LEGION, font=self.f_body, anchor="w",
-                                    tags="card")
-            bx = cv.bbox(leg_id)[2] + 8
         fac_col = ELYOS if c.race == 1 else ASMO if c.race == 2 else FG_DIM
         pill_w = self.f_tiny.measure(c.faction) + 12
+        # line 1 must stop before the CP number: the legion gives way first, then the name
+        limit = x1 - 44 - self.f_cp.measure("000,000") - self.f_tiny.measure("CP") - 18
+        room = limit - tx - pill_w - 8
+        name_w = self.f_name.measure(c.name)
+        legion = f"<{c.legion}>" if c.legion else ""
+        if legion:
+            legion = elide(self.f_body, legion, room - name_w - 6)
+            if len(legion) < 3:
+                legion = ""
+        name = elide(self.f_name, c.name, room - (self.f_body.measure(legion) + 6 if legion else 0))
+        name_id = cv.create_text(tx, y + 23, text=name, fill=FG, font=self.f_name, anchor="w", tags="card")
+        bx = cv.bbox(name_id)[2] + 8
+        if legion:
+            leg_id = cv.create_text(bx - 2, y + 24, text=legion, fill=LEGION, font=self.f_body, anchor="w",
+                                    tags="card")
+            bx = cv.bbox(leg_id)[2] + 8
         round_rect(cv, bx, y + 15, bx + pill_w, y + 31, 8, fill=SURFACE_2, outline=fac_col, tags="card")
         cv.create_text(bx + pill_w / 2, y + 23, text=c.faction, fill=fac_col, font=self.f_tiny, tags="card")
         cls_col = CLASS_COLORS.get(c.class_name, FG_DIM)
         cid = cv.create_text(tx, y + 49, text=c.class_name or "Unknown", fill=cls_col, font=self.f_small,
                              anchor="w", tags="card")
         rest = f"  ·  Lv {c.level}  ·  {c.server_name} ({REGION_LABELS.get(c.region, c.region.upper())})"
-        cv.create_text(cv.bbox(cid)[2], y + 49, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
+        rx2 = cv.bbox(cid)[2]
+        rest = elide(self.f_small, rest, x1 - 44 - self.f_small.measure("GS 0,000") - 12 - rx2)
+        cv.create_text(rx2, y + 49, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
 
         # favorite star (top right)
         fav = c.key in self.favorites
@@ -963,9 +990,7 @@ class SearchWindow:
                            tags="card")
             return False
         if c.status == "error":
-            cv.create_text(rx, y + 22, text="couldn't load", fill=RED, font=self.f_small, anchor="e", tags="card")
-            cv.create_text(rx, y + 49, text="right-click → refresh", fill=FG_FAINT, font=self.f_tiny, anchor="e",
-                           tags="card")
+            cv.create_text(rx, y + 22, text="Couldn't load", fill=RED, font=self.f_small, anchor="e", tags="card")
             return False
         round_rect(cv, rx - 80, y + 14, rx, y + 31, 6, fill=a, outline="", tags="card")
         round_rect(cv, rx - 54, y + 42, rx, y + 55, 6, fill=b, outline="", tags="card")
@@ -977,7 +1002,7 @@ class SearchWindow:
             self.status.config(text=f"{len(view):,} of {n:,} favorites" if n else "", fg=FG_DIM)
             return
         if not self.keyword:
-            self.status.config(text="Type a character name and press Enter.", fg=FG_DIM)
+            self.status.config(text="", fg=FG_DIM)
             return
         wanted = self.regions or set(SUB_REGIONS)
         totals = {r: st["total"] for r, st in self.region_state.items() if r in wanted and st["total"] is not None}
@@ -1039,6 +1064,8 @@ class SearchWindow:
         i, _ = self._hit(e.x, e.y)
         if i >= 0:
             self._menu_char = self._view[i]
+            fav = self._menu_char.key in self.favorites
+            self.menu.entryconfigure(1, label="Remove from favorites" if fav else "Add to favorites")
             self.menu.tk_popup(e.x_root, e.y_root)
 
     def _menu(self, fn):
@@ -1126,11 +1153,37 @@ class SearchWindow:
         self._show_main()
 
     # ═════ overlay window ═════
-    def _title_button(self, parent, text, cmd, hover=FG):
-        b = tk.Label(parent, text=text, bg=BG, fg=FG_DIM, font=self.f_body, padx=9, pady=1, cursor="hand2")
+    ICON_PX = 14
+
+    def _icon(self, name: str, color: str, accent: str | None = None):
+        """A drawn title-bar icon as a PhotoImage (cached); None without Pillow."""
+        key = (name, color, accent)
+        img = self._icon_cache.get(key)
+        if img is None:
+            try:
+                from .desktop import ui_icon
+                rgb = lambda h: tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))  # noqa: E731
+                img = ImageTk.PhotoImage(ui_icon(name, self.ICON_PX, rgb(color), rgb(accent) if accent else None))
+            except Exception:  # noqa: BLE001
+                img = False
+            self._icon_cache[key] = img
+        return img or None
+
+    GLYPHS = {"close": "✕", "minimize": "—", "cog": "⚙", "pin": "📌"}
+
+    def _set_icon(self, widget, name: str, color: str, accent: str | None = None):
+        img = self._icon(name, color, accent)
+        if img:
+            widget.config(image=img, text="")
+        else:
+            widget.config(text=self.GLYPHS.get(name, "?"), fg=accent or color)
+
+    def _title_button(self, parent, name, cmd, hover=FG, repaint=None):
+        b = tk.Label(parent, bg=BG, fg=FG_DIM, font=self.f_body, padx=9, pady=4, cursor="hand2")
+        self._set_icon(b, name, FG_DIM)
         b.bind("<Button-1>", lambda e: cmd())
-        b.bind("<Enter>", lambda e: b.config(fg=hover, bg=SURFACE_2))
-        b.bind("<Leave>", lambda e: b.config(fg=FG_DIM, bg=BG))
+        b.bind("<Enter>", lambda e: (self._set_icon(b, name, hover), b.config(bg=SURFACE_2)))
+        b.bind("<Leave>", lambda e: (b.config(bg=BG), repaint() if repaint else self._set_icon(b, name, FG_DIM)))
         return b
 
     def _lift_chrome(self):
@@ -1306,7 +1359,8 @@ class SearchWindow:
 
     def _paint_gear(self):
         waiting = self.updater is not None and self.updater.state in ("available", "ready")
-        self.gear.config(text="⚙•" if waiting else "⚙", fg=ACCENT if waiting else FG_DIM, bg=BG)
+        self._set_icon(self.gear, "cog", FG_DIM, accent=ACCENT if waiting else None)
+        self.gear.config(bg=BG)
 
     def _update_click(self):
         if self.updater is None:

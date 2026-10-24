@@ -10,6 +10,7 @@ details add combat power and item level (gear score). Results link to Shugo.GG p
 """
 from __future__ import annotations
 
+import collections
 import html
 import itertools
 import json
@@ -172,22 +173,36 @@ def rank(results: list[Character], keyword: str) -> list[Character]:
 
 
 class RateLimiter:
-    """Token bucket shared by all workers; halves its rate on HTTP 429/5xx and recovers slowly."""
+    """
+    At most `rate` requests in any one-second window, shared by all workers. Requests that arrive together
+    (one per region for a search) go out together instead of being spaced 1/rate apart; the ceiling holds.
+    Halves on HTTP 429/5xx and recovers slowly.
+    """
 
     def __init__(self, rate: float = 6.0, min_rate: float = 0.5, max_rate: float = 8.0):
         self.rate, self.min_rate, self.max_rate = rate, min_rate, max_rate
-        self._next = 0.0
+        self._sent: collections.deque[float] = collections.deque()
         self._pause_until = 0.0
         self._lock = threading.Lock()
 
+    def _window(self) -> tuple[int, float]:
+        if self.rate >= 1:
+            return int(self.rate), 1.0
+        return 1, 1.0 / self.rate
+
     def wait(self) -> None:
-        with self._lock:
-            now = time.monotonic()
-            start = max(now, self._next, self._pause_until)
-            self._next = start + 1.0 / self.rate
-        delay = start - time.monotonic()
-        if delay > 0:
-            time.sleep(delay)
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                limit, span = self._window()
+                while self._sent and now - self._sent[0] >= span:
+                    self._sent.popleft()
+                if now >= self._pause_until and len(self._sent) < limit:
+                    self._sent.append(now)
+                    return
+                delay = max(self._pause_until - now,
+                            (self._sent[0] + span - now) if len(self._sent) >= limit else 0.0)
+            time.sleep(max(delay, 0.005))
 
     def ok(self) -> None:
         with self._lock:
@@ -206,6 +221,8 @@ SEARCH_KEEP_S = 15 * 60            # identical searches within this window are a
 PROFILE_FRESH_S = 10 * 60
 PROFILE_KEEP_S = 7 * 86400
 PROFILE_DISK_MAX = 300
+RECENT_INFO_S = 120                # a card's info response is reused for its profile for this long
+RECENT_INFO_MAX = 200
 
 
 class Api:
@@ -229,6 +246,8 @@ class Api:
         self._inflight: dict[str, list] = {}
         self._pflock = threading.Lock()
         self._search_cache: dict[tuple, tuple[float, dict]] = {}
+        # the raw info response behind each card's numbers: opening that profile soon after reuses it
+        self._recent_info: collections.OrderedDict[str, tuple[float, dict]] = collections.OrderedDict()
         if profile_dir:
             os.makedirs(profile_dir, exist_ok=True)
             self._prune_profiles()
@@ -346,6 +365,7 @@ class Api:
             try:
                 data = self._get_json(INFO_URL, {"lang": "en-US", "characterId": c.char_id,
                                                  "serverId": c.server_id, "region": c.region})
+                self._remember_info(c.key, data)
                 info = parse_info(data)
                 self._store(c, info)
                 self._fill(c, info)
@@ -356,6 +376,18 @@ class Api:
                     c.status, c.error = "error", f"{e.__class__.__name__}"
                 self.log(f"api: details for {c.name}@{c.server_name} failed: {e}")
             on_done(c)
+
+    def _remember_info(self, key: str, data: dict) -> None:
+        with self._cache_lock:
+            self._recent_info[key] = (time.monotonic(), data)
+            self._recent_info.move_to_end(key)
+            while len(self._recent_info) > RECENT_INFO_MAX:
+                self._recent_info.popitem(last=False)
+
+    def _recent(self, key: str) -> dict | None:
+        with self._cache_lock:
+            hit = self._recent_info.get(key)
+        return hit[1] if hit and time.monotonic() - hit[0] < RECENT_INFO_S else None
 
     @staticmethod
     def _fill(c: Character, info: dict) -> None:
@@ -427,13 +459,15 @@ class Api:
         from .profile import EQUIPMENT_URL, parse_profile
         key = c.key
         params = {"lang": "en-US", "characterId": c.char_id, "serverId": c.server_id, "region": c.region}
-        f_info = self._profile_pool.submit(self._get_json, INFO_URL, params)
         f_eq = self._profile_pool.submit(self._get_json, EQUIPMENT_URL, params)
-        try:
-            info = f_info.result()
-        except Exception as e:  # noqa: BLE001
-            self._deliver(key, c, None, f"{e.__class__.__name__}: {e}", final=True)
-            return
+        info = self._recent(key)                # the card just loaded it: don't ask again
+        if info is None:
+            try:
+                info = self._profile_pool.submit(self._get_json, INFO_URL, params).result()
+            except Exception as e:  # noqa: BLE001
+                self._deliver(key, c, None, f"{e.__class__.__name__}: {e}", final=True)
+                return
+            self._remember_info(key, info)
         details = parse_info(info)            # the info call also refreshes the card's numbers
         self._store(c, details)
         self._fill(c, details)
@@ -503,6 +537,7 @@ class Api:
                 pass
         with self._cache_lock:
             self._cache.pop(c.key, None)
+            self._recent_info.pop(c.key, None)
 
     # ───── cache ─────
     def _apply_cached(self, c: Character) -> str | None:
@@ -539,6 +574,7 @@ class Api:
         """Forget every cached search, card number and profile (memory and disk)."""
         with self._cache_lock:
             self._cache.clear()
+            self._recent_info.clear()
         with self._pflock:
             self._profiles.clear()
         self._search_cache.clear()

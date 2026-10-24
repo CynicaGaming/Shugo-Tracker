@@ -579,6 +579,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.bench:
         return _bench(args.bench)
     nearby = args.nearby or args.replay or args.console
+    if nearby and FROZEN:
+        try:
+            import scapy  # noqa: F401
+        except ImportError:
+            print("The experimental --nearby mode isn't part of the packaged app; run it from source.")
+            return 2
     if not nearby:
         code = _run_search(cfg, args.config, demo=args.demo, query=args.query or (
                            "Luna" if args.selftest_favorites else None), screenshot=args.screenshot,

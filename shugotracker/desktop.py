@@ -208,6 +208,56 @@ def make_bubble_image(size: int = 46):
     return im.resize((size, size), Image.LANCZOS)
 
 
+def ui_icon(name: str, size: int, color: tuple, accent: tuple | None = None):
+    """Small line-weight UI icons drawn at 8x and scaled down: cog, pin, pin_on, minimize, close, refresh."""
+    import math
+    from PIL import Image, ImageDraw
+    ss = 8
+    S = size * ss
+    im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    col = tuple(color) + (255,)
+    c = S / 2
+    w = max(ss, int(S * 0.11))                     # stroke width
+    if name == "cog":
+        teeth, r_out, r_in = 8, S * 0.47, S * 0.35
+        pts = []
+        for i in range(teeth * 4):
+            ang = (i / (teeth * 4)) * 2 * math.pi - math.pi / 2
+            r = r_out if i % 4 in (1, 2) else r_in
+            pts.append((c + r * math.cos(ang), c + r * math.sin(ang)))
+        d.polygon(pts, fill=col)
+        hole = S * 0.15
+        d.ellipse((c - hole, c - hole, c + hole, c + hole), fill=(0, 0, 0, 0))
+        if accent:                                   # update waiting: a small dot, top right
+            r = S * 0.15
+            d.ellipse((S - 2 * r - ss, ss, S - ss, 2 * r + ss), fill=tuple(accent) + (255,))
+    elif name in ("pin", "pin_on"):
+        g = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+        gd = ImageDraw.Draw(g)
+        cx = c
+        gd.rounded_rectangle((cx - S * 0.17, S * 0.08, cx + S * 0.17, S * 0.2), radius=S * 0.04, fill=col)
+        body = [(cx - S * 0.12, S * 0.2), (cx + S * 0.12, S * 0.2), (cx + S * 0.15, S * 0.5), (cx - S * 0.15, S * 0.5)]
+        gd.polygon(body, fill=col)
+        gd.rounded_rectangle((cx - S * 0.26, S * 0.5, cx + S * 0.26, S * 0.6), radius=S * 0.04, fill=col)
+        gd.line([(cx, S * 0.6), (cx, S * 0.92)], fill=col, width=int(w * 0.8))
+        im = g.rotate(-40, resample=Image.BICUBIC, center=(c, c))
+    elif name == "minimize":
+        d.line([(S * 0.22, c), (S * 0.78, c)], fill=col, width=w)
+    elif name == "close":
+        a, b2 = S * 0.25, S * 0.75
+        d.line([(a, a), (b2, b2)], fill=col, width=w)
+        d.line([(a, b2), (b2, a)], fill=col, width=w)
+    elif name == "refresh":
+        box = (S * 0.18, S * 0.18, S * 0.82, S * 0.82)
+        d.arc(box, start=-60, end=250, fill=col, width=w)
+        ang = math.radians(-60)
+        tip = (c + S * 0.32 * math.cos(ang), c + S * 0.32 * math.sin(ang))
+        d.polygon([(tip[0] - S * 0.16, tip[1] - S * 0.02), (tip[0] + S * 0.1, tip[1] - S * 0.14),
+                   (tip[0] + S * 0.05, tip[1] + S * 0.16)], fill=col)
+    return im.resize((size, size), Image.LANCZOS)
+
+
 def save_ico(path: str) -> None:
     make_icon_image(256).save(path, sizes=[(s, s) for s in (16, 20, 24, 32, 40, 48, 64, 128, 256)])
 

@@ -61,7 +61,7 @@ Everything is saved immediately.
 | region / faction / class chips | click to filter, click again to remove; nothing selected = everything |
 | Lv [min] – [max] | level range; fill in either or both |
 | click a card | open the character's profile |
-| ☆ on a card or in a profile | add / remove a favorite (see the **★ Favorites** tab) |
+| ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
 | right-click a card | profile / favorite / copy name / refresh |
 | 📌 | keep the window above other windows |
 
@@ -75,17 +75,20 @@ Search matches anywhere in the name (“luna” also finds “Aluna”); exact m
 
 ## Where the data comes from
 
-Shugo.GG's own search and profile pages read two public NCSOFT endpoints; Shugo Tracker calls them directly:
+Shugo Tracker reads NCSOFT's public AION 2 endpoints directly:
 
 - **Search:** `api-search.plaync.com/aion2global/search/v2/character` — one request per region, 30 results a page.
+  Class, a single faction and an exact level are filtered by NCSOFT (`pcId`, `race`, `level`); a level range is
+  filtered in the app.
 - **Details:** `aion2.plaync.com/api/character/info` — combat power, item level (gear score), stats, titles,
   Daevanion boards, legion.
 - **Gear:** `aion2.plaync.com/api/character/equipment` — equipment, cosmetics, wings, pet and skills
   (only requested when you open a profile).
 
 Details are only requested for cards on screen, newest scroll position first, by 4 parallel workers sharing a
-rate limit (6 requests/s, halved automatically if the server says to slow down). Starting a new search
-cancels the old one's pending requests.
+hard limit of 6 requests in any one second (halved automatically if the server says to slow down); a
+search's five region requests go out together. Opening a profile reuses the info a card has just loaded, so
+only the gear is fetched. Starting a new search cancels the old one's pending requests.
 
 Caching (in the data folder, `character_cache.json` and `cache/`):
 
@@ -106,7 +109,7 @@ The **Check for updates** button is in ⚙ Settings (the ⚙ turns gold when an 
 | Check for updates | asks GitHub for the latest release |
 | ✓ Up to date | you have the newest version (goes back to *Check for updates* after a few seconds) |
 | ⬇ Download v1.x.y | a newer version exists — click to download it (shows progress) |
-| ⟳ Restart to update | downloaded and checksum-verified — click to switch to the new version |
+| Restart | downloaded and checksum-verified — click to switch to the new version |
 
 The app also checks quietly at start-up and every 6 hours, so the button may already say
 **Download** when you open it; nothing is downloaded until you click. If you quit with an update
@@ -120,7 +123,8 @@ the button opens the release page instead.
 
 The repo holds the source; the exe is only built when you publish.
 
-- **Every push / PR** runs the tests on Windows (`.github/workflows/ci.yml`). No exe is built.
+- **Every push / PR** runs the tests on Windows (`.github/workflows/ci.yml`), takes screenshots, and builds a
+  throwaway exe to check that favorites survive a restart. Nothing is published.
 - **To publish a version**, either
   - GitHub → **Actions → Publish release → Run workflow**, enter a version such as `1.2.0`, or
   - `git tag v1.2.0 && git push origin v1.2.0`.
@@ -249,4 +253,4 @@ The packet layouts were reverse-engineered and published by the open-source AION
 [Aion2DPSMeter](https://github.com/domel1998/Aion2DPSMeter) and
 [aion2-combat-meter](https://github.com/mgauna-ar/aion2-combat-meter). The server table comes from A2Tools'
 data. This is an independent Python implementation, released under **GPL-3.0** (see `LICENSE`).
-Character data courtesy of [Shugo.GG](https://shugo.gg). Not affiliated with NCSOFT or Shugo.GG.
+Character data from NCSOFT's public AION 2 site. Not affiliated with NCSOFT or Shugo.GG.

@@ -269,3 +269,19 @@ class StatBonusTests(unittest.TestCase):
         from shugotracker.profile import Stat
         s = Stat("Justice", "Justice [Nezekan]", 69, ["Defense increase +6.9%", "Perfect Chance +6.9%"])
         self.assertEqual([p.rsplit(" ", 1)[0] for p in s.per_point], [e.rsplit(" ", 1)[0] for e in s.effects])
+
+
+class ReuseCardInfoTests(unittest.TestCase):
+    def test_profile_after_card_skips_second_info_call(self):
+        sess = FakeSession()
+        api = a.Api(session=sess, rate=1000)
+        self.addCleanup(api.close)
+        c = char()
+        done = threading.Event()
+        api.want(c, lambda ch: done.set())
+        self.assertTrue(done.wait(5))
+        got, fin = [], threading.Event()
+        api.fetch_profile(c, lambda ch, p, e: (got.append(p), p and not p.equipment_pending and fin.set()))
+        self.assertTrue(fin.wait(5))
+        self.assertEqual(sess.calls.count(a.INFO_URL), 1)      # the card's info was reused
+        self.assertEqual(sess.calls.count(EQUIPMENT_URL), 1)
