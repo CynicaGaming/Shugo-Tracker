@@ -481,32 +481,37 @@ class SearchWindow:
         go.pack(side="right", padx=4, pady=4)
         go.bind("<Button-1>", lambda e: self._start_search(now=True))
 
-        # filter chips: toggles; nothing selected means "all"
+        # filters, one labelled row each; chips toggle and nothing selected means "all"
         self.filters = tk.Frame(self.top, bg=BG)
         self.filters.pack(fill="x", pady=(2, 0))
-        row1 = tk.Frame(self.filters, bg=BG)
-        row1.pack(fill="x")
-        self.region_chips = [(r, self._chip(row1, REGION_LABELS[r], lambda k=r: self._toggle_region(k)))
-                             for r in SUB_REGIONS]
-        row2 = tk.Frame(self.filters, bg=BG)
-        row2.pack(fill="x", pady=(6, 0))
-        self.faction_chips = [(f, self._chip(row2, label, lambda k=f: self._toggle_faction(k)))
-                              for f, label in FACTIONS]
-        # level range: [min] – [max], either or both
-        lv = tk.Frame(row2, bg=BG)
-        lv.pack(side="left", padx=(8, 0))
-        tk.Label(lv, text="Lv", bg=BG, fg=FG_DIM, font=self.f_small).pack(side="left", padx=(0, 5))
-        self.level_min_var = self._level_box(lv, "min", self.level_min)
-        tk.Label(lv, text="–", bg=BG, fg=FG_FAINT, font=self.f_small).pack(side="left", padx=4)
+        self.filters.columnconfigure(1, weight=1)
+
+        def row(r, title):
+            tk.Label(self.filters, text=title, bg=BG, fg=FG_FAINT, font=self.f_small, anchor="w", width=8).grid(
+                row=r, column=0, sticky="nw", pady=(4 if r else 3, 0))
+            flow = FlowFrame(self.filters, bg=BG, height=1)
+            flow.grid(row=r, column=1, sticky="ew", pady=(0 if r == 0 else 5, 0))
+            return flow
+
+        regions = row(0, "Region")
+        self.region_chips = [(r, regions.add(self._chip(regions, REGION_LABELS[r], lambda k=r: self._toggle_region(k),
+                                                        pack=False))) for r in SUB_REGIONS]
+        factions = row(1, "Faction")
+        self.faction_chips = [(f, factions.add(self._chip(factions, label, lambda k=f: self._toggle_faction(k),
+                                                          pack=False))) for f, label in FACTIONS]
+        classes = row(2, "Class")
+        self.class_chips = [(name, classes.add(self._chip(classes, name, lambda k=name: self._toggle_class(k),
+                                                          pack=False))) for name in CLASSES]
+        tk.Label(self.filters, text="Level", bg=BG, fg=FG_FAINT, font=self.f_small, anchor="w", width=8).grid(
+            row=3, column=0, sticky="w", pady=(5, 0))
+        lv = tk.Frame(self.filters, bg=BG)
+        lv.grid(row=3, column=1, sticky="ew", pady=(5, 0))
+        self.level_min_var = self._level_box(lv, "min", self.level_min)       # either, both or neither
+        tk.Label(lv, text="–", bg=BG, fg=FG_FAINT, font=self.f_small).pack(side="left", padx=6)
         self.level_max_var = self._level_box(lv, "max", self.level_max)
-        self.clear_chip = tk.Label(row2, text="Clear filters", bg=BG, fg=FG_FAINT, font=self.f_small,
+        self.clear_chip = tk.Label(lv, text="Clear filters", bg=BG, fg=FG_FAINT, font=self.f_small,
                                    cursor="hand2", padx=6)
         self.clear_chip.bind("<Button-1>", lambda e: self._clear_filters())
-        self.class_row = FlowFrame(self.filters, bg=BG, height=1)
-        self.class_row.pack(fill="x", pady=(6, 0))
-        self.class_chips = [(name, self.class_row.add(self._chip(self.class_row, name,
-                                                                 lambda k=name: self._toggle_class(k), pack=False)))
-                            for name in CLASSES]
         self._paint_chips()
         self._paint_tabs()
 
@@ -578,6 +583,7 @@ class SearchWindow:
                 ph.place_forget()
             else:
                 ph.place(relx=0.5, rely=0.5, anchor="center")
+            box.config(highlightbackground=ACCENT if var.get() else SURFACE)   # filled = active filter
         ph.bind("<Button-1>", lambda e: ent.focus_set())
         ent.bind("<Return>", lambda e: self._apply_levels())
         ent.bind("<FocusOut>", lambda e: self._apply_levels())
@@ -587,16 +593,11 @@ class SearchWindow:
         return var
 
     def _paint_chips(self):
-        for key, lb in self.region_chips:
-            on = key in self.regions
-            lb.config(bg=ACCENT if on else SURFACE, fg=ACCENT_FG if on else FG_DIM)
-        for key, lb in self.faction_chips:
-            on = key in self.factions
-            col = ELYOS if key == "1" else ASMO
-            lb.config(bg=col if on else SURFACE, fg=BG if on else FG_DIM)
-        for key, lb in self.class_chips:
-            on = key in self.classes
-            lb.config(bg=CLASS_COLORS.get(key, ACCENT) if on else SURFACE, fg=BG if on else FG_DIM)
+        for chips, chosen in ((self.region_chips, self.regions), (self.faction_chips, self.factions),
+                              (self.class_chips, self.classes)):
+            for key, lb in chips:                # one highlight colour for every filter
+                on = key in chosen
+                lb.config(bg=ACCENT if on else SURFACE, fg=ACCENT_FG if on else FG_DIM)
         if self.regions or self.factions or self.classes or self.level_min or self.level_max:
             self.clear_chip.pack(side="right")
         else:
