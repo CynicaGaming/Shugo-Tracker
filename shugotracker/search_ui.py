@@ -882,7 +882,7 @@ class SearchWindow:
                 elif self._has_skeletons and now - self._last_frame > 0.12:
                     self._render(shimmer_only=True)
                     self._last_frame = now
-            elif self.profile_view.animating and now - self._last_frame > 0.12:
+            elif self.profile_view.animating and now - self._last_frame > 0.03:   # smooth spinner
                 self.profile_view.shimmer()
                 self._last_frame = now
         finally:
@@ -1079,20 +1079,9 @@ class SearchWindow:
 
     def _set_hover(self, i, on_star):
         if i != self.hover_index or on_star != self.hover_star:
-            if i != self.hover_index:
-                self._schedule_prefetch(i)
             self.hover_index, self.hover_star = i, on_star
             self.canvas.config(cursor="hand2" if i >= 0 else "")
             self._mark()
-
-    def _schedule_prefetch(self, i):
-        """If the pointer rests on a card, start loading its profile so the click opens instantly."""
-        if self._prefetch_job:
-            self.root.after_cancel(self._prefetch_job)
-            self._prefetch_job = None
-        if 0 <= i < len(self._view):
-            c = self._view[i]
-            self._prefetch_job = self.root.after(250, lambda: self.api.prefetch_profile(c))
 
     def _click(self, e):
         i, on_star = self._hit(e.x, e.y)
@@ -1205,9 +1194,11 @@ class SearchWindow:
 
         buttons = tk.Frame(box, bg=SURFACE)
         if key == "optin":
-            text("Nearby Players", self.f_name, FG)
-            text("Enemies and allies around your character, with gear score and combat power. "
-                 "Requires Npcap.", self.f_body, FG_DIM, (8, 0))
+            head = tk.Frame(box, bg=SURFACE)
+            head.pack(fill="x")
+            tk.Label(head, text="Nearby Players", bg=SURFACE, fg=FG, font=self.f_name).pack(side="left")
+            tk.Label(head, text="BETA", bg=ACCENT, fg=ACCENT_FG, font=self.f_tiny, padx=5).pack(
+                side="left", padx=(8, 0), pady=(2, 0))
             text("Disclaimer: reading game traffic may violate AION 2's Terms of Service. Use at your own risk; "
                  "Shugo Tracker is not responsible for any action taken against your account, including bans.",
                  self.f_small, FG_FAINT, (10, 0))
@@ -1539,7 +1530,9 @@ class SearchWindow:
             (900, lambda: self._grab(f"{base}-loading.png")),
             (7000, lambda: self._grab(f"{base}.png")),
             (7200, lambda: self._view and self.toggle_favorite(self._view[0])),
+            (7300, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
             (7400, lambda: self._view and self.open_profile(self._view[0])),
+            (7480, lambda: self._grab(f"{base}-profile-loading.png")),
         ]
         t = 11000
         for tab in ProfileView.TABS:

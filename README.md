@@ -96,7 +96,7 @@ Caching (in the data folder, `character_cache.json` and `cache/`):
 - profiles are kept for 7 days and shown instantly; if older than 10 minutes they refresh quietly;
 - portraits (1 day) and game icons (30 days) are stored on disk;
 - the same search within 15 minutes is answered from memory;
-- resting the pointer on a card for a moment preloads its profile.
+- a profile (gear, skills, …) is only fetched when you open it.
 
 Delete the `cache` folder and `character_cache.json` at any time to start fresh.
 
@@ -155,7 +155,7 @@ Working locally:
 | `my_server` | `""` | Nearby: your server until the game reveals it: `"nae-siel"`, `"eu-ludra"` or `1101` |
 | `opcodes` | | Nearby: packet opcodes — see *After a game patch* |
 
-## Nearby players (opt-in)
+## Nearby players (opt-in, beta)
 
 The **◉ Nearby** tab lists the players around your character, split into **Enemies** and **Allies**, with the
 same cards (gear score, combat power, profile on click) as search. It is off until you turn it on in the tab

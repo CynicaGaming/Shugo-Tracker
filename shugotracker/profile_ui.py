@@ -273,20 +273,25 @@ class ProfileView:
         self.canvas.yview_moveto(y)
 
     def _skeleton(self):
-        cv = tk.Canvas(self.body, bg=BG, height=420, highlightthickness=0)
+        """A spinning ring while the profile (or its gear) loads."""
+        cv = tk.Canvas(self.body, bg=BG, height=220, highlightthickness=0)
         cv.pack(fill="x")
-        for i in range(8):
-            y = i * 52
-            for (x0, x1, h, tone) in ((0, ICON, ICON, 0), (48, 220, 12, 0), (48, 150, 10, 1)):
-                yy = y + (0 if tone == 0 and x0 == 0 else 6 if x0 and tone == 0 else 24)
-                rid = round_rect(cv, x0, yy, x1, yy + h, 5, fill=SKEL_A, outline="")
-                self._skel_items.append((cv, rid, tone))
+        r, w = 18, 4
+        ring = cv.create_oval(0, 0, 0, 0, outline=SURFACE_2, width=w)
+        arc = cv.create_arc(0, 0, 0, 0, start=90, extent=100, style="arc", outline=ACCENT, width=w)
+
+        def place(e):
+            cx, cy = e.width / 2, 90
+            for item in (ring, arc):
+                cv.coords(item, cx - r, cy - r, cx + r, cy + r)
+        cv.bind("<Configure>", place)
+        self._skel_items.append((cv, arc, 0))
 
     def shimmer(self):
-        phase = (time.monotonic() * 1.6) % 2.0
-        for cv, rid, tone in self._skel_items:
+        start = -(time.monotonic() * 360) % 360          # one turn per second
+        for cv, arc, _tone in self._skel_items:
             try:
-                cv.itemconfigure(rid, fill=(SKEL_B if (phase < 1.0) ^ bool(tone) else SKEL_A))
+                cv.itemconfigure(arc, start=start)
             except tk.TclError:
                 pass
 
