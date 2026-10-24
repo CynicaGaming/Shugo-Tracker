@@ -1,0 +1,2 @@
+first: added | C:\Users\runneradmin\AppData\Roaming\ShugoTracker
+second: loaded 1 | C:\Users\runneradmin\AppData\Roaming\ShugoTracker
