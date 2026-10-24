@@ -17,7 +17,7 @@ SLOT_LABELS = {
     "SwordMain": "Weapon", "Arcana1": "Arcana", "Arcana2": "Arcana", "Arcana3": "Arcana",
     "Arcana4": "Arcana", "Arcana5": "Arcana",
 }
-SKILL_CATEGORIES = [("Active", "Active"), ("Passive", "Passive"), ("Dp", "DP skills")]
+SKILL_CATEGORIES = [("Active", "Active"), ("Passive", "Passive"), ("Dp", "Stigma")]
 PRIMARY_STATS = ["STR", "DEX", "INT", "CON", "AGI", "WIS"]
 
 
@@ -54,6 +54,34 @@ class Stat:
     name: str
     value: int
     effects: list[str] = field(default_factory=list)
+
+    @property
+    def per_point(self) -> list[str]:
+        """What one point of this stat adds, e.g. ["Attack increase +0.1%"] (empty for unknown stats)."""
+        return [f"{label} {sign}{STAT_PER_POINT:g}%" for label, sign in STAT_BONUSES.get(self.type, ())]
+
+
+# Every point of a stat adds 0.1% to each of its bonuses (checked against ~50 live characters; the API only
+# lists bonuses for stats that have points, so this lets empty stats show what they would give).
+STAT_PER_POINT = 0.1
+STAT_BONUSES: dict[str, list[tuple[str, str]]] = {
+    "STR": [("Attack increase", "+")],
+    "DEX": [("Evasion increase", "+"), ("Block increase", "+"), ("Critical Hit Resist increase", "+")],
+    "AGI": [("Accuracy increase", "+"), ("Critical Hit increase", "+")],
+    "CON": [("HP increase", "+")],
+    "INT": [("Status Effect Chance", "+")],
+    "WIS": [("Status Effect Resist", "+")],
+    "Justice": [("Defense increase", "+"), ("Perfect Chance", "+")],
+    "Freedom": [("Accuracy increase", "+"), ("Evasion increase", "+")],
+    "Illusion": [("Cooldown", "-"), ("Endurance Penetration", "+")],
+    "Life": [("HP increase", "+"), ("Regeneration", "+")],
+    "Time": [("Combat Speed", "+"), ("Double Resist", "+")],
+    "Destruction": [("Attack increase", "+"), ("Perfect Resist", "+")],
+    "Death": [("Critical Hit increase", "+"), ("Regeneration Penetration", "+")],
+    "Wisdom": [("Double Chance", "+"), ("MP Cost", "-")],
+    "Destiny": [("MP increase", "+"), ("Endurance", "+")],
+    "Space": [("Move Speed", "+"), ("Block increase", "+")],
+}
 
 
 @dataclass

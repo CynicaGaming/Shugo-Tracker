@@ -421,6 +421,7 @@ class ProfileView:
 
     def _tab_stats(self, p: Profile):
         self._first_tip = None
+        self._first_zero = False
         for title, stats in (("Primary stats", p.primary_stats), ("Deity stats", p.deity_stats)):
             if not stats:
                 continue
@@ -442,26 +443,38 @@ class ProfileView:
                 val = tk.Label(top, text=str(s.value), bg=SURFACE, fg=ACCENT if s.value else FG_FAINT,
                                font=self.app.f_bold)
                 val.pack(side="right")
-                if s.effects:
-                    self._hover_tip([cell, top, name, val], s.name, s.effects)
-                    if getattr(self, "_first_tip", None) is None:
-                        self._first_tip = (cell, s.name, s.effects)
+                lines, foot = self._stat_tip(s)
+                if lines or foot:
+                    self._hover_tip([cell, top, name, val], s.name, lines, foot)
+                    if getattr(self, "_first_tip", None) is None or (not s.value and not self._first_zero):
+                        self._first_tip = (cell, s.name, lines, foot)
+                        self._first_zero = not s.value
+
+    @staticmethod
+    def _stat_tip(s) -> tuple[list[str], list[str]]:
+        """(bonus lines, faint footer) for a stat's tooltip; empty stats show what each point would add."""
+        per = s.per_point
+        if s.value and s.effects:
+            return list(s.effects), ([f"+{per[0].rsplit(' ', 1)[-1].lstrip('+-')} per point"] if per else [])
+        if per:
+            return [f"{p} per point" for p in per], []
+        return list(s.effects), []
 
     def demo_hover_first_stat(self):
         """Used by the screenshot run: show the first stat's tooltip as if hovered."""
         if getattr(self, "_first_tip", None):
-            cell, title, lines = self._first_tip
-            self._show_tip(cell, title, lines)
+            cell, title, lines, foot = self._first_tip
+            self._show_tip(cell, title, lines, foot)
 
     # ───── tooltips ─────
-    def _hover_tip(self, widgets, title: str, lines: list[str]):
+    def _hover_tip(self, widgets, title: str, lines: list[str], foot: list[str] | None = None):
         """Highlight the cell and show its effects in a small popup while the mouse is over it."""
         cell = widgets[0]
 
         def enter(_e):
             for w in widgets:
                 w.config(bg=HOVER)
-            self._show_tip(cell, title, lines)
+            self._show_tip(cell, title, lines, foot)
 
         def leave(e):
             # moving between the cell's own children isn't leaving the cell
@@ -478,7 +491,7 @@ class ProfileView:
             w.bind("<Enter>", enter, add="+")
             w.bind("<Leave>", leave, add="+")
 
-    def _show_tip(self, anchor: tk.Widget, title: str, lines: list[str]):
+    def _show_tip(self, anchor: tk.Widget, title: str, lines: list[str], foot: list[str] | None = None):
         self._hide_tip()
         tip = tk.Toplevel(self.frame)
         tip.overrideredirect(True)
@@ -489,6 +502,8 @@ class ProfileView:
         tk.Label(box, text=title, bg=SURFACE_2, fg=FG, font=self.app.f_bold, anchor="w").pack(fill="x")
         for ln in lines:
             tk.Label(box, text=ln, bg=SURFACE_2, fg=FG_DIM, font=self.app.f_small, anchor="w").pack(fill="x")
+        for ln in foot or []:
+            tk.Label(box, text=ln, bg=SURFACE_2, fg=FG_FAINT, font=self.app.f_tiny, anchor="w").pack(fill="x", pady=(3, 0))
         tip.update_idletasks()
         x = anchor.winfo_rootx()
         y = anchor.winfo_rooty() + anchor.winfo_height() + 4

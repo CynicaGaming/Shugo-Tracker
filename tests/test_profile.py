@@ -254,3 +254,18 @@ class LegionTests(unittest.TestCase):
         self.assertTrue(done.wait(5))
         self.assertEqual((c.legion, c.combat_power), ("Power", 119296))
         self.assertIn(a.INFO_URL, sess.calls)
+
+
+class StatBonusTests(unittest.TestCase):
+    def test_per_point(self):
+        from shugotracker.profile import STAT_BONUSES, Stat
+        self.assertEqual(Stat("INT", "Intelligence", 0).per_point, ["Status Effect Chance +0.1%"])
+        self.assertEqual(Stat("Illusion", "Illusion", 0).per_point, ["Cooldown -0.1%", "Endurance Penetration +0.1%"])
+        self.assertEqual(Stat("Unknown", "?", 0).per_point, [])
+        self.assertEqual(len(STAT_BONUSES), 16)
+
+    def test_bonus_table_matches_live_text(self):
+        # the API's own lines for a stat with points: label and sign must match our table
+        from shugotracker.profile import Stat
+        s = Stat("Justice", "Justice [Nezekan]", 69, ["Defense increase +6.9%", "Perfect Chance +6.9%"])
+        self.assertEqual([p.rsplit(" ", 1)[0] for p in s.per_point], [e.rsplit(" ", 1)[0] for e in s.effects])

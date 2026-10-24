@@ -66,7 +66,7 @@ Everything is saved immediately.
 | 📌 | keep the window above other windows |
 
 The profile has tabs for **Gear** (equipment, accessories and Arcana with grade and enchant level),
-**Skills** (Active, Passive and DP, equipped first), **Daevanion** (board progress), **Stats** (primary and
+**Skills** (Active, Passive and Stigma, equipped first), **Daevanion** (board progress), **Stats** (primary and
 deity stats with their effects), **Cosmetics** (wings, wing appearance, pet, outfit) and **Titles**, plus the
 character's legion and a link to their Shugo.GG page. Per-item stat rolls aren't part of NCSOFT's public
 data, so items show name, grade and enchant level.
