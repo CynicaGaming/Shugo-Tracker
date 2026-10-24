@@ -91,7 +91,7 @@ class DemoSession:
         r = self._rnd(char_id, "eq")
         from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN
         grades = ["Unique", "Unique", "Legend", "Epic", "Special"]
-        gear = [{"slotPosName": s, "name": f"Demo {s}", "grade": r.choice(grades), "enchantLevel": r.randint(0, 15),
+        gear = [{"slotPosName": s, "name": (f"Enraged Kromede's Ancient Ceremonial {s}" if s in ("Necklace", "Earring1") else f"Demo {s}"), "grade": r.choice(grades), "enchantLevel": r.randint(0, 15),
                  "exceedLevel": r.choice([0, 0, 1])} for s in GEAR_MAIN + GEAR_ACCESSORIES + GEAR_ARCANA]
         skills = [{"name": f"{cat} skill {i + 1}", "category": cat, "skillLevel": r.randint(0, 20),
                    "equip": int(r.random() < .5), "acquired": int(r.random() < .85), "needLevel": i}

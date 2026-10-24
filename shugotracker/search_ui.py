@@ -1153,7 +1153,7 @@ class SearchWindow:
         self._show_main()
 
     # ═════ overlay window ═════
-    ICON_PX = 14
+    ICON_PX = 15
 
     def _icon(self, name: str, color: str, accent: str | None = None):
         """A drawn title-bar icon as a PhotoImage (cached); None without Pillow."""
@@ -1179,8 +1179,10 @@ class SearchWindow:
             widget.config(text=self.GLYPHS.get(name, "?"), fg=accent or color)
 
     def _title_button(self, parent, name, cmd, hover=FG, repaint=None):
-        b = tk.Label(parent, bg=BG, fg=FG_DIM, font=self.f_body, padx=9, pady=4, cursor="hand2")
+        b = tk.Label(parent, bg=BG, fg=FG_DIM, font=self.f_body, cursor="hand2")
         self._set_icon(b, name, FG_DIM)
+        if b.cget("image"):
+            b.config(width=32, height=26)          # image labels size in pixels: a comfortable hit area
         b.bind("<Button-1>", lambda e: cmd())
         b.bind("<Enter>", lambda e: (self._set_icon(b, name, hover), b.config(bg=SURFACE_2)))
         b.bind("<Leave>", lambda e: (b.config(bg=BG), repaint() if repaint else self._set_icon(b, name, FG_DIM)))
