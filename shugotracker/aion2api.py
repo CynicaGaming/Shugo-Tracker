@@ -228,7 +228,7 @@ RECENT_INFO_MAX = 200
 class Api:
     """Search (parallel over sub-regions) and lazily-fetched character details, with caching."""
 
-    def __init__(self, cache_path: str | None = None, workers: int = 4, rate: float = REQUESTS_PER_SECOND,
+    def __init__(self, cache_path: str | None = None, workers: int = 6, rate: float = REQUESTS_PER_SECOND,
                  cache_ttl_s: float = DETAILS_FRESH_S, log: Callable[[str], None] | None = None,
                  session: requests.Session | None = None, profile_dir: str | None = None):
         self.log = log or (lambda s: None)

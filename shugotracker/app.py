@@ -443,8 +443,9 @@ def _bench(name: str) -> int:
     tmp = tempfile.mkdtemp()
 
     def run(label: str) -> None:
-        api = Api(cache_path=os.path.join(tmp, "details.json"), profile_dir=os.path.join(tmp, "profiles"))
         t0 = time.perf_counter()
+        api = Api(cache_path=os.path.join(tmp, "details.json"), profile_dir=os.path.join(tmp, "profiles"),
+                  log=lambda m: print(f"  [{time.perf_counter() - t0:5.2f}s] {m}"))
         first, done, found, lock, left = [None], _t.Event(), [], _t.Lock(), [len(SUB_REGIONS)]
 
         def on_done(region, chars, total, err):
@@ -460,11 +461,13 @@ def _bench(name: str) -> int:
         t_search = time.perf_counter() - t0
         top = rank(found, name)[:10]
         t1 = time.perf_counter()
+        print(f"  {label}: {sum(c.status == 'ok' for c in top)}/10 cards cached before asking")
         for c in top:
             api.want(c, lambda ch: None)
         while any(c.status == "loading" for c in top) and time.perf_counter() - t1 < 30:
             time.sleep(0.01)
         t_cards = time.perf_counter() - t1
+        print(f"  cards: {[c.status for c in top]}")
         times, fin = {}, _t.Event()
         t2 = time.perf_counter()
 
