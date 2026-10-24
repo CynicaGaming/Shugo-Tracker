@@ -655,6 +655,7 @@ class SearchWindow:
             return
         self.mode = mode
         self.nearby_bar.pack_forget()
+        self._ensure_filters()
         if mode == "favorites":
             self.box.pack_forget()
             self.fav_chars = self.favorites.characters()
@@ -1232,6 +1233,10 @@ class SearchWindow:
                 chip.pack(side="left", padx=(0, 6), before=self.nearby_state)
             else:
                 chip.pack_forget()
+        if key is None:                            # filters do nothing behind the opt-in / Npcap card
+            self._ensure_filters()
+        elif self.mode == "nearby":
+            self.filters.pack_forget()
         if key is None:
             self.nearby_panel.place_forget()
             return
@@ -1268,6 +1273,10 @@ class SearchWindow:
         buttons.pack(fill="x", pady=(14, 0))
         self.nearby_panel.place(x=0, y=0, relwidth=1, relheight=1)
         self.nearby_panel.lift()
+
+    def _ensure_filters(self):
+        if not self.filters.winfo_manager():
+            self.filters.pack(fill="x", pady=(2, 0))
 
     def _panel_button(self, parent, text, cmd, accent=False):
         b = tk.Label(parent, text=text, bg=ACCENT if accent else SURFACE_2, fg=ACCENT_FG if accent else FG,
