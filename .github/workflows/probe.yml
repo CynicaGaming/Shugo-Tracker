@@ -1,0 +1,19 @@
+name: Probe (one-off)
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install requests
+      - run: python tools/probe_skills.py probe.txt || true
+      - name: Publish results
+        run: |
+          mkdir out && cp probe.txt out/ 2>/dev/null || echo none > out/probe.txt
+          cd out && git init -q -b probe-results && git add . \
+            && git -c user.name=ci -c user.email=ci@local commit -qm probe \
+            && git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" probe-results
