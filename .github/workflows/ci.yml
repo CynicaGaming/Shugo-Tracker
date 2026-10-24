@@ -38,7 +38,12 @@ jobs:
           Get-Content bench.txt | Select-Object -Last 4 | ForEach-Object { Write-Output "::notice title=bench::$_" }
 
       - name: UI screenshots (demo data)
-        run: python -m shugotracker.app --demo --query Luna --screenshot ui-demo.png
+        shell: pwsh
+        run: |
+          python -m shugotracker.app --demo --query Luna --screenshot ui-demo.png *> ui-demo-log.txt
+          $code = $LASTEXITCODE
+          Get-Content ui-demo-log.txt | Select-Object -Last 15 | ForEach-Object { Write-Output "::notice title=demo::$_" }
+          exit $code
 
       - name: UI screenshots (live data)
         continue-on-error: true
