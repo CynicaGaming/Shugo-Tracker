@@ -511,8 +511,8 @@ class SearchWindow:
         self.level_min_var = self._level_box(lv, "min", self.level_min)       # either, both or neither
         tk.Label(lv, text="–", bg=BG, fg=FG_FAINT, font=self.f_small).pack(side="left", padx=6)
         self.level_max_var = self._level_box(lv, "max", self.level_max)
-        self.clear_chip = tk.Label(lv, text="Clear filters", bg=BG, fg=FG_FAINT, font=self.f_small,
-                                   cursor="hand2", padx=6)
+        self.clear_chip = tk.Label(lv, text="Clear", bg=ACCENT, fg=ACCENT_FG, font=self.f_small,
+                                   cursor="hand2", padx=12, pady=3)
         self.clear_chip.bind("<Button-1>", lambda e: self._clear_filters())
         self._paint_chips()
         self._paint_tabs()
