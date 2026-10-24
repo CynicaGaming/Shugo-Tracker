@@ -453,11 +453,13 @@ class ProfileView:
     @staticmethod
     def _stat_tip(s) -> tuple[list[str], list[str]]:
         """(bonus lines, faint footer) for a stat's tooltip; empty stats show what each point would add."""
-        per = s.per_point
+        from .profile import STAT_BONUSES, STAT_PER_POINT
+        bonuses = STAT_BONUSES.get(s.type, ())
+        foot = [f"{bonuses[0][1]}{STAT_PER_POINT:g}% per point"] if bonuses else []
         if s.value and s.effects:
-            return list(s.effects), ([f"+{per[0].rsplit(' ', 1)[-1].lstrip('+-')} per point"] if per else [])
-        if per:
-            return [f"{p} per point" for p in per], []
+            return list(s.effects), foot
+        if bonuses:                                   # no points yet: the same lines, at 0%
+            return [f"{label} 0%" for label, _sign in bonuses], foot
         return list(s.effects), []
 
     def demo_hover_first_stat(self):
