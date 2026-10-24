@@ -552,7 +552,7 @@ class SearchWindow:
         self.level_min_var = self._level_box(lv, "min", self.level_min)       # either, both or neither
         tk.Label(lv, text="–", bg=BG, fg=FG_FAINT, font=self.f_small).pack(side="left", padx=6)
         self.level_max_var = self._level_box(lv, "max", self.level_max)
-        self.advanced_open = bool(cfg.get("advanced_filters", False))
+        self.advanced_open = bool(self.cfg.get("advanced_filters", False))
         self._paint_advanced()
         self._paint_chips()
         self._paint_tabs()
