@@ -1581,7 +1581,7 @@ class SearchWindow:
             self._set_icon(self.upd_btn, "update", FG_DIM if st == "downloading" else GREEN)
             self.upd_btn.config(bg=BG, cursor="watch" if st == "downloading" else "hand2")
             if not self.upd_btn.winfo_manager():
-                self.upd_btn.pack(side="right", before=self.pin)
+                self.upd_btn.pack(side="right", after=self.pin)
         elif self.upd_btn.winfo_manager():
             self.upd_btn.pack_forget()
 
