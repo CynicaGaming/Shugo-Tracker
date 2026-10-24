@@ -169,10 +169,9 @@ game traffic may be against AION 2's terms of service — use it at your own ris
 
 | | |
 |---|---|
-| Enemies / Allies chips | show only that side (nothing selected = both); the counts are live |
 | red / green edge on a card | enemy / ally |
-| Region / Faction / Class / Level | the usual filters apply here too |
-| a card without numbers | the game showed the player but NCSOFT hasn't identified them yet |
+| Faction / Class / Level | the usual filters apply here too (Faction = Elyos or Asmodian) |
+| a card still shimmering | the game showed the player; NCSOFT hasn't identified them yet |
 
 ### Who shows up, and where
 
@@ -189,23 +188,18 @@ record sent when you log in or load a map; if you turn Nearby on mid-session, lo
 
 Players are listed as soon as the game sends their spawn record. Only cards on screen are looked up: one
 NCSOFT search per player for the exact name in your region (nearby players share it), which gives their real
-server and faction. The server read from the game is only used to choose between namesakes; if it can't
-choose, the card says *several characters with this name*. Your region is found once from your own name and
-remembered.
+server and faction. The server read from the game is only used to choose between namesakes. Your region is
+found once from your own name and remembered.
 
 ### Troubleshooting
 
-⚙ Settings → *Nearby players* → **Record** saves 60 seconds of the game's downstream traffic to
-`%APPDATA%\ShugoTracker\diagnostics\nearby-….bin`. If players are missing or wrong, record while standing
-near other players and send that file in an issue: it lets the decoder be checked against the live game. It
-contains what the game sent you in that minute (including chat), so only share it if you're comfortable with
-that. From source, `python -m shugotracker.app --replay-bin FILE` prints what was decoded.
+From source, `python -m shugotracker.app --replay-bin FILE` decodes a Nearby recording (made with
+`NearbyService.start_recording`) and prints every record found — the way to check the decoder after a patch.
 
 ### After a game patch
 
 Patches sometimes renumber opcodes (the June 2026 patch shifted the `xx 36` family by one). If names stop
-appearing or players never leave the list, the `opcodes` block in `config.json` needs updating (a recording,
-see above, is the quickest way to find the new values).
+appearing or players never leave the list, the `opcodes` block in `config.json` needs updating.
 
 The wire layout comes from the community DPS-meter projects (A2Tools-DPS-Meter, AIon2-Dps-Meter,
 aion2-dps-meter, Aion2DPSMeter — all GPL-3.0). The despawn and map-load records are the least battle-tested
