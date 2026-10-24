@@ -15,9 +15,8 @@ from .search_ui import (ACCENT, ASMO, BG, BORDER, CLASS_COLORS, ELYOS, FG, FG_DI
 if TYPE_CHECKING:
     from .search_ui import SearchWindow
 
-ICON = 26
-HERO = 52
-NARROW = 470   # body width (px) under which two-column layouts stack
+ICON = 36
+HERO = 84
 
 
 class ProfileView:
@@ -46,40 +45,40 @@ class ProfileView:
     def _build_header(self):
         f = self.app
         bar = tk.Frame(self.frame, bg=BG)
-        bar.pack(fill="x", padx=PAD, pady=(4, 4))
-        back = tk.Label(bar, text="←", bg=BG, fg=FG_DIM, font=f.f_name, cursor="hand2")
+        bar.pack(fill="x", padx=PAD, pady=(PAD, 6))
+        back = tk.Label(bar, text="←  Back", bg=BG, fg=FG_DIM, font=f.f_bold, cursor="hand2")
         back.pack(side="left")
         back.bind("<Button-1>", lambda e: f.close_profile())
-        self.star = tk.Label(bar, bg=BG, font=f.f_star, cursor="hand2", padx=4)
+        self.star = tk.Label(bar, bg=BG, font=f.f_small, cursor="hand2", padx=6)
         self.star.pack(side="right")
         self.star.bind("<Button-1>", lambda e: f.toggle_favorite(self.char))
         shugo = tk.Label(bar, text="Shugo.GG ↗", bg=BG, fg=FG_DIM, font=f.f_small, cursor="hand2", padx=6)
         shugo.pack(side="right")
         shugo.bind("<Button-1>", lambda e: webbrowser.open(self.char.shugo_url))
-        refresh = tk.Label(bar, text="⟳", bg=BG, fg=FG_DIM, font=f.f_small, cursor="hand2", padx=6)
+        refresh = tk.Label(bar, text="⟳ Refresh", bg=BG, fg=FG_DIM, font=f.f_small, cursor="hand2", padx=6)
         refresh.pack(side="right")
         refresh.bind("<Button-1>", lambda e: self.reload())
         self.paint_star()
 
         hero = tk.Frame(self.frame, bg=SURFACE, highlightthickness=1, highlightbackground=BORDER)
-        hero.pack(fill="x", padx=PAD, pady=(0, 4))
+        hero.pack(fill="x", padx=PAD, pady=(0, 8))
         inner = tk.Frame(hero, bg=SURFACE)
-        inner.pack(fill="x", padx=8, pady=8)
+        inner.pack(fill="x", padx=12, pady=12)
         self.portrait = tk.Label(inner, bg=SURFACE_2, image=self._blank(HERO), bd=0)
         self.portrait.pack(side="left")
         mid = tk.Frame(inner, bg=SURFACE)
-        mid.pack(side="left", fill="x", expand=True, padx=(10, 0))
+        mid.pack(side="left", fill="x", expand=True, padx=(12, 0))
         top = tk.Frame(mid, bg=SURFACE)
         top.pack(fill="x", anchor="w")
         self.h_name = tk.Label(top, bg=SURFACE, fg=FG, font=f.f_big, anchor="w")
         self.h_name.pack(side="left")
-        self.h_legion = tk.Label(top, bg=SURFACE, fg=LEGION, font=f.f_small, anchor="w")
-        self.h_legion.pack(side="left", padx=(5, 0), pady=(3, 0))
-        self.h_faction = tk.Label(top, bg=SURFACE, font=f.f_tiny, padx=4, pady=0, highlightthickness=1)
-        self.h_faction.pack(side="left", padx=(6, 0), pady=(3, 0))
+        self.h_legion = tk.Label(top, bg=SURFACE, fg=LEGION, font=f.f_title, anchor="w")
+        self.h_legion.pack(side="left", padx=(6, 0), pady=(4, 0))
+        self.h_faction = tk.Label(top, bg=SURFACE, font=f.f_tiny, padx=6, pady=1, highlightthickness=1)
+        self.h_faction.pack(side="left", padx=(8, 0), pady=(6, 0))
         self.h_line = tk.Label(mid, bg=SURFACE, fg=FG_DIM, font=f.f_small, anchor="w")
         self.h_line.pack(fill="x")
-        self.h_line2 = tk.Label(mid, bg=SURFACE, fg=FG_FAINT, font=f.f_tiny, anchor="w")
+        self.h_line2 = tk.Label(mid, bg=SURFACE, fg=FG_FAINT, font=f.f_small, anchor="w")
         self.h_line2.pack(fill="x")
         right = tk.Frame(inner, bg=SURFACE)
         right.pack(side="right", anchor="n")
@@ -87,7 +86,7 @@ class ProfileView:
         self.h_cp.pack(anchor="e")
         tk.Label(right, text="COMBAT POWER", bg=SURFACE, fg=FG_FAINT, font=f.f_tiny, anchor="e").pack(anchor="e")
         self.h_gs = tk.Label(right, bg=SURFACE, fg=FG, font=f.f_bold, anchor="e")
-        self.h_gs.pack(anchor="e", pady=(2, 0))
+        self.h_gs.pack(anchor="e", pady=(6, 0))
         tk.Label(right, text="GEAR SCORE", bg=SURFACE, fg=FG_FAINT, font=f.f_tiny, anchor="e").pack(anchor="e")
         self._paint_hero()
 
@@ -97,7 +96,7 @@ class ProfileView:
         bar.pack(fill="x", padx=PAD)
         self.tab_labels = {}
         for name in self.TABS:
-            lb = tk.Label(bar, text=name, bg=BG, font=f.f_bold, padx=5, pady=3, cursor="hand2")
+            lb = tk.Label(bar, text=name, bg=BG, font=f.f_bold, padx=8, pady=6, cursor="hand2")
             lb.pack(side="left")
             lb.bind("<Button-1>", lambda e, n=name: self.show_tab(n))
             self.tab_labels[name] = lb
@@ -105,9 +104,9 @@ class ProfileView:
 
     def _build_body(self):
         wrap = tk.Frame(self.frame, bg=BG)
-        wrap.pack(fill="both", expand=True, padx=(PAD, 2), pady=(2, 8))
-        self.canvas = tk.Canvas(wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=12)
-        sb = tk.Scrollbar(wrap, orient="vertical", command=self.canvas.yview, width=8)
+        wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(6, PAD))
+        self.canvas = tk.Canvas(wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=16)
+        sb = tk.Scrollbar(wrap, orient="vertical", command=self.canvas.yview, width=10)
         sb.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
         self.canvas.configure(yscrollcommand=sb.set)
@@ -173,7 +172,7 @@ class ProfileView:
 
     def paint_star(self):
         fav = self.char.key in self.app.favorites
-        self.star.config(text="★" if fav else "☆", fg=ACCENT if fav else FG_DIM)
+        self.star.config(text="★ Favorite" if fav else "☆ Favorite", fg=ACCENT if fav else FG_DIM)
 
     def _paint_hero(self):
         c, p = self.char, self.profile
@@ -281,9 +280,9 @@ class ProfileView:
         cv = tk.Canvas(self.body, bg=BG, height=420, highlightthickness=0)
         cv.pack(fill="x")
         for i in range(8):
-            y = i * 38
-            for (x0, x1, h, tone) in ((0, ICON, ICON, 0), (36, 200, 10, 0), (36, 140, 8, 1)):
-                yy = y + (0 if tone == 0 and x0 == 0 else 3 if x0 and tone == 0 else 17)
+            y = i * 52
+            for (x0, x1, h, tone) in ((0, ICON, ICON, 0), (48, 220, 12, 0), (48, 150, 10, 1)):
+                yy = y + (0 if tone == 0 and x0 == 0 else 6 if x0 and tone == 0 else 24)
                 rid = round_rect(cv, x0, yy, x1, yy + h, 5, fill=SKEL_A, outline="")
                 self._skel_items.append((cv, rid, tone))
 
@@ -298,7 +297,7 @@ class ProfileView:
     # helpers
     def _section(self, parent, title: str, extra: str = ""):
         row = tk.Frame(parent, bg=BG)
-        row.pack(fill="x", pady=(8, 3))
+        row.pack(fill="x", pady=(10, 4))
         tk.Label(row, text=title.upper(), bg=BG, fg=FG_DIM, font=self.app.f_tiny).pack(side="left")
         if extra:
             tk.Label(row, text=extra, bg=BG, fg=FG_FAINT, font=self.app.f_tiny).pack(side="left", padx=6)
@@ -311,18 +310,18 @@ class ProfileView:
         return box
 
     def _item_row(self, parent, item: Item | None, label: str):
-        row = tk.Frame(parent, bg=SURFACE, padx=6, pady=3)
-        row.pack(fill="x", pady=1)
+        row = tk.Frame(parent, bg=SURFACE, padx=8, pady=6)
+        row.pack(fill="x", pady=2)
         if item is None:
             self._icon(row, None).pack(side="left")
             tk.Label(row, text=label, bg=SURFACE, fg=FG_FAINT, font=self.app.f_small, anchor="w").pack(
-                side="left", padx=6)
+                side="left", padx=8)
             tk.Label(row, text="empty", bg=SURFACE, fg=FG_FAINT, font=self.app.f_tiny).pack(side="right")
             return
         col = GRADE_COLORS.get(item.grade, FG)
         self._icon(row, item.icon, border=col).pack(side="left")
         txt = tk.Frame(row, bg=SURFACE)
-        txt.pack(side="left", fill="x", expand=True, padx=6)
+        txt.pack(side="left", fill="x", expand=True, padx=8)
         tk.Label(txt, text=item.name, bg=SURFACE, fg=col, font=self.app.f_bold, anchor="w").pack(fill="x")
         sub = f"{label}  ·  {item.grade}" + (f"  ·  Lv {item.level}" if item.level else "")
         tk.Label(txt, text=sub, bg=SURFACE, fg=FG_FAINT, font=self.app.f_tiny, anchor="w").pack(fill="x")
@@ -331,12 +330,7 @@ class ProfileView:
             tk.Label(row, text=ench, bg=SURFACE, fg=ACCENT if item.enchant >= 10 else FG, font=self.app.f_bold).pack(
                 side="right")
 
-    def _narrow(self) -> bool:
-        return max(self.canvas.winfo_width(), self.app.root.winfo_width() - 30) < NARROW
-
     def _columns(self):
-        if self._narrow():                       # compact window: one column, left then right
-            return self.body, self.body
         cols = tk.Frame(self.body, bg=BG)
         cols.pack(fill="x")
         left, right = tk.Frame(cols, bg=BG), tk.Frame(cols, bg=BG)
@@ -382,12 +376,12 @@ class ProfileView:
             grid.columnconfigure(0, weight=1, uniform="s")
             grid.columnconfigure(1, weight=1, uniform="s")
             for i, s in enumerate(skills):
-                cell = tk.Frame(grid, bg=SURFACE, padx=5, pady=3)
-                cell.grid(row=i // 2, column=i % 2, sticky="nsew", padx=(0 if i % 2 == 0 else 2, 0 if i % 2 else 2),
-                          pady=1)
-                self._icon(cell, s.icon, 22, border=ACCENT if s.equipped else BORDER).pack(side="left")
+                cell = tk.Frame(grid, bg=SURFACE, padx=8, pady=5)
+                cell.grid(row=i // 2, column=i % 2, sticky="nsew", padx=(0 if i % 2 == 0 else 4, 0 if i % 2 else 4),
+                          pady=2)
+                self._icon(cell, s.icon, 30, border=ACCENT if s.equipped else BORDER).pack(side="left")
                 txt = tk.Frame(cell, bg=SURFACE)
-                txt.pack(side="left", fill="x", expand=True, padx=5)
+                txt.pack(side="left", fill="x", expand=True, padx=8)
                 tk.Label(txt, text=s.name, bg=SURFACE, fg=FG if s.acquired else FG_FAINT, font=self.app.f_small,
                          anchor="w").pack(fill="x")
                 sub = ("Not learned" if not s.acquired else f"Lv {s.level}" if s.level else "Learned") + \
@@ -404,26 +398,26 @@ class ProfileView:
         total = sum(b.total for b in p.boards)
         self._section(self.body, "Daevanion boards", f"{total_open}/{total} nodes")
         for b in p.boards:
-            row = tk.Frame(self.body, bg=SURFACE, padx=6, pady=4)
-            row.pack(fill="x", pady=1)
-            self._icon(row, b.icon, 22).pack(side="left")
+            row = tk.Frame(self.body, bg=SURFACE, padx=10, pady=8)
+            row.pack(fill="x", pady=3)
+            self._icon(row, b.icon, 30).pack(side="left")
             mid = tk.Frame(row, bg=SURFACE)
-            mid.pack(side="left", fill="x", expand=True, padx=6)
+            mid.pack(side="left", fill="x", expand=True, padx=10)
             top = tk.Frame(mid, bg=SURFACE)
             top.pack(fill="x")
             tk.Label(top, text=b.name, bg=SURFACE, fg=FG, font=self.app.f_bold).pack(side="left")
             tk.Label(top, text=f"{b.opened}/{b.total}  ·  {b.percent}%", bg=SURFACE, fg=FG_DIM,
                      font=self.app.f_small).pack(side="right")
-            bar = tk.Canvas(mid, height=6, bg=SURFACE, highlightthickness=0)
-            bar.pack(fill="x", pady=(3, 0))
+            bar = tk.Canvas(mid, height=8, bg=SURFACE, highlightthickness=0)
+            bar.pack(fill="x", pady=(5, 0))
             bar.bind("<Configure>", lambda e, cv=bar, pct=b.percent: self._bar(cv, e.width, pct))
 
     @staticmethod
     def _bar(cv: tk.Canvas, width: int, pct: int):
         cv.delete("all")
-        round_rect(cv, 0, 0, width, 6, 3, fill=SURFACE_2, outline="")
+        round_rect(cv, 0, 0, width, 8, 4, fill=SURFACE_2, outline="")
         if pct > 0:
-            round_rect(cv, 0, 0, max(6, width * pct / 100), 6, 3, fill=ACCENT, outline="")
+            round_rect(cv, 0, 0, max(8, width * pct / 100), 8, 4, fill=ACCENT, outline="")
 
     def _tab_stats(self, p: Profile):
         self._first_tip = None
@@ -433,14 +427,14 @@ class ProfileView:
             self._section(self.body, title)
             grid = tk.Frame(self.body, bg=BG)
             grid.pack(fill="x")
-            cols = 2 if self._narrow() else 3
+            cols = 3
             for c in range(cols):
                 grid.columnconfigure(c, weight=1, uniform="t")
             for i, s in enumerate(stats):
                 col = i % cols
-                cell = tk.Frame(grid, bg=SURFACE, padx=7, pady=3)
+                cell = tk.Frame(grid, bg=SURFACE, padx=10, pady=5)
                 cell.grid(row=i // cols, column=col, sticky="nsew",
-                          padx=(0 if col == 0 else 2, 0 if col == cols - 1 else 2), pady=1)
+                          padx=(0 if col == 0 else 3, 0 if col == cols - 1 else 3), pady=2)
                 top = tk.Frame(cell, bg=SURFACE)
                 top.pack(fill="x")
                 name = tk.Label(top, text=s.name, bg=SURFACE, fg=FG, font=self.app.f_small, anchor="w")
@@ -490,7 +484,7 @@ class ProfileView:
         tip.overrideredirect(True)
         tip.attributes("-topmost", True)
         tip.configure(bg=BORDER)
-        box = tk.Frame(tip, bg=SURFACE_2, padx=8, pady=5)
+        box = tk.Frame(tip, bg=SURFACE_2, padx=10, pady=7)
         box.pack(padx=1, pady=1)
         tk.Label(box, text=title, bg=SURFACE_2, fg=FG, font=self.app.f_bold, anchor="w").pack(fill="x")
         for ln in lines:
@@ -535,14 +529,14 @@ class ProfileView:
         if not p.titles:
             tk.Label(self.body, text="No titles equipped.", bg=BG, fg=FG_DIM, font=self.app.f_small).pack(anchor="w")
         for t in p.titles:
-            card = tk.Frame(self.body, bg=SURFACE, padx=8, pady=5)
-            card.pack(fill="x", pady=1)
+            card = tk.Frame(self.body, bg=SURFACE, padx=12, pady=8)
+            card.pack(fill="x", pady=3)
             top = tk.Frame(card, bg=SURFACE)
             top.pack(fill="x")
             tk.Label(top, text=t.name, bg=SURFACE, fg=GRADE_COLORS.get(t.grade, FG), font=self.app.f_bold).pack(
                 side="left")
             tk.Label(top, text=t.category, bg=SURFACE_2, fg=FG_DIM, font=self.app.f_tiny, padx=6).pack(
-                side="left", padx=6)
+                side="left", padx=8)
             if t.owned_percent is not None:
                 tk.Label(top, text=f"{t.owned_percent}% of players own", bg=SURFACE, fg=FG_FAINT,
                          font=self.app.f_tiny).pack(side="right")

@@ -20,9 +20,9 @@ def migrate(cfg: dict) -> dict:
     """Bring settings saved by older versions up to date (in place). Returns cfg."""
     for old in RETIRED:
         cfg.pop(old, None)
-    if cfg.get("layout_version", 1) < 2:
-        cfg.pop("window_size", None)      # v1.9 is much more compact: start at the new default size
-        cfg["layout_version"] = 2
+    if cfg.get("layout_version", 1) == 2:
+        cfg.pop("window_size", None)      # v1.9.0's compact size: back to the regular default
+    cfg["layout_version"] = 3
     for k, v in SETTING_DEFAULTS.items():
         cfg.setdefault(k, v)
     cfg["window_opacity"] = clamp_opacity(cfg["window_opacity"])

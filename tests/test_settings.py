@@ -25,11 +25,9 @@ class OpacityAndLayoutTests(unittest.TestCase):
         self.assertEqual(migrate({"window_opacity": 0.8})["window_opacity"], 0.8)
         self.assertEqual(clamp_opacity("x"), 1.0)
 
-    def test_compact_layout_resets_old_size_once(self):
-        cfg = migrate({"window_size": [560, 760]})
-        self.assertNotIn("window_size", cfg)
-        cfg["window_size"] = [430, 500]
-        self.assertEqual(migrate(cfg)["window_size"], [430, 500])     # later sizes are kept
+    def test_window_size(self):
+        self.assertEqual(migrate({"window_size": [560, 700]})["window_size"], [560, 700])   # kept
+        self.assertNotIn("window_size", migrate({"window_size": [420, 600], "layout_version": 2}))  # v1.9.0 reset
 
 
 class FavoritesOnDiskTests(unittest.TestCase):

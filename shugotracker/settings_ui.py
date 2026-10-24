@@ -36,7 +36,7 @@ class Slider(tk.Canvas):
     """Flat slider: drag or click the track. on_change(value, final)."""
 
     def __init__(self, parent, value: float, lo: float, hi: float, on_change, step: float = 0.05,
-                 width: int = 130, fmt=lambda v: f"{v:.0%}"):
+                 width: int = 180, fmt=lambda v: f"{v:.0%}"):
         super().__init__(parent, width=width + 44, height=20, bg=SURFACE, highlightthickness=0, cursor="hand2")
         self.lo, self.hi, self.step, self.fmt, self.on_change, self.track_w = lo, hi, step, fmt, on_change, width
         self.value = value
@@ -70,7 +70,7 @@ class Slider(tk.Canvas):
 
 class Switch(tk.Canvas):
     def __init__(self, parent, on: bool, on_toggle, enabled: bool = True):
-        super().__init__(parent, width=34, height=18, bg=SURFACE, highlightthickness=0,
+        super().__init__(parent, width=40, height=22, bg=SURFACE, highlightthickness=0,
                          cursor="hand2" if enabled else "")
         self.on, self.on_toggle, self.enabled = on, on_toggle, enabled
         self.bind("<Button-1>", self._click)
@@ -79,11 +79,11 @@ class Switch(tk.Canvas):
     def _draw(self):
         self.delete("all")
         col = (ACCENT if self.on else SURFACE_2) if self.enabled else BORDER
-        self.create_oval(1, 1, 17, 17, fill=col, outline="")
-        self.create_oval(17, 1, 33, 17, fill=col, outline="")
-        self.create_rectangle(9, 1, 25, 17, fill=col, outline="")
-        x = 25 if self.on else 9
-        self.create_oval(x - 6, 3, x + 6, 15, fill=FG if self.enabled else FG_FAINT, outline="")
+        self.create_oval(1, 1, 21, 21, fill=col, outline="")
+        self.create_oval(19, 1, 39, 21, fill=col, outline="")
+        self.create_rectangle(11, 1, 29, 21, fill=col, outline="")
+        x = 29 if self.on else 11
+        self.create_oval(x - 8, 3, x + 8, 19, fill=FG if self.enabled else FG_FAINT, outline="")
 
     def _click(self, _e):
         if not self.enabled:
@@ -102,14 +102,14 @@ class SettingsView:
         self.frame = tk.Frame(app.root, bg=BG)
 
         bar = tk.Frame(self.frame, bg=BG)
-        bar.pack(fill="x", padx=PAD, pady=(6, 2))
-        back = tk.Label(bar, text="←", bg=BG, fg=FG_DIM, font=f.f_bold, cursor="hand2")
+        bar.pack(fill="x", padx=PAD, pady=(10, 4))
+        back = tk.Label(bar, text="←  Back", bg=BG, fg=FG_DIM, font=f.f_bold, cursor="hand2")
         back.pack(side="left")
         back.bind("<Button-1>", lambda e: app.close_settings())
-        tk.Label(bar, text="Settings", bg=BG, fg=FG, font=f.f_title).pack(side="left", padx=(10, 0))
+        tk.Label(bar, text="Settings", bg=BG, fg=FG, font=f.f_title).pack(side="left", padx=(14, 0))
 
         wrap = tk.Frame(self.frame, bg=BG)
-        wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(2, 8))
+        wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(4, PAD))
         self.canvas = tk.Canvas(wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=16)
         sb = tk.Scrollbar(wrap, orient="vertical", command=self.canvas.yview, width=10)
         sb.pack(side="right", fill="y")
@@ -135,13 +135,13 @@ class SettingsView:
     # ───── layout helpers ─────
     def _section(self, title: str):
         tk.Label(self.body, text=title.upper(), bg=BG, fg=FG_DIM, font=self.app.f_tiny, anchor="w").pack(
-            fill="x", pady=(10, 3))
+            fill="x", pady=(14, 4))
         card = tk.Frame(self.body, bg=SURFACE)
         card.pack(fill="x")
         return card
 
     def _row(self, card, label: str, sub: str | None = None):
-        row = tk.Frame(card, bg=SURFACE, padx=10, pady=6)
+        row = tk.Frame(card, bg=SURFACE, padx=12, pady=9)
         row.pack(fill="x")
         if card.winfo_children()[:-1]:
             tk.Frame(card, bg=BG, height=1).pack(fill="x", before=row)
@@ -157,7 +157,7 @@ class SettingsView:
 
     def _button(self, parent, text, cmd, accent=False):
         b = tk.Label(parent, text=text, bg=ACCENT if accent else SURFACE_2, fg=ACCENT_FG if accent else FG,
-                     font=self.app.f_small, padx=10, pady=2, cursor="hand2")
+                     font=self.app.f_small, padx=12, pady=4, cursor="hand2")
         b.bind("<Button-1>", lambda e: cmd())
         return b
 
@@ -191,7 +191,7 @@ class SettingsView:
             self._sync_update()
 
         card = self._section("Data")
-        r, self._cache_sub = self._row(card, "Cache", " ")
+        r, self._cache_sub = self._row(card, "Cached profiles, portraits and icons", " ")
         self._button(r, "Clear", self._clear_cache).pack(side="right")
         self._show_cache_size()
         if self.services:
@@ -199,7 +199,7 @@ class SettingsView:
             self._button(r, "Open", lambda: desktop.open_folder(self.services.data_dir)).pack()
 
         about = tk.Frame(self.body, bg=BG)
-        about.pack(fill="x", pady=(10, 4))
+        about.pack(fill="x", pady=(16, 6))
         link = tk.Label(about, text="Shugo Tracker on GitHub ↗", bg=BG, fg=FG_DIM, font=self.app.f_small,
                         cursor="hand2")
         link.pack(anchor="w")

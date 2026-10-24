@@ -339,8 +339,8 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     from .favorites import Favorites
     favorites = Favorites(None if (demo or screenshot) else os.path.join(DATA, "favorites.json"))
     if screenshot:
-        cfg = {**cfg, "window_pos": [40, 40], "window_size": [420, 600], "layout_version": 2, "regions": [],
-               "factions": [], "pill_pos": [400, 60]}
+        cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [],
+               "factions": [], "pill_pos": [560, 60]}
     win = SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
                        on_update=on_update,
                        version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir)
