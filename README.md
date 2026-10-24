@@ -164,7 +164,7 @@ same cards (gear score, combat power, profile on click) as search. It is off unt
 It needs **[Npcap](https://npcap.com/#download)** (free; the default install options are fine). Shugo Tracker
 then reads the game's own downstream traffic on this PC: only AION2.exe's connections, found in the Windows
 connection table. It never sends anything to the game or changes anything; the only network requests are the
-normal NCSOFT character searches (one per player, name + server, inside the app's 6-per-second limit). Reading
+normal NCSOFT character searches (one per player on screen, inside the app's 6-per-second limit). Reading
 game traffic may be against AION 2's terms of service — use it at your own risk.
 
 | | |
@@ -187,8 +187,11 @@ fighting you counts as an enemy until their server is known. Your own character 
 record sent when you log in or load a map; if you turn Nearby on mid-session, load a map once (or set
 `"my_server"`).
 
-Spawn records usually carry name and class but not always the server; then the app tries your server, then
-the opposite-faction server paired with it (Siel ↔ Israphel), and NCSOFT's answer settles the side.
+Players are listed as soon as the game sends their spawn record. Only cards on screen are looked up: one
+NCSOFT search per player for the exact name in your region (nearby players share it), which gives their real
+server and faction. The server read from the game is only used to choose between namesakes; if it can't
+choose, the card says *several characters with this name*. Your region is found once from your own name and
+remembered.
 
 ### Troubleshooting
 

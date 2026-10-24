@@ -397,6 +397,11 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
             save_config(config_path, cfg)
         win._refresh_nearby(force=True)
 
+    def remember_region(region: str):
+        cfg["nearby_region"] = region
+        if not screenshot:
+            save_config(config_path, cfg)
+    nearby.on_region = remember_region
     win.nearby = nearby
     win.set_nearby_enabled = set_nearby_enabled
     if cfg.get("nearby_enabled"):

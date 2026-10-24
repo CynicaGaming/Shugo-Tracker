@@ -928,7 +928,10 @@ class SearchWindow:
                 has_skel = True
                 continue
             c = view[i]
-            if c.status == "none" or c.stale:
+            if not c.char_id:
+                if self.mode == "nearby" and self.nearby is not None:
+                    self.nearby.want(c.name)        # on screen: ask NCSOFT who this is
+            elif c.status == "none" or c.stale:
                 self.api.want(c, lambda ch: self.inbox.put(("detail",)))
             has_skel |= self._draw_card(cv, c, y, width, i == self.hover_index, a, b)
         if not view and not loading_any:
@@ -1017,6 +1020,8 @@ class SearchWindow:
                              anchor="w", tags="card")
         where = f"{c.server_name} ({REGION_LABELS.get(c.region, c.region.upper())})" if c.server_name else "server unknown"
         rest = (f"  ·  Lv {c.level}" if c.level else "") + f"  ·  {where}"
+        if not c.char_id and c.status == "unresolved":
+            rest += f"  ·  {c.title or 'not found'}"
         rx2 = cv.bbox(cid)[2]
         rest = elide(self.f_small, rest, x1 - 44 - self.f_small.measure("GS 0,000") - 12 - rx2)
         cv.create_text(rx2, y + 49, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")

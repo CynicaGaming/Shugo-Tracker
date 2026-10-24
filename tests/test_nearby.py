@@ -7,22 +7,24 @@ import unittest
 
 from shugotracker import nearby as nb
 from shugotracker.aion2api import Character
-from shugotracker.tracker import ALLY, ENEMY
 from tests.test_scout import damage, frame, other_record, ownership, self_record
 
 
-class FakeApi:
-    def __init__(self):
-        self.calls = []
-        self.lock = threading.Lock()
+def char(name, sid):
+    return Character(char_id=f"{name}-{sid}", name=name, race=sid // 1000, pc_id=10, level=45, server_id=sid,
+                     server_name="Srv", region="nae")
 
-    def find_player(self, name, server_id):
+
+class FakeNcsoft:
+    """find_by_name over a small world: {name: [server, ...]} per region."""
+
+    def __init__(self, world):
+        self.world, self.calls, self.lock = world, [], threading.Lock()
+
+    def __call__(self, name, region):
         with self.lock:
-            self.calls.append((name, server_id))
-        if name == "Ghost":
-            return None
-        return Character(char_id=f"id-{name}", name=name, race=server_id // 1000, pc_id=10, level=45,
-                         server_id=server_id, server_name="Srv", region="nae")
+            self.calls.append((name, region))
+        return [char(name, sid) for sid in self.world.get(region, {}).get(name, [])]
 
 
 def wait_for(cond, timeout=3.0):
@@ -35,42 +37,76 @@ def wait_for(cond, timeout=3.0):
 
 
 class NearbyServiceTests(unittest.TestCase):
-    def make(self):
-        api = FakeApi()
-        svc = nb.NearbyService(api, data_dir=tempfile.mkdtemp())
+    def make(self, world, cfg=None):
+        find = FakeNcsoft(world)
+        svc = nb.NearbyService(object(), cfg=cfg, data_dir=tempfile.mkdtemp(), find=find)
         svc.start_lookups()
         self.addCleanup(svc.stop)
-        return svc, api
+        return svc, find
 
     def feed(self, svc, *bodies):
         svc.on_bytes(("1.2.3.4", 7777, "10.0.0.2", 5000), b"".join(frame(b) for b in bodies), False)
 
-    def test_enemies_and_allies_are_resolved(self):
-        svc, api = self.make()
-        v0 = svc.version()
-        # me on Siel (Elyos, 1101); an Asmodian attacker named on Israphel (2101) and an Elyos ally on Siel
-        self.feed(svc, self_record(100, "Mine", 1101),
-                  other_record(200, "Foe"), ownership(5000, 200, 2101, "Foe"),
-                  other_record(300, "Friend"), ownership(5001, 300, 1101, "Friend"),
-                  damage(100, 200))
-        self.assertNotEqual(svc.version(), v0)
-        self.assertTrue(wait_for(lambda: all(c.char_id for _, c, _ in svc.snapshot())))
-        snap = {c.name: side for side, c, _ in svc.snapshot()}
-        self.assertEqual(snap, {"Foe": ENEMY, "Friend": ALLY})
-        self.assertEqual(svc.snapshot()[0][1].name, "Foe")          # enemies first
-        self.assertIn(("Foe", 2101), api.calls)
-        self.assertEqual([sid for n, sid in api.calls if n == "Foe"], [2101])   # server known: one lookup
-        self.assertEqual(svc.counts()[ENEMY], 1)
+    def show_all(self, svc):                     # what the UI does for cards on screen
+        for _side, c, _p in svc.snapshot():
+            if not c.char_id:
+                svc.want(c.name)
 
-    def test_unknown_player_gets_placeholder_then_unresolved(self):
-        svc, api = self.make()
-        self.feed(svc, self_record(100, "Mine", 1101), other_record(400, "Ghost"), ownership(5002, 400, 2101, "Ghost"))
-        side, c, p = svc.snapshot()[0]
-        self.assertEqual((c.name, c.char_id), ("Ghost", ""))      # shown at once, before NCSOFT answers
+    def test_listed_at_once_identified_only_when_shown(self):
+        svc, find = self.make({"nae": {"Mine": [1101], "Foe": [2101], "Friend": [1101]}})
+        self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Foe"), other_record(300, "Friend"),
+                  damage(100, 200))
+        self.assertEqual({c.name for _s, c, _p in svc.snapshot()}, {"Foe", "Friend"})   # instantly
+        time.sleep(0.2)
+        self.assertEqual([n for n, _r in find.calls if n != "Mine"], [])            # nobody looked up yet
+        self.show_all(svc)
+        self.assertTrue(wait_for(lambda: all(c.char_id for _s, c, _p in svc.snapshot())))
+        sides = {c.name: side for side, c, _p in svc.snapshot()}
+        self.assertEqual(sides, {"Foe": "enemy", "Friend": "ally"})
+        self.assertEqual(svc.snapshot()[0][1].name, "Foe")                            # enemies first
+
+    def test_one_search_per_player_and_server_comes_from_ncsoft(self):
+        # the game record says 1101 for Foe (wrong); NCSOFT knows exactly one Foe, on 2101
+        svc, find = self.make({"nae": {"Mine": [1101], "Foe": [2101]}})
+        self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Foe"), ownership(5000, 200, 1101, "Foe"))
+        self.show_all(svc)
+        self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].char_id))
+        side, c, _ = svc.snapshot()[0]
+        self.assertEqual((side, c.server_id), ("enemy", 2101))
+        self.assertEqual([r for n, r in find.calls if n == "Foe"], ["nae"])
+
+    def test_namesakes_use_the_game_server_to_choose(self):
+        svc, _ = self.make({"nae": {"Mine": [1101], "Ash": [1101, 2101]}})
+        self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Ash"), ownership(5000, 200, 2101, "Ash"))
+        self.show_all(svc)
+        self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].char_id))
+        self.assertEqual(svc.snapshot()[0][1].server_id, 2101)
+
+    def test_ambiguous_namesake_is_shown_as_such(self):
+        svc, _ = self.make({"nae": {"Mine": [1101], "Ash": [1101, 2101]}})
+        self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Ash"))
+        self.show_all(svc)
         self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].status == "unresolved"))
+        self.assertEqual(svc.snapshot()[0][1].title, "several characters with this name")
+
+    def test_region_found_from_your_own_name_and_remembered(self):
+        # the game says 1101 (NA East) but you're really in Europe
+        svc, find = self.make({"eu": {"Mine": [3101], "Foe": [4101 - 1000]}})
+        got = []
+        svc.on_region = got.append
+        self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Foe"))
+        self.show_all(svc)
+        self.assertTrue(wait_for(lambda: got == ["eu"]))
+        self.assertEqual(svc.me()[1], 3101)
+        svc2, find2 = self.make({"eu": {"Mine": [3101]}}, cfg={"nearby_region": "eu"})
+        self.feed(svc2, self_record(100, "Mine", 1101), other_record(200, "Foe"))
+        self.show_all(svc2)
+        self.assertTrue(wait_for(lambda: find2.calls))
+        time.sleep(0.2)
+        self.assertNotIn(("Mine", "nae"), find2.calls)              # remembered: no region hunt
 
     def test_recording_roundtrip(self):
-        svc, _ = self.make()
+        svc, _ = self.make({})
         path = svc.start_recording(5)
         self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Foe"))
         svc.stop_recording()
@@ -81,34 +117,12 @@ class NearbyServiceTests(unittest.TestCase):
         self.assertTrue(os.path.getsize(path) > 20)
 
     def test_start_without_npcap(self):
-        svc = nb.NearbyService(FakeApi())
         if nb.npcap_installed():
             self.skipTest("Npcap is installed here")
+        svc = nb.NearbyService(object(), find=lambda n, r: [])
         svc.start()
         self.assertEqual(svc.state, nb.NO_NPCAP)
 
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class GuessTests(unittest.TestCase):
-    def test_namesake_on_my_server_is_not_mistaken_for_the_player(self):
-        calls = []
-
-        def find(name, sid):
-            calls.append((name, sid))
-            # "Ash" exists on my server (1101) AND on the enemy server (2101)
-            return Character(char_id=f"{name}-{sid}", name=name, race=sid // 1000, pc_id=10, level=45,
-                             server_id=sid, server_name="S", region="nae")
-        svc = nb.NearbyService(FakeApi(), find=find)
-        svc.start_lookups()
-        self.addCleanup(svc.stop)
-        feed = lambda *b: svc.on_bytes(("a", 1, "b", 2), b"".join(frame(x) for x in b), False)  # noqa: E731
-        feed(self_record(100, "Mine", 1101), other_record(200, "Ash"))       # server not known yet
-        time.sleep(0.3)
-        feed(ownership(5000, 200, 2101, "Ash"))                               # ...and here it is
-        self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].char_id != "", timeout=5))
-        side, c, _ = svc.snapshot()[0]
-        self.assertEqual((side, c.server_id), (ENEMY, 2101))
-        self.assertEqual([sid for n, sid in calls if n == "Ash"], [2101])       # never guessed on 1101

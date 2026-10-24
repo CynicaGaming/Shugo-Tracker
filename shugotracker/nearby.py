@@ -27,7 +27,6 @@ OFF, STARTING, NO_NPCAP, NO_LIBS, WAITING, CAPTURING, ERROR = (
     "off", "starting", "no_npcap", "no_libs", "waiting", "capturing", "error")
 
 WIRE_CLASS = {"Elementalist": "Spiritmaster"}   # the wire table predates the Global class names
-GUESS_DELAY_S = 2.5    # a player's server record usually follows their spawn: wait this long before guessing
 
 
 def npcap_installed() -> bool:
@@ -45,10 +44,10 @@ class NearbyService:
 
     def __init__(self, api: Api, cfg: dict | None = None, log: Callable[[str], None] | None = None,
                  on_change: Callable[[], None] | None = None, data_dir: str | None = None,
-                 find: Callable[[str, int], Character | None] | None = None):
+                 find: Callable[[str, str], list[Character]] | None = None):
         cfg = cfg or {}
         self.api = api
-        self._find = find or api.find_player
+        self._find = find or api.find_by_name
         self.log = log or (lambda s: None)
         self.on_change = on_change or (lambda: None)
         self.data_dir = data_dir
@@ -64,6 +63,9 @@ class NearbyService:
         self._lookups: queue.PriorityQueue = queue.PriorityQueue()
         self._seq = itertools.count()
         self._pending: set[str] = set()
+        self._failed: dict[str, str] = {}             # name -> "notfound" | "several"
+        self._my_region: str | None = cfg.get("nearby_region") or None
+        self.on_region: Callable[[str], None] = lambda r: None   # remember it (set by the app)
         self._stop = threading.Event()
         self._lookup_thread: threading.Thread | None = None
         self.capture = None
@@ -162,62 +164,98 @@ class NearbyService:
     def _on_event(self, ev) -> None:          # called with self._lock held
         before = len(self.tracker.players)
         self.tracker.handle(ev)
-        name = getattr(ev, "name", None)
-        p = self.tracker.players.get(name) if name else None
-        if p is not None and p.server and p.server_source in ("record", "owner"):
-            c = self._chars.get(name)
-            if c is not None and c.server_id != p.server:       # a guess matched a namesake elsewhere
-                del self._chars[name]
-                self.tracker.retry(name)
         self.stats["events"] += 1
         if len(self.tracker.players) > before:
             self.stats["players_seen"] += len(self.tracker.players) - before
 
     # ───── lookups ─────
+    # Players are listed straight from the game's records; NCSOFT is only asked about cards on screen (want()),
+    # with one search per player for the exact name across your region. NCSOFT's answer gives the real server
+    # and faction; the server read from the game is only used to choose between namesakes.
     def _request(self, name: str, prio: int, servers: list[int], guessed: bool) -> None:
-        """Tracker callback (lock held): resolve `name` on the first of `servers` that has them."""
-        if name in self._chars:
-            return
-        self._pending.add(name)
-        not_before = time.time() + GUESS_DELAY_S if guessed else 0.0
-        self._lookups.put((prio, next(self._seq), name, (list(servers), not_before)))
+        """Tracker callback: nothing is queued until the player's card is on screen (see want())."""
+
+    def want(self, name: str) -> None:
+        """The UI shows this player's card: identify them (newest requests first)."""
+        with self._lock:
+            if name in self._chars or name in self._pending or name in self._failed:
+                return
+            self._pending.add(name)
+        self._lookups.put((0, -next(self._seq), name, None))
+
+    def _region(self) -> str | None:
+        """Your region: found once by looking your own name up in every region (the game's server ids
+        aren't trusted for this), remembered for next time."""
+        if self._my_region:
+            return self._my_region
+        name, server = self.me()
+        if not name:
+            return None
+        found: dict[str, list[Character]] = {}
+        for region in ("nae", "naw", "eu", "la", "as"):
+            try:
+                found[region] = self._find(name, region)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"nearby: finding your region failed: {e}")
+                return None
+        hits = [r for r, cs in found.items() if cs]
+        hint = sv.REGION_PREFIX.get(sv.region_of(server)) if server else None
+        if len(hits) == 1:
+            self._my_region = hits[0]
+        elif hint in hits:
+            self._my_region = hint
+        elif hits:
+            self._my_region = hits[0]
+        else:
+            self._my_region = hint
+        if self._my_region:
+            self.log(f"nearby: you are {name} in {self._my_region}")
+            mine = [c for c in found.get(self._my_region, []) if not server or c.server_id == server] or \
+                found.get(self._my_region, [])
+            if mine:
+                with self._lock:
+                    self._chars[name] = mine[0]
+                    self.tracker.me.server = mine[0].server_id      # NCSOFT's word over the decoded value
+                    self._v += 1
+            self.on_region(self._my_region)
+        return self._my_region
 
     def _lookup_loop(self) -> None:
         while not self._stop.is_set():
-            prio, seq, name, job = self._lookups.get()
+            _prio, _seq, name, _job = self._lookups.get()
             if name is None:
                 return
-            servers, not_before = job
+            region = self._region()
+            if region is None:                       # don't know who/where you are yet: try again shortly
+                self._lookups.put((_prio, _seq, name, _job))
+                self._stop.wait(0.5)
+                continue
             with self._lock:
-                if name in self._chars or (name not in self.tracker.players and name != self.tracker.me.name):
+                p = self.tracker.players.get(name)
+                if p is None:
                     self._pending.discard(name)
                     continue
-                p = self.tracker.players.get(name)
-                if p is not None and p.server and p.server_source in ("record", "owner"):
-                    servers, not_before = [p.server], 0.0        # the real server arrived meanwhile
-            if not_before > time.time():
-                self._lookups.put((prio, seq, name, (servers, not_before)))
-                self._stop.wait(0.2)
-                continue
-            found, tried, err = None, [], None
-            for sid in servers:
-                tried.append(sid)
-                try:
-                    found = self._find(name, sid)
-                except Exception as e:  # noqa: BLE001
-                    err = f"{e.__class__.__name__}: {e}"
-                    break
-                if found:
-                    break
+                hint = p.server if p.server_source in ("record", "owner") else None
+            err, pick = None, None
+            try:
+                cands = self._find(name, region)
+            except Exception as e:  # noqa: BLE001
+                cands, err = [], f"{e.__class__.__name__}: {e}"
+            if hint:
+                pick = next((c for c in cands if c.server_id == hint), None)
+            if pick is None and len(cands) == 1:
+                pick = cands[0]
             with self._lock:
                 self._pending.discard(name)
-                if found:
-                    self._chars[name] = found
-                    res = Lookup(status="ok", server=found.server_id, level=found.level,
-                                 class_name=found.class_name, faction=found.race or None)
+                if pick:
+                    self._chars[name] = pick
+                    res = Lookup(status="ok", server=pick.server_id, level=pick.level,
+                                 class_name=pick.class_name, faction=pick.race or None)
                 else:
+                    if not err:
+                        self._failed[name] = "several" if len(cands) > 1 else "notfound"
                     res = Lookup(status="error" if err else "notfound", error=err)
-                self.tracker.apply_lookup(name, res, tried)
+                self.tracker.apply_lookup(name, res, [])
                 self._v += 1
 
     # ───── for the UI ─────
@@ -250,8 +288,9 @@ class NearbyService:
                            region=sv.REGION_PREFIX.get(sv.region_of(server), "") if server else "")
             ph.status = "pending"
             self._placeholders[p.name] = ph
-        if p.lookup.status in ("notfound", "error"):
+        if p.name in self._failed or p.lookup.status == "error":
             ph.status = "unresolved"
+            ph.title = "several characters with this name" if self._failed.get(p.name) == "several" else None
         return ph
 
     def me(self) -> tuple[str | None, int | None]:

@@ -136,21 +136,20 @@ def feed_nearby(service) -> None:
 
 
 def find_nearby(session):
-    """find_player for --demo: every nearby name exists, with demo numbers."""
+    """find_by_name for --demo: like NCSOFT, the exact name in that region."""
     import random
     from .aion2api import Character, class_pc_ids
     from . import servers as sv
-
     home = {n: srv for n, srv, _ in DEMO_NEARBY}
     home["Luna"] = 1101
 
-    def find(name: str, server_id: int):
-        if home.get(name) != server_id:          # like NCSOFT: only the real server has them
-            return None
+    def find(name: str, region: str):
+        srv = home.get(name)
+        if srv is None or sv.REGION_PREFIX.get(sv.region_of(srv)) != region:
+            return []
         r = random.Random(name)
         cls = r.choice(["Gladiator", "Templar", "Ranger", "Assassin", "Spiritmaster", "Sorcerer", "Cleric",
                         "Chanter", "Brawler"])
-        return Character(char_id=f"demo-{name}", name=name, race=sv.race_of(server_id),
-                         pc_id=class_pc_ids([cls])[0], level=45, server_id=server_id,
-                         server_name=sv.name_of(server_id), region=sv.REGION_PREFIX.get(sv.region_of(server_id), ""))
+        return [Character(char_id=f"demo-{name}", name=name, race=sv.race_of(srv), pc_id=class_pc_ids([cls])[0],
+                          level=45, server_id=srv, server_name=sv.name_of(srv), region=region)]
     return find

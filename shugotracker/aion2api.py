@@ -307,6 +307,12 @@ class Api:
             self._apply_cached(c)
         return chars, total
 
+    def find_by_name(self, name: str, region: str) -> list[Character]:
+        """Every character in `region` whose name is exactly `name` (any server): one search request."""
+        chars, _ = self.search_region(name, region, page=1, size=50)
+        want = name.casefold()
+        return [c for c in chars if c.name.casefold() == want]
+
     def find_player(self, name: str, server_id: int) -> Character | None:
         """The character called `name` on `server_id` (exact name), via the search endpoint; None if not found."""
         region = sv.REGION_PREFIX.get(sv.region_of(server_id))
