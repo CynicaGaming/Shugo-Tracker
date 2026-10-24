@@ -48,6 +48,8 @@ class PlayerSeen:
     server: int | None
     server_source: str | None  # "record" (trusted layout) or "scan" (heuristic)
     class_name: str | None
+    race: int | None = None     # 1 Elyos / 2 Asmodian, straight from the spawn record (Oct 2026 layout)
+    pc_id: int | None = None    # exact class id (same numbers as NCSOFT's pcId)
 
 
 @dataclass(frozen=True)
@@ -475,11 +477,17 @@ class StreamDecoder:
                         level = lv
             elif o + 4 <= len(b):
                 cls = class_from_wire(u32(b, o))
+        # Oct 2026 spawn layout: <u32 class id> <u8 race> ... (no server id). Checked against NCSOFT's own data.
+        race = pc_id = None
+        if o + 5 <= len(b) and class_from_wire(u32(b, o)):
+            pc_id = u32(b, o)
+            if b[o + 4] in (1, 2):
+                race = b[o + 4]
         if not is_self and server is None:
             server = self._scan_server(b, o)
             source = "scan" if server else None
 
-        key = (is_self, eid, name, server, cls)
+        key = (is_self, eid, name, server, cls, race)
         if key not in self._recent:
             self._recent[key] = None
             if len(self._recent) > 4096:
@@ -487,7 +495,7 @@ class StreamDecoder:
             if is_self:
                 self.emit(SelfSeen(eid, name, server, cls, level))
             else:
-                self.emit(PlayerSeen(eid, name, server, source, cls))
+                self.emit(PlayerSeen(eid, name, server, source, cls, race, pc_id))
         return o
 
     def _scan_server(self, b: bytes, start: int, window: int = 48) -> int | None:

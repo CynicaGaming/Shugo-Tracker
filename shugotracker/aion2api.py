@@ -307,10 +307,14 @@ class Api:
             self._apply_cached(c)
         return chars, total
 
-    def find_by_name(self, name: str, region: str, classes: list[str] | None = None) -> list[Character]:
-        """Every character in `region` whose name is exactly `name` (any server), optionally only of those
-        classes: one search request."""
-        filters = {"pcId": ",".join(str(i) for i in class_pc_ids(classes))} if classes else None
+    def find_by_name(self, name: str, region: str, classes: list[str] | None = None,
+                     pc_ids: list[int] | None = None, race: int | None = None) -> list[Character]:
+        """Every character in `region` whose name is exactly `name` (any server), optionally narrowed by class
+        and faction: one search request."""
+        ids = pc_ids or (class_pc_ids(classes) if classes else None)
+        filters = {"pcId": ",".join(str(i) for i in ids)} if ids else {}
+        if race in (1, 2):
+            filters["race"] = race
         chars, _ = self.search_region(name, region, page=1, size=50, filters=filters)
         want = name.casefold()
         return [c for c in chars if c.name.casefold() == want]

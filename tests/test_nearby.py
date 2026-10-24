@@ -21,7 +21,7 @@ class FakeNcsoft:
     def __init__(self, world):
         self.world, self.calls, self.lock = world, [], threading.Lock()
 
-    def __call__(self, name, region, classes=None):
+    def __call__(self, name, region, classes=None, pc_ids=None, race=None):
         with self.lock:
             self.calls.append((name, region))
         return [char(name, sid) for sid in self.world.get(region, {}).get(name, [])]
@@ -94,7 +94,7 @@ class NearbyServiceTests(unittest.TestCase):
         world = {"nae": {"Mine": [1101], **{f"P{i}": [1101] for i in range(8)}}}
         slow = FakeNcsoft(world)
 
-        def find(name, region, classes=None):
+        def find(name, region, classes=None, pc_ids=None, race=None):
             time.sleep(0.2)
             return slow(name, region)
         svc = nb.NearbyService(object(), find=find, cfg={"nearby_region": "nae"})
@@ -198,3 +198,27 @@ class ChooseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LiveLayoutTests(unittest.TestCase):
+    """Spawn records as AION 2 sent them on 2026-10-24 (bytes from a real capture near invaders)."""
+    WOODOO = bytes.fromhex("4536e14001 20a00107 06 576f6f646f6f".replace(" ", "")) + bytes.fromhex(
+        "200000000202 00 12f59a3a46253d52c6003eb8461f49a443a7e901b850b850810d00000400040200 31f88801040000 10".replace(" ", ""))
+    SHAGRA = bytes.fromhex("4536dd0401 20a40107 06 536861677261".replace(" ", "")) + bytes.fromhex(
+        "210000000101 00 d23b393946ce4b1ec6008a99468c15b343b3fe01fe48b35cf70900000400040200 31d48e01040000 10".replace(" ", ""))
+
+    def test_faction_and_class_come_from_the_spawn_record(self):
+        from shugotracker import servers as sv
+        from shugotracker.protocol import PlayerSeen, StreamDecoder
+        got = []
+        dec = StreamDecoder(emit=got.append, known_servers=sv.KNOWN_SERVERS)
+        dec.feed(frame(self.WOODOO) + frame(self.SHAGRA))
+        seen = {e.name: e for e in got if isinstance(e, PlayerSeen)}
+        self.assertEqual((seen["Woodoo"].race, seen["Woodoo"].pc_id, seen["Woodoo"].class_name), (2, 32, "Cleric"))
+        self.assertEqual((seen["Shagra"].race, seen["Shagra"].pc_id, seen["Shagra"].class_name), (1, 33, "Chanter"))
+
+    def test_invader_is_an_enemy_before_any_lookup(self):
+        svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_me": ["Mine", 1104]})
+        svc.on_bytes(("a", 1, "b", 2), frame(self.WOODOO) + frame(self.SHAGRA), False)
+        sides = {c.name: side for side, c, _p in svc.snapshot()}
+        self.assertEqual(sides, {"Woodoo": "enemy", "Shagra": "ally"})

@@ -143,7 +143,7 @@ def find_nearby(session):
     home = {n: srv for n, srv, _ in DEMO_NEARBY}
     home["Luna"] = 1101
 
-    def find(name: str, region: str, classes=None):
+    def find(name: str, region: str, classes=None, pc_ids=None, race=None):
         srv = home.get(name)
         if srv is None or sv.REGION_PREFIX.get(sv.region_of(srv)) != region:
             return []

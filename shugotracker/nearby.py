@@ -273,14 +273,18 @@ class NearbyService:
                 self._inflight.add(name)
                 hint = p.server if p.server_source in ("record", "owner") else None
                 cls = WIRE_CLASS.get(p.class_name or "", p.class_name or "")
+                pc_id, race = p.pc_id, p.race
                 seen_servers = {c.server_id for c in self._chars.values()}
                 my_faction = self.tracker.me.faction
                 # someone in a fight with you is almost certainly on the other side (an invader, a gank)
                 prefer = (3 - my_faction) if (p.last_combat and my_faction in (1, 2)) else my_faction
             err, cands = None, []
             try:
-                if cls:
-                    cands = self._find(name, region, [cls])     # the class the game reported narrows namesakes
+                # narrowest first: exact class id + faction from the spawn record, then class, then name only
+                if pc_id or race:
+                    cands = self._find(name, region, pc_ids=[pc_id] if pc_id else None, race=race)
+                if not cands and cls:
+                    cands = self._find(name, region, [cls])
                 if not cands:
                     cands = self._find(name, region)
             except Exception as e:  # noqa: BLE001
@@ -312,7 +316,7 @@ class NearbyService:
             me = self.tracker.me
             if not me.server:
                 # Until the game names you: the side most players around you are on is almost always yours.
-                races = [c.race for c in self._chars.values() if c.race in (1, 2) and c.name != me.name]
+                races = [p.faction for p in self.tracker.players.values() if p.faction in (1, 2)]
                 top = max((1, 2), key=races.count) if races else None
                 me.faction_guess = top if races and races.count(top) >= max(4, 0.7 * len(races)) else None
             groups = self.tracker.groups()
@@ -331,9 +335,9 @@ class NearbyService:
         server = p.server if p.server and p.server_source in ("record", "owner") else 0
         cls = WIRE_CLASS.get(p.class_name or "", p.class_name or "")
         ids = class_pc_ids([cls]) if cls else []
-        if ph is None or ph.server_id != server:
-            ph = Character(char_id="", name=p.name, race=sv.race_of(server) if server else 0,
-                           pc_id=ids[0] if ids else 0, level=0, server_id=server,
+        if ph is None or ph.server_id != server or (p.race and ph.race != p.race):
+            ph = Character(char_id="", name=p.name, race=p.race or (sv.race_of(server) if server else 0),
+                           pc_id=p.pc_id or (ids[0] if ids else 0), level=0, server_id=server,
                            server_name=sv.name_of(server) if server else "",
                            region=sv.REGION_PREFIX.get(sv.region_of(server), "") if server else "")
             ph.status = "pending"

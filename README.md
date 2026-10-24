@@ -180,7 +180,9 @@ or you load a map), removed when it sends the record that they left view, and th
 a new map (the game re-sends everyone around you). A player whose leave record was missed is dropped after
 15 minutes without activity.
 
-**Enemy / ally.** AION 2 Global server ids encode faction (`race × 1000 + region × 100 + n`; race 1 = Elyos,
+**Enemy / ally.** Since the October 2026 client, a player's spawn record carries their faction and exact
+class directly, so invaders and locals are told apart the moment they appear (no lookup needed). Otherwise:
+AION 2 Global server ids encode faction (`race × 1000 + region × 100 + n`; race 1 = Elyos,
 2 = Asmodian), so a player on the other faction's server is an enemy and one on yours an ally. Someone
 fighting you counts as an enemy until their server is known. Your own character and server come from the
 record sent when you log in or load a map; if you turn Nearby on mid-session, load a map once (or set

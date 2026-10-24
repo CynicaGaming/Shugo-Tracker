@@ -36,6 +36,8 @@ class Player:
     server: int | None = None
     server_source: str | None = None   # record | owner | scan
     class_name: str | None = None
+    race: int | None = None            # faction from the spawn record
+    pc_id: int | None = None
     first_seen: float = 0.0
     last_seen: float = 0.0
     last_combat: float = 0.0           # last hit between this player and you
@@ -48,6 +50,8 @@ class Player:
     def faction(self) -> int | None:
         if self.lookup.faction:
             return self.lookup.faction
+        if self.race:
+            return self.race
         if self.server and self.server_source in ("record", "owner"):
             return sv.race_of(self.server)
         return None
@@ -101,6 +105,10 @@ class Tracker:
             p.dead = False
             if ev.class_name:
                 p.class_name = ev.class_name
+            if ev.race:
+                p.race = ev.race
+            if ev.pc_id:
+                p.pc_id = ev.pc_id
             if ev.server and (p.server is None or (p.server_source == "scan" and ev.server_source == "record")):
                 p.server, p.server_source = ev.server, ev.server_source
             self._consider(p)
