@@ -59,10 +59,11 @@ class Me:
     name: str | None = None
     server: int | None = None
     lookup: Lookup = field(default_factory=Lookup)
+    faction_guess: int | None = None   # used until your own record arrives (see NearbyService)
 
     @property
     def faction(self) -> int | None:
-        return sv.race_of(self.server) if self.server else None
+        return sv.race_of(self.server) if self.server else self.faction_guess
 
 
 class Tracker:

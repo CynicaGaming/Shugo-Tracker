@@ -402,6 +402,12 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         if not screenshot:
             save_config(config_path, cfg)
     nearby.on_region = remember_region
+
+    def remember_me(name: str, server: int):
+        cfg["nearby_me"] = [name, server]
+        if not screenshot:
+            save_config(config_path, cfg)
+    nearby.on_me = remember_me
     win.nearby = nearby
     win.set_nearby_enabled = set_nearby_enabled
     if cfg.get("nearby_enabled"):

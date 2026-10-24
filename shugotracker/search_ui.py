@@ -1008,8 +1008,9 @@ class SearchWindow:
         cls_col = CLASS_COLORS.get(c.class_name, FG_DIM)
         cid = cv.create_text(tx, y + 49, text=c.class_name or "Unknown", fill=cls_col, font=self.f_small,
                              anchor="w", tags="card")
-        where = f"{c.server_name} ({REGION_LABELS.get(c.region, c.region.upper())})" if c.server_name else "server unknown"
-        rest = (f"  ·  Lv {c.level}" if c.level else "") + f"  ·  {where}"
+        region = REGION_LABELS.get(c.region, c.region.upper())
+        where = (f"{c.server_name} ({region})" if region else c.server_name) if c.server_name else ""
+        rest = (f"  ·  Lv {c.level}" if c.level else "") + (f"  ·  {where}" if where else "")
         rx2 = cv.bbox(cid)[2]
         rest = elide(self.f_small, rest, x1 - 44 - self.f_small.measure("GS 0,000") - 12 - rx2)
         cv.create_text(rx2, y + 49, text=rest, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
@@ -1029,6 +1030,9 @@ class SearchWindow:
                            font=self.f_tiny, anchor="e", tags="card")
             cv.create_text(rx, y + 49, text=f"GS {fmt_int(c.gear_score)}", fill=FG, font=self.f_small, anchor="e",
                            tags="card")
+            return False
+        if c.status == "unresolved":                 # a nearby player NCSOFT couldn't identify: no numbers
+            cv.create_text(rx, y + 22, text="—", fill=FG_FAINT, font=self.f_cp, anchor="e", tags="card")
             return False
         if c.status == "error":
             cv.create_text(rx, y + 22, text="Couldn't load", fill=RED, font=self.f_small, anchor="e", tags="card")

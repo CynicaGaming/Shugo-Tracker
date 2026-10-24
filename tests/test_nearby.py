@@ -82,12 +82,55 @@ class NearbyServiceTests(unittest.TestCase):
         self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].char_id))
         self.assertEqual(svc.snapshot()[0][1].server_id, 2101)
 
-    def test_ambiguous_namesake_is_shown_as_such(self):
+    def test_ambiguous_namesake_stops_loading(self):
         svc, _ = self.make({"nae": {"Mine": [1101], "Ash": [1101, 2101]}})
         self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Ash"))
         self.show_all(svc)
-        self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].status == "unresolved"))
-        self.assertEqual(svc.snapshot()[0][1].title, "several characters with this name")
+        self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].status == "unresolved"))   # no endless shimmer
+
+    def test_lookups_run_in_parallel(self):
+        world = {"nae": {"Mine": [1101], **{f"P{i}": [1101] for i in range(8)}}}
+        slow = FakeNcsoft(world)
+
+        def find(name, region):
+            time.sleep(0.2)
+            return slow(name, region)
+        svc = nb.NearbyService(object(), find=find, cfg={"nearby_region": "nae"})
+        svc.start_lookups()
+        self.addCleanup(svc.stop)
+        self.feed(svc, self_record(100, "Mine", 1101), *[other_record(200 + i, f"P{i}") for i in range(8)])
+        t0 = time.time()
+        self.show_all(svc)
+        self.assertTrue(wait_for(lambda: all(c.char_id for _s, c, _p in svc.snapshot()), timeout=5))
+        self.assertLess(time.time() - t0, 1.0)            # 8 x 0.2 s one at a time would be 1.6 s
+
+    def test_region_and_sides_without_your_own_record(self):
+        # Nearby turned on mid-session: the game hasn't named you, nothing remembered
+        world = {"nae": {"A": [1101], "B": [1101], "C": [1102], "D": [1101], "E": [2101]}}
+        svc, find = self.make(world)
+        self.feed(svc, *[other_record(200 + i, n) for i, n in enumerate("ABCDE")])
+        self.show_all(svc)
+        self.assertTrue(wait_for(lambda: all(c.char_id for _s, c, _p in svc.snapshot()), timeout=5))
+        sides = {c.name: side for side, c, _p in svc.snapshot()}
+        self.assertEqual(sides["E"], "enemy")            # most people around you are on your side
+        self.assertEqual(sides["A"], "ally")
+
+    def test_your_character_is_remembered(self):
+        got = []
+        svc, _ = self.make({"nae": {"Mine": [1101]}})
+        svc.on_me = lambda n, s: got.append((n, s))
+        self.feed(svc, self_record(100, "Mine", 1101))
+        self.assertEqual(got, [("Mine", 1101)])
+        svc2, _ = self.make({}, cfg={"nearby_me": ["Mine", 1101]})
+        self.assertEqual(svc2.me(), ("Mine", 1101))
+
+    def test_heuristic_server_is_not_shown(self):
+        svc, _ = self.make({})
+        self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Zed"))
+        with svc._lock:
+            p = svc.tracker.players["Zed"]
+            p.server, p.server_source = 2301, "scan"
+        self.assertEqual(svc.snapshot()[0][1].server_name, "")
 
     def test_region_found_from_your_own_name_and_remembered(self):
         # the game says 1101 (NA East) but you're really in Europe
