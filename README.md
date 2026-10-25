@@ -60,6 +60,7 @@ Everything is saved immediately.
 | type a name, press Enter | search (it also searches by itself after you pause typing) |
 | Region / Faction chips; Class and Level under *Advanced filters* | click to filter, click again to remove; nothing selected = everything; **Clear** resets all filters |
 | Lv [min] – [max] | level range; fill in either or both |
+| Sort: … ▾ | Default, Name, Combat power, Gear score or Level (Nearby / Recent keep enemies and allies grouped) |
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
 | right-click a card | profile / favorite / copy name / refresh |
