@@ -567,6 +567,12 @@ class SearchWindow:
         self.sort_lb = tk.Label(self.status_row, bg=BG, fg=FG_DIM, font=self.f_small, cursor="hand2", padx=PAD)
         self.sort_lb.pack(side="right")
         self.sort_lb.bind("<Button-1>", self._sort_menu_open)
+        # Nearby: move everyone to Recent / Recent: empty it (shown on those tabs only)
+        self.list_clear = tk.Label(self.status_row, text="Clear", bg=BG, fg=FG_DIM, font=self.f_small,
+                                   cursor="hand2", padx=4)
+        self.list_clear.bind("<Button-1>", lambda e: self._clear_list())
+        self.list_clear.bind("<Enter>", lambda e: self.list_clear.config(fg=ACCENT))
+        self.list_clear.bind("<Leave>", lambda e: self.list_clear.config(fg=FG_DIM))
         self.status = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, anchor="w",
                                padx=PAD)
         self.status.pack(side="left", fill="x", expand=True)
@@ -959,6 +965,23 @@ class SearchWindow:
             key = lambda c: side(c)                                                           # noqa: E731
         return sorted(chars, key=key)
 
+    def _clear_list(self):
+        if self.nearby is None or not self._nearby_on():
+            return
+        if self.mode == "recent":
+            self.nearby.clear_recent()
+        elif self.mode == "nearby":
+            self.nearby.clear_nearby()
+        self._refresh_nearby(force=True)
+
+    def _paint_list_clear(self):
+        show = self.mode in ("nearby", "recent") and self._nearby_on() and (
+            self._recent_rows if self.mode == "recent" else self._nearby_rows)
+        if show and not self.list_clear.winfo_manager():
+            self.list_clear.pack(side="right", before=self.sort_lb)
+        elif not show and self.list_clear.winfo_manager():
+            self.list_clear.pack_forget()
+
     def _sort_menu_open(self, e):
         self.sort_menu.tk_popup(e.x_root, e.y_root)
 
@@ -1166,6 +1189,7 @@ class SearchWindow:
         return True
 
     def _update_status(self, view):
+        self._paint_list_clear()
         if self.mode in ("nearby", "recent"):
             self.status.config(text=self._nearby_status_text(view), fg=FG_DIM)
             return

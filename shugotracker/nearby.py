@@ -231,6 +231,21 @@ class NearbyService:
             self._recent.popitem(last=False)
         self._v += 1
 
+    def clear_nearby(self) -> None:
+        """Everyone on the list -> Recent (the list then fills again as the game shows players)."""
+        with self._lock:
+            players = list(self.tracker.players.values())
+            if players:
+                self._to_recent(players)
+                self.tracker.clear()
+
+    def clear_recent(self) -> None:
+        with self._lock:
+            self._recent.clear()
+            self._recent_players.clear()
+            self._recent_ids.clear()
+            self._v += 1
+
     def _restore(self, name: str, eid: int) -> None:
         """Put a player from Recent back on the list (lock held)."""
         old = self._recent_players.pop(name, None)

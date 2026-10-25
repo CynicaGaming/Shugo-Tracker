@@ -308,3 +308,17 @@ class SelfRecordTests(unittest.TestCase):
         dec.feed(frame(fake) + frame(self_record(100, "Cynica", 1104, cls=10, level=45)))
         mine = [e for e in got if isinstance(e, SelfSeen)]
         self.assertEqual([(e.name, e.server) for e in mine], [("Cynica", 1104)])
+
+
+class ManualClearTests(unittest.TestCase):
+    def test_clear_nearby_and_recent(self):
+        svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae"})
+        svc.on_bytes(("a", 1, "b", 2), frame(self_record(100, "Mine", 1101)) + frame(other_record(200, "Foe"))
+                     + frame(other_record(300, "Pal")), False)
+        svc.clear_nearby()
+        self.assertEqual(svc.snapshot(), [])
+        self.assertEqual(sorted(c.name for _s, c, _t, _f in svc.recent()), ["Foe", "Pal"])
+        svc.on_bytes(("a", 1, "b", 2), frame(damage(100, 200)), False)       # Foe is still here, fighting
+        self.assertEqual([c.name for _s, c, _p in svc.snapshot()], ["Foe"])
+        svc.clear_recent()
+        self.assertEqual(svc.recent(), [])
