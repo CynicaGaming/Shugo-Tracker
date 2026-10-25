@@ -282,3 +282,52 @@ class RateLimiterTests(unittest.TestCase):
         stamps.sort()
         for i in range(len(stamps) - 6):
             self.assertGreaterEqual(stamps[i + 6] - stamps[i], 0.99)
+
+
+class PriorityTests(unittest.TestCase):
+    def test_on_screen_cards_overtake_background_requests(self):
+        order, gate = [], threading.Event()
+
+        def handler(url, params):
+            if url == a.INFO_URL:
+                gate.wait(5)
+                order.append(params["characterId"])
+            return default_handler(url, params)
+        sess = FakeSession(handler)
+        api = a.Api(session=sess, rate=1000, workers=1)
+        self.addCleanup(api.close)
+        chars, _ = a.parse_search(SEARCH_JSON)
+        blocker, bg, fg = chars
+        api.want(blocker, lambda c: None)            # occupies the single worker
+        time.sleep(0.1)
+        api.want(bg, lambda c: None, background=True)
+        api.want(fg, lambda c: None)                  # on screen: goes first
+        api.want(bg, lambda c: None)                  # and bg comes on screen too: moves up, not duplicated
+        gate.set()
+        end = time.time() + 3
+        while len(order) < 3 and time.time() < end:
+            time.sleep(0.02)
+        # bg moved up to on-screen priority after fg, and newest on-screen requests go first
+        self.assertEqual(order, [blocker.char_id, bg.char_id, fg.char_id])
+        self.assertEqual(len(order), 3)               # nobody fetched twice
+
+    def test_background_waits_for_on_screen(self):
+        order, gate = [], threading.Event()
+
+        def handler(url, params):
+            if url == a.INFO_URL:
+                gate.wait(5)
+                order.append(params["characterId"])
+            return default_handler(url, params)
+        api = a.Api(session=FakeSession(handler), rate=1000, workers=1)
+        self.addCleanup(api.close)
+        blocker, bg, fg = a.parse_search(SEARCH_JSON)[0]
+        api.want(blocker, lambda c: None)
+        time.sleep(0.1)
+        api.want(bg, lambda c: None, background=True)
+        api.want(fg, lambda c: None)
+        gate.set()
+        end = time.time() + 3
+        while len(order) < 3 and time.time() < end:
+            time.sleep(0.02)
+        self.assertEqual(order, [blocker.char_id, fg.char_id, bg.char_id])

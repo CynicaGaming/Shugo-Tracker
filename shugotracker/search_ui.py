@@ -48,6 +48,9 @@ CARD_GAP = 8
 PAD = 14
 PORTRAIT = 48
 PAGE_SIZE = 30
+SORTS = [("default", "Default"), ("name", "Name (A–Z)"), ("cp", "Combat power"), ("gs", "Gear score"),
+         ("level", "Level")]
+SIDE_ORDER = {"enemy": 0, "ally": 1}
 LOCAL_FILTER_PAGES = 20       # with a level range, look through at most this many pages per region
 
 CLASS_COLORS = {
@@ -352,6 +355,7 @@ class SearchWindow:
         self.regions: set[str] = {r for r in cfg.get("regions", []) if r in SUB_REGIONS}
         self.factions: set[str] = {f for f in cfg.get("factions", []) if f in ("1", "2")}
         self.classes: set[str] = {c for c in cfg.get("classes", []) if c in CLASSES}
+        self.sort_key = cfg.get("sort", "default") if cfg.get("sort") in dict(SORTS) else "default"
         self.level_min: int | None = _level_or_none(cfg.get("level_min"))
         self.level_max: int | None = _level_or_none(cfg.get("level_max"))
         self._query_filters: dict = {}         # what the current search asked NCSOFT to filter
@@ -557,9 +561,20 @@ class SearchWindow:
         self._paint_chips()
         self._paint_tabs()
 
-        self.status = tk.Label(self.root, text="", bg=BG, fg=FG_DIM,
-                               font=self.f_small, anchor="w", padx=PAD)
-        self.status.pack(fill="x", pady=(4, 4))
+        # status line, with the sort menu at its right end
+        self.status_row = tk.Frame(self.root, bg=BG)
+        self.status_row.pack(fill="x", pady=(4, 4))
+        self.sort_lb = tk.Label(self.status_row, bg=BG, fg=FG_DIM, font=self.f_small, cursor="hand2", padx=PAD)
+        self.sort_lb.pack(side="right")
+        self.sort_lb.bind("<Button-1>", self._sort_menu_open)
+        self.status = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, anchor="w",
+                               padx=PAD)
+        self.status.pack(side="left", fill="x", expand=True)
+        self.sort_menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
+                                 activeforeground=FG, bd=0)
+        for key, label in SORTS:
+            self.sort_menu.add_command(label=label, command=lambda k=key: self._set_sort(k))
+        self._paint_sort()
         self.status.bind("<Shift-Button-1>", lambda e: self._nearby_record())   # hidden: Nearby capture
         # virtualized card list
         self.list_wrap = tk.Frame(self.root, bg=BG)
@@ -924,7 +939,39 @@ class SearchWindow:
             out = [c for c in out if c.level >= self.level_min]
         if self.level_max is not None:
             out = [c for c in out if c.level <= self.level_max]
-        return out
+        return self._sorted(out)
+
+    def _sorted(self, chars: list[Character]) -> list[Character]:
+        """Apply the chosen sort. Nearby / Recent keep enemies and allies in their own groups."""
+        k = self.sort_key
+        grouped = self.mode in ("nearby", "recent")
+        if k == "default" and not grouped:
+            return chars
+        side = (lambda c: SIDE_ORDER.get(self._nearby_side.get(c.name), 2)) if grouped else (lambda c: 0)
+        if k == "name":
+            key = lambda c: (side(c), c.name.casefold())                                     # noqa: E731
+        elif k in ("cp", "gs", "level"):
+            attr = {"cp": "combat_power", "gs": "gear_score", "level": "level"}[k]
+            # highest first; characters whose numbers aren't known yet go last
+            key = lambda c: (side(c), getattr(c, attr) is None or not getattr(c, attr),     # noqa: E731
+                             -(getattr(c, attr) or 0))
+        else:
+            key = lambda c: side(c)                                                           # noqa: E731
+        return sorted(chars, key=key)
+
+    def _sort_menu_open(self, e):
+        self.sort_menu.tk_popup(e.x_root, e.y_root)
+
+    def _set_sort(self, key: str):
+        self.sort_key = key
+        self.cfg["sort"] = key
+        self._paint_sort()
+        self.canvas.yview_moveto(0)
+        self._mark()
+
+    def _paint_sort(self):
+        label = dict(SORTS)[self.sort_key]
+        self.sort_lb.config(text=f"Sort: {label}  ▾", fg=ACCENT if self.sort_key != "default" else FG_DIM)
 
     def _mark(self):
         self._dirty = True
@@ -996,6 +1043,10 @@ class SearchWindow:
         if not view and not loading_any:
             self._draw_empty(cv, width)
         self._update_status(view)
+        if not shimmer_only and self.sort_key in ("cp", "gs"):
+            for c in view[:300]:                     # sorting by numbers needs everyone's numbers
+                if c.char_id and c.status == "none":
+                    self.api.want(c, lambda ch: self.inbox.put(("detail",)), background=True)
         if not shimmer_only:
             self._load_more_if_needed(last, len(view))
         self._has_skeletons = has_skel
@@ -1357,7 +1408,7 @@ class SearchWindow:
     def open_profile(self, c: Character):
         self.close_profile()
         self.top.pack_forget()
-        self.status.pack_forget()
+        self.status_row.pack_forget()
         self.list_wrap.pack_forget()
         self.profile_view = ProfileView(self, c)
         self.profile_view.frame.pack(fill="both", expand=True)
@@ -1374,7 +1425,7 @@ class SearchWindow:
 
     def _show_main(self):
         self.top.pack(fill="x", padx=PAD, pady=(6, 4))
-        self.status.pack(fill="x", pady=(4, 4))
+        self.status_row.pack(fill="x", pady=(4, 4))
         self.list_wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(0, PAD))
         if self.overlay:
             self._lift_chrome()
@@ -1390,7 +1441,7 @@ class SearchWindow:
             self.profile_view.destroy()
             self.profile_view = None
         self.top.pack_forget()
-        self.status.pack_forget()
+        self.status_row.pack_forget()
         self.list_wrap.pack_forget()
         self.settings_view = SettingsView(self, self.settings_services)
         self.settings_view.frame.pack(fill="both", expand=True)
@@ -1643,7 +1694,12 @@ class SearchWindow:
             (t + 200, lambda: self._toggle_class("Cleric")),
             (t + 400, lambda: set_levels("40", "45")),
             (t + 3500, lambda: self._grab(f"{base}-filters.png")),
-            (t + 3700, self._clear_filters),
+            (t + 3600, lambda: self._set_sort("cp")),
+            (t + 3650, lambda: self.sort_menu.post(self.sort_lb.winfo_rootx(), self.sort_lb.winfo_rooty() + 18)),
+            (t + 3800, lambda: self._grab(f"{base}-sort.png")),
+            (t + 3850, lambda: self.sort_menu.unpost()),
+            (t + 3900, lambda: self._set_sort("default")),
+            (t + 3950, self._clear_filters),
         ]
         t += 4000
         steps += [

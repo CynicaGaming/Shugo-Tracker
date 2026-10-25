@@ -255,7 +255,8 @@ class Api:
         self._dq: queue.PriorityQueue = queue.PriorityQueue()
         self._seq = itertools.count()
         self._generation = 0
-        self._queued: set[str] = set()
+        self._queued: dict[str, int] = {}          # key -> priority it is queued at
+        self._working: set[str] = set()
         self._qlock = threading.Lock()
         self._stop = threading.Event()
         self._workers = [threading.Thread(target=self._detail_worker, name=f"details-{i}", daemon=True)
@@ -350,7 +351,7 @@ class Api:
             self._generation += 1
             self._queued.clear()
 
-    def want(self, c: Character, on_done: Callable[[Character], None]) -> None:
+    def want(self, c: Character, on_done: Callable[[Character], None], background: bool = False) -> None:
         """
         Ask for c's details. Cached numbers are shown at once; stale ones (older than 30 min) are
         refreshed in the background at lower priority. Newest requests are served first.
@@ -364,14 +365,16 @@ class Api:
             if cached == "fresh":
                 return
         refresh = c.status == "ok"          # already showing (stale) numbers
+        prio = 2 if background else 1 if refresh else 0
         with self._qlock:
-            if c.key in self._queued:
-                return
-            self._queued.add(c.key)
+            queued = self._queued.get(c.key)
+            if queued is not None and queued <= prio:
+                return                      # already waiting at this priority or better
+            self._queued[c.key] = prio      # new, or moving up (a background request now on screen)
             gen = self._generation
-        if not refresh:
+        if not refresh and not background:
             c.status = "loading"
-        self._dq.put((1 if refresh else 0, -next(self._seq), gen, c, on_done))
+        self._dq.put((prio, -next(self._seq), gen, c, on_done))
 
     def _detail_worker(self) -> None:
         while not self._stop.is_set():
@@ -380,12 +383,22 @@ class Api:
                 return
             with self._qlock:
                 old_search = gen != self._generation
-                self._queued.discard(c.key)
+                busy = c.key in self._working
+                if not busy:
+                    self._queued.pop(c.key, None)
+            if busy:
+                continue                     # another worker is fetching this one right now
             if old_search:
                 if c.status == "loading":
                     c.status = "none"
                 continue
+            if c.status == "ok" and not c.stale:
+                continue                     # a duplicate of a request already served
+            if c.status == "none":
+                c.status = "loading"
             was_showing = c.status == "ok"
+            with self._qlock:
+                self._working.add(c.key)
             try:
                 data = self._get_json(INFO_URL, {"lang": "en-US", "characterId": c.char_id,
                                                  "serverId": c.server_id, "region": c.region})
@@ -399,6 +412,8 @@ class Api:
                 else:
                     c.status, c.error = "error", f"{e.__class__.__name__}"
                 self.log(f"api: details for {c.name}@{c.server_name} failed: {e}")
+            with self._qlock:
+                self._working.discard(c.key)
             on_done(c)
 
     def _remember_info(self, key: str, data: dict) -> None:
