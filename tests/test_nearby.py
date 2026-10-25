@@ -296,3 +296,15 @@ class ArenaTests(unittest.TestCase):
         feed(damage(100, 200))                                             # but Foe hits you
         self.assertEqual(self.names(svc), ["Foe"])
         self.assertEqual(svc.recent(), [])
+
+
+class SelfRecordTests(unittest.TestCase):
+    def test_lookalike_self_record_is_ignored(self):
+        from shugotracker import servers as sv
+        from shugotracker.protocol import SelfSeen, StreamDecoder, encode_varint
+        got = []
+        dec = StreamDecoder(emit=got.append, known_servers=sv.KNOWN_SERVERS)
+        fake = b"\x33\x36" + encode_varint(500) + b"\x00" * 4 + bytes([0x01, 2]) + b"lw" + b"\x07\x00\x00\x00"
+        dec.feed(frame(fake) + frame(self_record(100, "Cynica", 1104, cls=10, level=45)))
+        mine = [e for e in got if isinstance(e, SelfSeen)]
+        self.assertEqual([(e.name, e.server) for e in mine], [("Cynica", 1104)])

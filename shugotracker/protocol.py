@@ -484,6 +484,10 @@ class StreamDecoder:
             pc_id = u32(b, o)
             if b[o + 4] in (1, 2):
                 race = b[o + 4]
+        if is_self and (server is None or server not in self.known_servers or not cls or not level):
+            # Your own record always carries server, class and level; something that only looks like it
+            # (the same two marker bytes inside another packet) would rename you, e.g. to "lw".
+            return None
         if not is_self and server is None:
             server = self._scan_server(b, o)
             source = "scan" if server else None
