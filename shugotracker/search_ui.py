@@ -624,6 +624,10 @@ class SearchWindow:
         self.menu.add_command(label="Add to favorites", command=lambda: self._menu(self.toggle_favorite))
         self.menu.add_command(label="Copy name", command=lambda: self._menu(self._copy_name))
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
+        self._menu_base = 4                                  # Nearby / Recent add a Clear item below these
+        self.list_menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
+                                 activeforeground=FG, bd=0)
+        self.list_menu.add_command(label="Clear", command=self._clear_list)
         self._menu_char: Character | None = None
 
     def _chip(self, parent, text, cmd, pack: bool = True):
@@ -1247,13 +1251,34 @@ class SearchWindow:
         else:
             self.open_profile(c)
 
-    def _right_click(self, e):
+    def _clear_label(self) -> str | None:
+        if self.mode not in ("nearby", "recent") or not self._nearby_on():
+            return None
+        if self.mode == "recent":
+            return "Clear Recent" if self._recent_rows else None
+        return "Clear Nearby (move everyone to Recent)" if self._nearby_rows else None
+
+    def _right_click(self, e, demo: bool = False):
         i, _ = self._hit(e.x, e.y)
+        clear = self._clear_label()
         if i >= 0:
-            self._menu_char = self._view[i]
-            fav = self._menu_char.key in self.favorites
+            self._menu_char = c = self._view[i]
+            self.menu.delete(self._menu_base, "end")
+            fav = c.key in self.favorites
             self.menu.entryconfigure(1, label="Remove from favorites" if fav else "Add to favorites")
-            self.menu.tk_popup(e.x_root, e.y_root)
+            known = "normal" if c.char_id else "disabled"     # a nearby player NCSOFT hasn't identified
+            for idx in (0, 1, 3):
+                self.menu.entryconfigure(idx, state=known)
+            if clear:
+                self.menu.add_separator()
+                self.menu.add_command(label=clear, command=self._clear_list)
+            if demo:
+                self.menu.post(e.x_root, e.y_root)
+            else:
+                self.menu.tk_popup(e.x_root, e.y_root)
+        elif clear:                                       # empty space on the list
+            self.list_menu.entryconfigure(0, label=clear)
+            self.list_menu.tk_popup(e.x_root, e.y_root)
 
     def _menu(self, fn):
         if self._menu_char:
@@ -1660,6 +1685,15 @@ class SearchWindow:
         elif self.upd_btn.winfo_manager():
             self.upd_btn.pack_forget()
 
+    def _demo_card_menu(self):
+        """Screenshots only: the right-click menu on the first card."""
+        if not self._view:
+            return
+        x, y = self.canvas.winfo_rootx() + 200, self.canvas.winfo_rooty() + 30
+        ev = type("E", (), {"x": 200, "y": 30, "x_root": x, "y_root": y})()
+        self._right_click(ev, demo=True)
+        self.root.update_idletasks()
+
     def _demo_update_state(self, state):
         """Screenshots only: show how the title bar looks with an update waiting."""
         if self.updater is None:
@@ -1731,6 +1765,9 @@ class SearchWindow:
             (t + 800, lambda: self._grab(f"{base}-nearby-optin.png")),
             (t + 1000, lambda: self.set_nearby_enabled(True)),
             (t + 4500, lambda: self._grab(f"{base}-nearby.png")),
+            (t + 4520, lambda: self._demo_card_menu()),
+            (t + 4560, lambda: self._grab(f"{base}-nearby-menu.png")),
+            (t + 4580, lambda: self.menu.unpost()),
             (t + 4600, lambda: self.nearby and self.nearby.state == "capturing" and self.demo_teleport()),
             (t + 5200, lambda: self._set_mode("recent")),
             (t + 5800, lambda: self._grab(f"{base}-nearby-recent.png")),
