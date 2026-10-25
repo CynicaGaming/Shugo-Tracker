@@ -1753,9 +1753,7 @@ class SearchWindow:
             (t + 400, lambda: set_levels("40", "45")),
             (t + 3500, lambda: self._grab(f"{base}-filters.png")),
             (t + 3600, lambda: self._set_sort("cp")),
-            (t + 3650, lambda: self.sort_menu.post(self.sort_lb.winfo_rootx(), self.sort_lb.winfo_rooty() + 18)),
             (t + 3800, lambda: self._grab(f"{base}-sort.png")),
-            (t + 3850, lambda: self.sort_menu.unpost()),
             (t + 3900, lambda: self._set_sort("default")),
             (t + 3950, self._clear_filters),
         ]
