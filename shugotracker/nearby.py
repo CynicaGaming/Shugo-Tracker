@@ -232,8 +232,7 @@ class NearbyService:
         if len(self.tracker.players) > before:
             self.stats["players_seen"] += len(self.tracker.players) - before
         for n in set(self.tracker.players) - before_names:
-            self._recent.pop(n, None)                   # back in range
-            self._recent_players.pop(n, None)
+            self._recent_players.pop(n, None)           # back in range (they stay on Recent as history)
         self._last_players.update(self.tracker.players)
 
     def _to_recent(self, players: list[Player], park: bool = False) -> None:
@@ -271,8 +270,7 @@ class NearbyService:
 
     def _restore(self, name: str, eid: int) -> None:
         """Put a player from Recent back on the list (lock held)."""
-        old = self._recent_players.pop(name, None)
-        self._recent.pop(name, None)
+        old = self._recent_players.pop(name, None)       # (they stay on Recent as history)
         if old is None:
             return
         old.entity_ids = {eid}
@@ -284,7 +282,8 @@ class NearbyService:
         self._v += 1
 
     def recent(self) -> list[tuple[str, Character, float, bool]]:
-        """[(side, character, left_at, fought_you)] newest first."""
+        """[(side, character, left_at, fought_you)] newest first: everyone you've been near this past hour,
+        including those who are back on Nearby right now (left_at is when they last left)."""
         with self._lock:
             now = time.time()
             for name in [n for n, r in self._recent.items() if now - r[2] > RECENT_KEEP_S]:

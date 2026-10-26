@@ -588,8 +588,8 @@ class SearchWindow:
         # update available: a green download icon left of the pin (hidden otherwise)
         self.upd_btn = self._title_button(head, "update", self._update_click, hover=GREEN,
                                           repaint=lambda: self._paint_gear())
-        # one click does it all: download, then restart into the new version. Hovering says which step it's on.
-        self._restart_when_ready = False
+        # click to download, click again (green restart arrow) to restart into it. Hovering says which step.
+        self._update_clicked = False
         self.upd_btn.bind("<Enter>", lambda e: (self.upd_btn.config(bg=SURFACE_2), self._update_tip(True)))
         self.upd_btn.bind("<Leave>", lambda e: (self.upd_btn.config(bg=BG), self._update_tip(False)))
         self._sync_update_button()
@@ -1129,7 +1129,9 @@ class SearchWindow:
         if self.mode == "nearby":
             return getattr(self, "_nearby_seen_at", {})
         if self.mode == "recent":
-            return {c.name: t for _s, c, t, _f in self._recent_rows}
+            now = time.time()                       # those back on Nearby right now count as newest
+            return {c.name: (now if c.name in getattr(self, "_nearby_names", ()) else t)
+                    for _s, c, t, _f in self._recent_rows}
         if self.mode == "favorites":
             return {c.key: i for i, c in enumerate(self.fav_chars)}    # starred order acts as the time
         return {}
@@ -1432,7 +1434,9 @@ class SearchWindow:
         seen = ""
         if self.mode in ("nearby", "recent") and self.nearby_view == "recent":
             left_at, fought = getattr(self, "_recent_info", {}).get(c.name, (None, False))
-            if left_at:
+            if c.name in getattr(self, "_nearby_names", ()):
+                seen = f"{'⚔ ' if fought else ''}Nearby now"
+            elif left_at:
                 seen = f"{'⚔ ' if fought else ''}{ago(time.time() - left_at)}"
                 if "seen" not in sp:                 # its column doesn't fit (or is hidden): next to the name
                     extra = seen
@@ -1456,7 +1460,7 @@ class SearchWindow:
         cell("legion", c.legion or "", FG_DIM)
         cell("class", c.class_name or "", cls_col)
         cell("level", str(c.level) if c.level else "", FG)
-        cell("seen", seen, FG_DIM)
+        cell("seen", seen, GREEN if "Nearby now" in seen else FG_DIM)
         if c.server_name:
             region = REGION_NAMES.get(c.region, (c.region or "").upper())
             cell("server", f"{c.server_name} · {region}" if region else c.server_name, FG_DIM)
@@ -1672,6 +1676,7 @@ class SearchWindow:
         self._nearby_side = {c.name: side for side, c, _t, _f in self._recent_rows}
         self._nearby_side.update({c.name: side for side, c in self._nearby_rows})
         self._recent_info = {c.name: (t, f) for _s, c, t, f in self._recent_rows}
+        self._nearby_names = {c.name for _s, c in self._nearby_rows}
         self._paint_tabs()
         self._paint_nearby_panel()
         if self.mode in ("nearby", "recent"):
@@ -2107,10 +2112,7 @@ class SearchWindow:
     def _sync_update_button(self):
         if self.updater is None or not hasattr(self, "upd_btn"):
             return
-        if self._restart_when_ready and self.updater.state == "ready" and not getattr(self, "_screenshot", False):
-            self._restart_when_ready = False
-            self.root.after(300, self._restart_now)        # downloaded after a click: finish the job
-        look = (self.updater.button(), self._restart_when_ready)
+        look = (self.updater.button(), self._update_clicked)
         if look == self._update_look:
             return
         self._update_look = look
@@ -2126,8 +2128,8 @@ class SearchWindow:
             pct = int((u.progress or 0) * 100)
             return f"progress:{pct}", ACCENT, f"Downloading v{u.latest}" + (f"  {pct}%" if u.progress else "…")
         if st == "ready":
-            return "refresh", GREEN, f"Restart to finish updating to v{u.latest}"
-        if st == "error" and self._restart_when_ready:
+            return "refresh", GREEN, f"v{u.latest} is ready: click to restart"
+        if st == "error" and self._update_clicked:
             return "update", RED, "Update failed: click to try again"
         return None
 
@@ -2214,12 +2216,12 @@ class SearchWindow:
         self.root.update_idletasks()
 
     def _update_click(self):
-        """Update button (title bar or Settings): one click downloads the update and restarts into it."""
+        """Update button (title bar or Settings): the first click downloads, the next one restarts into it."""
         u = self.updater
         if u is None:
             return
         if u.state in ("available", "error") and u.can_install:
-            self._restart_when_ready = True
+            self._update_clicked = True
         if u.click(webbrowser.open) == "restart":
             self._restart_now()
             return

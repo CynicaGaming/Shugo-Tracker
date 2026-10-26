@@ -255,8 +255,9 @@ class RecentTests(unittest.TestCase):
         recent = svc.recent()
         self.assertEqual([c.name for _s, c, _t, _f in recent], ["Foe", "Pal"])    # newest first
         self.assertEqual([f for _s, _c, _t, f in recent], [True, False])          # Foe fought you
-        feed(other_record(201, "Foe"))                                            # Foe shows up again
-        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Pal"])
+        feed(other_record(201, "Foe"))                                            # Foe shows up again:
+        self.assertIn("Foe", [c.name for _s, c, _p in svc.snapshot()])            # back on Nearby,
+        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Foe", "Pal"])   # and still on Recent
 
 
 class ArenaTests(unittest.TestCase):
@@ -295,7 +296,7 @@ class ArenaTests(unittest.TestCase):
         self.assertEqual(self.names(svc), [])
         feed(damage(100, 200))                                             # but Foe hits you
         self.assertEqual(self.names(svc), ["Foe"])
-        self.assertEqual(svc.recent(), [])
+        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Foe"])     # Recent keeps the history
 
 
 class SelfRecordTests(unittest.TestCase):
@@ -345,7 +346,7 @@ class ComingBackTests(unittest.TestCase):
         self.assertEqual(self.names(svc), [])
         feed(other_record(300, "Pal"))                             # Pal walks back: the game re-sends them
         self.assertEqual(self.names(svc), ["Pal"])
-        self.assertEqual(svc.recent(), [])
+        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Pal"])
 
     def test_cleared_players_still_around_come_back(self):
         from shugotracker.protocol import encode_varint
@@ -355,7 +356,7 @@ class ComingBackTests(unittest.TestCase):
         self.assertEqual(self.names(svc), [])
         feed(b"\x1d\x37" + encode_varint(300) + b"\x00" * 12)       # any update about Pal: Pal's still here
         self.assertEqual(self.names(svc), ["Pal"])
-        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Foe"])
+        self.assertEqual(sorted(c.name for _s, c, _t, _f in svc.recent()), ["Foe", "Pal"])
 
     def test_left_behind_players_dont_come_back_on_an_id_match(self):
         from shugotracker.protocol import encode_varint
