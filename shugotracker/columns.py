@@ -5,11 +5,11 @@ GAP = 10
 STAR_W = 24        # the favorite star, right of CP
 # key, min width, max width, share of spare room, text anchor, drop order when narrow (1 goes first; 0 never)
 SPEC = [
-    ("name", 100, 10 ** 6, 3, "w", 0),
-    ("legion", 64, 170, 2, "w", 2),
-    ("class", 74, 112, 1, "w", 3),
+    ("name", 130, 10 ** 6, 3, "w", 0),
+    ("legion", 56, 170, 2, "w", 2),
+    ("class", 70, 112, 1, "w", 3),
     ("level", 24, 24, 0, "e", 0),
-    ("server", 96, 200, 2, "w", 1),
+    ("server", 90, 200, 2, "w", 1),
     ("gs", 44, 52, 0, "e", 0),
     ("cp", 60, 72, 0, "e", 0),
 ]

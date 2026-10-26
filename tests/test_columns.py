@@ -10,7 +10,8 @@ class ColumnTests(unittest.TestCase):
         self.assertEqual(keys(900), ["name", "legion", "class", "level", "server", "gs", "cp"])
         self.assertNotIn("server", keys(540))
         self.assertIn("legion", keys(540))
-        self.assertEqual(keys(400), ["name", "class", "level", "gs", "cp"])
+        self.assertEqual(keys(430), ["name", "class", "level", "gs", "cp"])
+        self.assertEqual(keys(370), ["name", "level", "gs", "cp"])
         wide, narrow = layout_columns(900)["spans"], layout_columns(600)["spans"]
         self.assertGreater(wide["name"][1] - wide["name"][0], narrow["name"][1] - narrow["name"][0])
 

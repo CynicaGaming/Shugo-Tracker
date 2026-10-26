@@ -2063,8 +2063,6 @@ class SearchWindow:
             (500, self._update_click),
             (900, lambda: self._grab(f"{base}-loading.png")),
             (7000, lambda: self._grab(f"{base}.png")),
-            (7010, lambda: self._grab_at_width(f"{base}-narrow.png", 420)),
-            (7100, lambda: self._grab_at_width(f"{base}-wide.png", 900)),
             (7200, lambda: self._view and self.toggle_favorite(self._view[0])),
             (7250, lambda: len(self._view) > 2 and self.toggle_favorite(self._view[2])),   # 2 to show the grips
             (7300, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
@@ -2133,7 +2131,13 @@ class SearchWindow:
             (t + 3900, self.collapse),
             (t + 4900, self.expand),
             (t + 5500, lambda: self._grab(f"{base}-expanded.png")),
-            (t + 6100, self.close),
+            # the same list at a narrow and a wide window
+            (t + 5600, lambda: self._set_mode("search")),
+            (t + 5700, lambda: self.root.geometry(f"420x{self.root.winfo_height()}")),
+            (t + 6300, lambda: self._grab(f"{base}-narrow.png")),
+            (t + 6400, lambda: self.root.geometry(f"900x{self.root.winfo_height()}")),
+            (t + 7000, lambda: self._grab(f"{base}-wide.png")),
+            (t + 7600, self.close),
         ]
         for delay, fn in steps:
             self.root.after(delay, fn)
@@ -2166,19 +2170,6 @@ class SearchWindow:
                                  y + widget.winfo_height() + 2 * pad)).save(path)
         except Exception as e:  # noqa: BLE001
             print(f"screenshot failed: {e}")
-
-    def _grab_at_width(self, path: str, width: int):
-        """Screenshots only: resize, let everything reflow, capture, and put the size back."""
-        old = (self.root.winfo_width(), self.root.winfo_height())
-        for w in (width, None):
-            self.root.geometry(f"{w or old[0]}x{old[1]}")
-            for _ in range(3):
-                self.root.update()
-                time.sleep(0.05)
-            self._render()
-            self.root.update()
-            if w:
-                self._grab(path)
 
     def _grab(self, path: str):
         try:
