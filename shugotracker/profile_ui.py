@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from .aion2api import Character
 from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile
 from .search_ui import (ACCENT, ASMO, BG, BORDER, CLASS_COLORS, ELYOS, FG, FG_DIM, FG_FAINT, GRADE_COLORS, HOVER,
-                        LINE, PAD, RED, REGION_SHORT, SURFACE, SURFACE_2, fmt_int, round_rect, ThinScrollbar)
+                        LINE, PAD, RED, REGION_NAMES, SURFACE, SURFACE_2, fmt_int, round_rect, ThinScrollbar)
 
 if TYPE_CHECKING:
     from .search_ui import SearchWindow
@@ -189,7 +189,7 @@ class ProfileView:
         if race in (1, 2):
             self.h_faction.create_oval(2, 2, 8, 8, fill=ELYOS if race == 1 else ASMO, outline="")
         self.h_class.config(text=cls, fg=CLASS_COLORS.get(cls, FG_DIM))
-        bits = [f"Lv {level}" if level else "", f"{server} · {REGION_SHORT.get(c.region, c.region)}" if server else "",
+        bits = [f"Lv {level}" if level else "", f"{server} · {REGION_NAMES.get(c.region, c.region)}" if server else "",
                 {1: "Elyos", 2: "Asmodian"}.get(race, ""), p.title if p and p.title else ""]
         self._set_fit(self.h_line, "  ·  " + "  ·  ".join(b for b in bits if b))
         cp = p.combat_power if p else c.combat_power

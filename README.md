@@ -60,12 +60,13 @@ Everything is saved immediately.
 | type a name, press Enter | search (it also searches by itself after you pause typing) |
 | Region / Faction toggles; Class and Level under **More** | click to filter, click again to remove; **All** (or nothing selected) = every region; **Clear** resets all filters |
 | Lv [min] – [max] | level range; fill in either or both |
-| column headers (Name, Class, Lv, Server, GS, CP) | click to sort by that column, again to flip it, a third time to go back to the list's own order (Nearby / Recent keep enemies and allies grouped) |
+| column headers (Name, Legion, Class, Lv, Server, GS, CP) | click to sort by that column, again to flip it, a third time to go back to the list's own order (Nearby / Recent keep enemies and allies grouped) |
 | **Latest first** (bottom right in Favorites / Nearby / Recent) | newest arrivals / most recently left / your own favorites order, newest first |
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
 | right-click a card | profile / favorite / copy name / refresh |
-| drag ⋮⋮ on a favorite | reorder Favorites (when no column sort is on) |
+| drag ⋮⋮ on a favorite | reorder Favorites (switches back to your own order if a column sort is on) |
+| window edges and corners | drag to resize; columns widen with the window, and Server, then Legion, then Class step aside when it's narrow |
 | 📌 | keep the window above other windows |
 
 The profile has tabs for **Gear** (equipment, accessories and Arcana with grade and enchant level),

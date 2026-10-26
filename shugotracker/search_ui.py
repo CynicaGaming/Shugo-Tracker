@@ -18,6 +18,7 @@ import requests
 from .aion2api import (CLASSES, REGION_LABELS, SUB_REGIONS, USER_AGENT, Api, Character, rank,
                        search_filters)
 from .favorites import Favorites
+from .columns import layout_columns
 from .sorting import SORTS, sort_chars
 
 try:  # images are optional
@@ -52,7 +53,7 @@ CARD_GAP = 0
 PAD = 16
 PORTRAIT = 26
 PAGE_SIZE = 30
-REGION_SHORT = {"nae": "NA E", "naw": "NA W", "eu": "EU", "la": "LATAM", "as": "Asia"}
+REGION_NAMES = {"nae": "NA - East", "naw": "NA - West", "eu": "Europe", "la": "Latin America", "as": "Asia"}
 LOCAL_FILTER_PAGES = 20       # with a level range, look through at most this many pages per region
 
 CLASS_COLORS = {
@@ -491,13 +492,15 @@ class SearchWindow:
         self.root.title("Shugo Tracker")
         self.overlay = True                      # frameless window with our own title bar (always)
         self.root.configure(bg=BG)
-        self.root.minsize(500, 420)
+        self.root.minsize(400, 380)
         w, h = cfg.get("window_size", [600, 760])
         x, y = cfg.get("window_pos", [80, 80])
         self.root.geometry(f"{int(w)}x{int(h)}+{int(x)}+{int(y)}")
         self.root.attributes("-topmost", bool(cfg.get("always_on_top", True)))
         self.root.protocol("WM_DELETE_WINDOW", self.close_button)
         self.root.bind("<Map>", self._on_map, add="+")
+        self.root.bind("<Configure>", self._on_resize, add="+")
+        self._compact = None
         self.tray_ok = False                     # tray icons work here (set by the app)
         self.tray_icon = (lambda: False, lambda: None)   # (show, remove) the tray icon; set by the app
         if self.overlay:
@@ -617,22 +620,22 @@ class SearchWindow:
         self.filters.pack(fill="x")
         bar = tk.Frame(self.filters, bg=BG)
         bar.pack(fill="x")
-        seg = tk.Frame(bar, bg=SURFACE, padx=2, pady=2)
-        seg.pack(side="left")
-        self.region_all = self._segment(seg, "All", self._all_regions, small=True)
-        self.region_chips = [(r, self._segment(seg, REGION_SHORT[r], lambda k=r: self._toggle_region(k), small=True))
-                             for r in SUB_REGIONS]
-        seg = tk.Frame(bar, bg=SURFACE, padx=2, pady=2)
-        seg.pack(side="left", padx=(8, 0))
-        self.faction_chips = [(f, self._segment(seg, "Asmo" if f == "2" else label,
-                                                lambda k=f: self._toggle_faction(k), small=True))
-                              for f, label in FACTIONS]
         self.adv_toggle = tk.Label(bar, bg=BG, fg=FG_DIM, font=self.f_small, cursor="hand2", padx=4, pady=3)
-        self.adv_toggle.pack(side="right")
+        self.adv_toggle.pack(side="right", anchor="n")
         self.adv_toggle.bind("<Button-1>", lambda e: self._toggle_advanced())
         self.clear_chip = tk.Label(bar, text="Clear", bg=ACCENT, fg=ACCENT_FG, font=self.f_small,
                                    cursor="hand2", padx=10, pady=2)
         self.clear_chip.bind("<Button-1>", lambda e: self._clear_filters())
+        flow = FlowFrame(bar, bg=BG, height=1, gap_x=8, gap_y=6)      # the two groups wrap when narrow
+        flow.pack(side="left", fill="x", expand=True)
+        seg = flow.add(tk.Frame(flow, bg=SURFACE, padx=2, pady=2))
+        self.region_all = self._segment(seg, "All", self._all_regions, small=True)
+        self.region_chips = [(r, self._segment(seg, REGION_NAMES[r], lambda k=r: self._toggle_region(k), small=True))
+                             for r in SUB_REGIONS]
+        seg = flow.add(tk.Frame(flow, bg=SURFACE, padx=2, pady=2))
+        self.faction_chips = [(f, self._segment(seg, "Asmo" if f == "2" else label,
+                                                lambda k=f: self._toggle_faction(k), small=True))
+                              for f, label in FACTIONS]
 
         self.adv = tk.Frame(self.filters, bg=BG)
         self.adv.columnconfigure(1, weight=1)
@@ -697,9 +700,21 @@ class SearchWindow:
         if self.overlay:
             self.grip = tk.Label(self.root, text="◢", bg=BG, fg=FG_FAINT, font=self.f_tiny, cursor="size_nw_se")
             self.grip.place(relx=1.0, rely=1.0, anchor="se")
-            self.grip.bind("<ButtonPress-1>", self._resize_start)
-            self.grip.bind("<B1-Motion>", self._resize_move)
-            self.grip.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
+            self._bind_resize(self.grip, "se")
+            # resize from any edge or corner: thin grab zones along the border
+            self._zones = []
+            for edge, cursor, place in (
+                    ("n", "sb_v_double_arrow", dict(x=12, y=0, relwidth=1, width=-24, height=4)),
+                    ("s", "sb_v_double_arrow", dict(x=12, rely=1.0, y=-4, relwidth=1, width=-24, height=4)),
+                    ("w", "sb_h_double_arrow", dict(x=0, y=12, width=4, relheight=1, height=-24)),
+                    ("e", "sb_h_double_arrow", dict(relx=1.0, x=-4, y=12, width=4, relheight=1, height=-24)),
+                    ("nw", "size_nw_se", dict(x=0, y=0, width=10, height=10)),
+                    ("ne", "size_ne_sw", dict(relx=1.0, x=-10, y=0, width=10, height=10)),
+                    ("sw", "size_ne_sw", dict(x=0, rely=1.0, y=-10, width=10, height=10))):
+                z = tk.Frame(self.root, bg=BG, cursor=cursor)
+                z.place(**place)
+                self._bind_resize(z, edge)
+                self._zones.append(z)
             # A click on a frameless window doesn't activate it on Windows: do it ourselves
             self.root.bind_all("<ButtonPress-1>", self._activate_on_click, add="+")
             self.root.after(50, self._style_window)
@@ -725,11 +740,27 @@ class SearchWindow:
     def _segment(self, parent, text, cmd, small: bool = False, pack: bool = True):
         """One option in a segmented control."""
         lb = tk.Label(parent, text=text, bg=SURFACE, fg=FG_DIM, font=self.f_small,
-                      padx=8 if small else 11, pady=2 if small else 4, cursor="hand2")
+                      padx=7 if small else 11, pady=2 if small else 4, cursor="hand2")
         if pack:
             lb.pack(side="left", padx=(0, 1))
         lb.bind("<Button-1>", lambda e: cmd())
         return lb
+
+    def _on_resize(self, e):
+        """Reflow the chrome as the window is resized (the table reflows on its own)."""
+        if e.widget is not self.root:
+            return
+        compact = e.width < 480
+        if compact == self._compact or not hasattr(self, "tabs"):
+            return
+        self._compact = compact
+        if compact:
+            self.logo.pack_forget()
+        elif not self.logo.winfo_manager():
+            self.logo.pack(side="left", padx=(0, 10), before=self.back_btn if self.back_btn.winfo_manager()
+                           else self.tabs)
+        for tab in (self.tab_search, self.tab_fav, self.tab_near, self.tab_recent):
+            tab.config(padx=7 if compact else 11)
 
     def show_back(self, text: str, cmd):
         """Swap the tabs for a Back button (profile, Settings)."""
@@ -738,12 +769,12 @@ class SearchWindow:
         self.back_btn.config(text=f"  {text}" if img else f"‹  {text}", image=img or "")
         self.tabs.pack_forget()
         if not self.back_btn.winfo_manager():
-            self.back_btn.pack(side="left", after=self.logo)
+            self.back_btn.pack(side="left")
 
     def show_tabs(self):
         self.back_btn.pack_forget()
         if not self.tabs.winfo_manager():
-            self.tabs.pack(side="left", after=self.logo)
+            self.tabs.pack(side="left")
 
     def _chip(self, parent, text, cmd, pack: bool = True):
         lb = tk.Label(parent, text=text, font=self.f_small, padx=8, pady=2, cursor="hand2")
@@ -785,7 +816,7 @@ class SearchWindow:
             for key, lb in chips:
                 look(lb, key in chosen)
         if self.regions or self.factions or self.classes or self.level_min or self.level_max:
-            self.clear_chip.pack(side="right", padx=(0, 6))
+            self.clear_chip.pack(side="right", padx=(0, 6), anchor="n", before=self.adv_toggle)
         else:
             self.clear_chip.pack_forget()
         if hasattr(self, "adv_toggle"):
@@ -1101,27 +1132,15 @@ class SearchWindow:
         return {}
 
     # ───── table columns ─────
-    COLUMNS = [("name", "Name"), ("class", "Class"), ("level", "Lv"), ("server", "Server"), ("gs", "GS"),
-               ("cp", "CP")]
+    COLUMNS = [("name", "Name"), ("legion", "Legion"), ("class", "Class"), ("level", "Lv"), ("server", "Server"),
+               ("gs", "GS"), ("cp", "CP")]
 
     def _cols(self, width: int) -> dict:
-        """Where each column sits for a list this wide. Name takes what's left; Server goes when it's narrow."""
-        x1 = width - 6
-        k = {"x1": x1, "star": x1 - 11, "cp_r": x1 - 24, "name_l": 8}
-        k["gs_r"] = k["cp_r"] - 60 - 10
-        k["srv_w"] = 0 if width < 470 else 92 if width < 580 else 112
-        k["srv_l"] = k["gs_r"] - 44 - 10 - k["srv_w"]
-        k["lv_r"] = k["srv_l"] - 10 if k["srv_w"] else k["gs_r"] - 44 - 10
-        k["cls_w"] = 80 if width < 580 else 96
-        k["cls_l"] = k["lv_r"] - 22 - 10 - k["cls_w"]
-        k["name_r"] = k["cls_l"] - 10
-        return k
-
-    def _col_span(self, k: dict, key: str) -> tuple[int, int, str]:
-        """(left, right, anchor) of a column."""
-        return {"name": (k["name_l"], k["name_r"], "w"), "class": (k["cls_l"], k["cls_l"] + k["cls_w"], "w"),
-                "level": (k["lv_r"] - 24, k["lv_r"], "e"), "server": (k["srv_l"], k["srv_l"] + k["srv_w"], "w"),
-                "gs": (k["gs_r"] - 44, k["gs_r"], "e"), "cp": (k["cp_r"] - 60, k["cp_r"], "e")}[key]
+        """Where each column sits for a list this wide (columns grow with the window and drop out when it's
+        narrow: see columns.py). Cached per width."""
+        if getattr(self, "_cols_cache", (None,))[0] != width:
+            self._cols_cache = (width, layout_columns(width))
+        return self._cols_cache[1]
 
     def _draw_header(self, width: int):
         hv = self.hdr
@@ -1130,9 +1149,9 @@ class SearchWindow:
             return
         k = self._cols(width)
         for key, label in self.COLUMNS:
-            if key == "server" and not k["srv_w"]:
+            if key not in k["spans"]:
                 continue
-            x0, xr, anchor = self._col_span(k, key)
+            x0, xr, anchor = k["spans"][key]
             on = self.sort_key == key
             if on:
                 natural_desc = SORTS[key][1]
@@ -1144,10 +1163,7 @@ class SearchWindow:
 
     def _header_hit(self, x: int) -> str | None:
         k = self._cols(max(self.canvas.winfo_width(), 200))
-        for key, _label in self.COLUMNS:
-            if key == "server" and not k["srv_w"]:
-                continue
-            x0, xr, _a = self._col_span(k, key)
+        for key, (x0, xr, _a) in k["spans"].items():
             if x0 - 4 <= x <= xr + 4:
                 return key
         return None
@@ -1294,14 +1310,18 @@ class SearchWindow:
         cv.create_text(width / 2, 96, text=sub, fill=FG_DIM, font=self.f_small, tags="card")
 
     def _draw_skeleton(self, cv, y, width, a, b):
-        k = self._cols(width)
+        sp = self._cols(width)["spans"]
         cy = y + CARD_H / 2
-        round_rect(cv, 8, cy - 13, 8 + PORTRAIT, cy + 13, 7, fill=a, outline="", tags="card")
-        round_rect(cv, 8 + PORTRAIT + 9, cy - 5, min(k["name_r"], 8 + PORTRAIT + 100), cy + 5, 5, fill=a,
-                   outline="", tags="card")
-        round_rect(cv, k["cls_l"], cy - 5, k["cls_l"] + 60, cy + 5, 5, fill=b, outline="", tags="card")
-        round_rect(cv, k["gs_r"] - 34, cy - 5, k["gs_r"], cy + 5, 5, fill=b, outline="", tags="card")
-        round_rect(cv, k["cp_r"] - 50, cy - 5, k["cp_r"], cy + 5, 5, fill=a, outline="", tags="card")
+        n0, n1, _ = sp["name"]
+        round_rect(cv, n0, cy - 13, n0 + PORTRAIT, cy + 13, 7, fill=a, outline="", tags="card")
+        round_rect(cv, n0 + PORTRAIT + 9, cy - 5, max(n0 + PORTRAIT + 20, min(n1, n0 + PORTRAIT + 100)), cy + 5, 5,
+                   fill=a, outline="", tags="card")
+        for key, tone, w in (("legion", b, 50), ("class", b, 60), ("server", b, 70), ("gs", b, 34), ("cp", a, 50)):
+            if key in sp:
+                x0, x1_, anchor = sp[key]
+                w = min(w, x1_ - x0)
+                l, r = (x0, x0 + w) if anchor == "w" else (x1_ - w, x1_)
+                round_rect(cv, l, cy - 5, r, cy + 5, 5, fill=tone, outline="", tags="card")
 
     def _star_box(self, width, y):
         x = self._cols(width)["star"]
@@ -1309,7 +1329,7 @@ class SearchWindow:
 
     def _reorderable(self) -> bool:
         """Favorites can be dragged into your own order while the list shows that order."""
-        return self.mode == "favorites" and self.sort_key == "default" and len(self.fav_chars) > 1
+        return self.mode == "favorites" and len(self.fav_chars) > 1
 
     def _draw_grip(self, cv, y, hot: bool):
         col = ACCENT if hot else FG_FAINT
@@ -1331,7 +1351,8 @@ class SearchWindow:
             if side in ("enemy", "ally"):          # a slim mark on the left edge: red enemy, green ally
                 round_rect(cv, 0, cy - 9, 3, cy + 9, 1.5, fill=RED if side == "enemy" else GREEN, outline="",
                            tags="card")
-        x = k["name_l"]
+        sp = k["spans"]
+        x, name_r, _ = sp["name"]
         if self._reorderable():
             self._draw_grip(cv, y, dragging or (hover and self.hover_grip))
             x += 10
@@ -1345,33 +1366,35 @@ class SearchWindow:
             cv.create_text(x + PORTRAIT / 2, cy, text=(c.class_name[:1] or "?"), fill=cls_col, font=self.f_sbold,
                            tags="card")
         tx = x + PORTRAIT + 9
-        # name cell: the legion (or, in Recent, when they left) gives way before the name does
-        extra = f"<{c.legion}>" if c.legion else ""
+        # name cell: when they left (Recent), or the legion when its column doesn't fit, gives way first
+        extra = f"<{c.legion}>" if c.legion and "legion" not in sp else ""
         if self.mode in ("nearby", "recent") and self.nearby_view == "recent":
             left_at, fought = getattr(self, "_recent_info", {}).get(c.name, (None, False))
             if left_at:
                 extra = f"{'⚔ ' if fought else ''}{ago(time.time() - left_at)}"
-        room = k["name_r"] - tx - 12
-        name = elide(self.f_bold, c.name, room)
+        name = elide(self.f_bold, c.name, name_r - tx - 12)
         nid = cv.create_text(tx, cy, text=name, fill=FG, font=self.f_bold, anchor="w", tags="card")
         nx = cv.bbox(nid)[2] + 6
-        extra = elide(self.f_small, extra, k["name_r"] - nx - 12)
+        extra = elide(self.f_small, extra, name_r - nx - 12)
         if len(extra) >= 3:
             eid = cv.create_text(nx, cy + 1, text=extra, fill=FG_DIM, font=self.f_small, anchor="w", tags="card")
             nx = cv.bbox(eid)[2] + 6
         if c.race in (1, 2):
             fc = ELYOS if c.race == 1 else ASMO
             cv.create_oval(nx, cy - 2.5, nx + 5, cy + 2.5, fill=fc, outline="", tags="card")
-        # class, level, server
-        cv.create_text(k["cls_l"], cy, text=elide(self.f_small, c.class_name or "", k["cls_w"]), fill=cls_col,
-                       font=self.f_small, anchor="w", tags="card")
-        if c.level:
-            cv.create_text(k["lv_r"], cy, text=str(c.level), fill=FG, font=self.f_small, anchor="e", tags="card")
-        if k["srv_w"] and c.server_name:
-            region = REGION_SHORT.get(c.region, (c.region or "").upper())
-            where = f"{c.server_name} · {region}" if region else c.server_name
-            cv.create_text(k["srv_l"], cy, text=elide(self.f_small, where, k["srv_w"]), fill=FG_DIM,
-                           font=self.f_small, anchor="w", tags="card")
+
+        def cell(key, text, fill, font=None):
+            if key in sp and text:
+                x0, x1_, anchor = sp[key]
+                font = font or self.f_small
+                cv.create_text(x0 if anchor == "w" else x1_, cy, text=elide(font, text, x1_ - x0), fill=fill,
+                               font=font, anchor=anchor, tags="card")
+        cell("legion", c.legion or "", FG_DIM)
+        cell("class", c.class_name or "", cls_col)
+        cell("level", str(c.level) if c.level else "", FG)
+        if c.server_name:
+            region = REGION_NAMES.get(c.region, (c.region or "").upper())
+            cell("server", f"{c.server_name} · {region}" if region else c.server_name, FG_DIM)
         # favorite star: shown when starred, or on hover
         fav = c.key in self.favorites
         if fav or hover:
@@ -1383,20 +1406,21 @@ class SearchWindow:
             else:
                 cv.create_text(k["star"], cy, text="★" if fav else "☆", fill=col, font=self.f_star, tags="card")
         # numbers
+        gs_r, cp_r = sp["gs"][1], sp["cp"][1]
         if c.status == "ok":
-            cv.create_text(k["gs_r"], cy, text=fmt_int(c.gear_score), fill=FG, font=self.f_small, anchor="e",
+            cv.create_text(gs_r, cy, text=fmt_int(c.gear_score), fill=FG, font=self.f_small, anchor="e",
                            tags="card")
-            cv.create_text(k["cp_r"], cy, text=fmt_int(c.combat_power), fill=ACCENT, font=self.f_bold, anchor="e",
+            cv.create_text(cp_r, cy, text=fmt_int(c.combat_power), fill=ACCENT, font=self.f_bold, anchor="e",
                            tags="card")
             return False
         if c.status == "unresolved":                 # a nearby player NCSOFT couldn't identify: no numbers
-            cv.create_text(k["cp_r"], cy, text="—", fill=FG_FAINT, font=self.f_bold, anchor="e", tags="card")
+            cv.create_text(cp_r, cy, text="—", fill=FG_FAINT, font=self.f_bold, anchor="e", tags="card")
             return False
         if c.status == "error":
-            cv.create_text(k["cp_r"], cy, text="Couldn't load", fill=RED, font=self.f_small, anchor="e", tags="card")
+            cv.create_text(cp_r, cy, text="Couldn't load", fill=RED, font=self.f_small, anchor="e", tags="card")
             return False
-        round_rect(cv, k["gs_r"] - 34, cy - 5, k["gs_r"], cy + 5, 5, fill=b, outline="", tags="card")
-        round_rect(cv, k["cp_r"] - 50, cy - 5, k["cp_r"], cy + 5, 5, fill=a, outline="", tags="card")
+        round_rect(cv, gs_r - 34, cy - 5, gs_r, cy + 5, 5, fill=b, outline="", tags="card")
+        round_rect(cv, cp_r - 50, cy - 5, cp_r, cy + 5, 5, fill=a, outline="", tags="card")
         return True
 
     def _update_status(self, view):
@@ -1499,7 +1523,12 @@ class SearchWindow:
         if i < 0:
             return
         if self._on_grip(e.x):
-            self._drag = {"key": self._view[i].key, "to": i}
+            key = self._view[i].key
+            if self.sort_key != "default":          # reordering means your own order: show it, then drag
+                self._set_sort("default")
+                self._view = self._visible()
+                i = next((n for n, c in enumerate(self._view) if c.key == key), i)
+            self._drag = {"key": key, "to": i}
             self._mark()
             return
         c = self._view[i]
@@ -1823,7 +1852,7 @@ class SearchWindow:
         return b
 
     def _lift_chrome(self):
-        for w in getattr(self, "_edges", []):
+        for w in getattr(self, "_zones", []) + getattr(self, "_edges", []):
             w.lift()
         self.grip.lift()
 
@@ -1848,14 +1877,30 @@ class SearchWindow:
         dx, dy = self._drag
         self.root.geometry(f"+{e.x_root - dx}+{e.y_root - dy}")
 
-    def _resize_start(self, e):
-        self._resize = (e.x_root, e.y_root, self.root.winfo_width(), self.root.winfo_height())
+    def _bind_resize(self, widget, edge: str):
+        widget.bind("<ButtonPress-1>", lambda e: self._resize_start(e, edge))
+        widget.bind("<B1-Motion>", self._resize_move)
+        widget.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
+
+    def _resize_start(self, e, edge: str = "se"):
+        r = self.root
+        self._resize = (edge, e.x_root, e.y_root, r.winfo_x(), r.winfo_y(), r.winfo_width(), r.winfo_height())
 
     def _resize_move(self, e):
-        x0, y0, w0, h0 = self._resize
-        w = max(460, w0 + e.x_root - x0)
-        h = max(420, h0 + e.y_root - y0)
-        self.root.geometry(f"{w}x{h}")
+        edge, px, py, x, y, w, h = self._resize
+        min_w, min_h = self.root.minsize()
+        dx, dy = e.x_root - px, e.y_root - py
+        if "e" in edge:
+            w = max(min_w, w + dx)
+        if "w" in edge:
+            nw = max(min_w, w - dx)
+            x, w = x + (w - nw), nw
+        if "s" in edge:
+            h = max(min_h, h + dy)
+        if "n" in edge:
+            nh = max(min_h, h - dy)
+            y, h = y + (h - nh), nh
+        self.root.geometry(f"{w}x{h}+{x}+{y}")
         self._mark()
 
     def _hwnd(self):
@@ -2018,6 +2063,11 @@ class SearchWindow:
             (500, self._update_click),
             (900, lambda: self._grab(f"{base}-loading.png")),
             (7000, lambda: self._grab(f"{base}.png")),
+            (7010, lambda: self.root.geometry("420x720")),
+            (7080, lambda: self._grab(f"{base}-narrow.png")),
+            (7090, lambda: self.root.geometry("900x720")),
+            (7160, lambda: self._grab(f"{base}-wide.png")),
+            (7170, lambda: self.root.geometry("600x720")),
             (7200, lambda: self._view and self.toggle_favorite(self._view[0])),
             (7250, lambda: len(self._view) > 2 and self.toggle_favorite(self._view[2])),   # 2 to show the grips
             (7300, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible

@@ -7,6 +7,7 @@ SORTS = {
     "default": (None, False),
     "latest": (None, True),
     "name": (lambda c: c.name.casefold(), False),
+    "legion": (lambda c: (c.legion or "").casefold() or None, False),
     "class": (lambda c: (c.class_name or "").casefold() or None, False),
     "level": (lambda c: c.level or None, True),
     "server": (lambda c: ((c.region or ""), (c.server_name or "").casefold()) if c.server_name else None, False),
