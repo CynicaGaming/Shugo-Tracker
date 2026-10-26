@@ -973,6 +973,15 @@ class SearchWindow:
         grouped = self.mode in ("nearby", "recent")
         return sort_chars(chars, self.sort_key, self._nearby_side if grouped else None, self._latest_times())
 
+    def _clear_list(self):
+        if self.nearby is None or not self._nearby_on():
+            return
+        if self.mode == "recent":
+            self.nearby.clear_recent()
+        elif self.mode == "nearby":
+            self.nearby.clear_nearby()
+        self._refresh_nearby(force=True)
+
     def _latest_times(self) -> dict:
         """When each listed character arrived: Nearby = first seen, Recent = left, Favorites = starred."""
         if self.mode == "nearby":
