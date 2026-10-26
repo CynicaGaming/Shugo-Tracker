@@ -1174,7 +1174,7 @@ class SearchWindow:
         self._set_sort("default" if self.sort_key == "latest" else "latest")
 
     def _paint_sort(self):
-        if self.mode in ("favorites", "nearby", "recent"):
+        if self.mode == "favorites" or (self.mode in ("nearby", "recent") and self._nearby_on()):
             self.latest_lb.config(fg=ACCENT if self.sort_key == "latest" else FG_DIM,
                                   font=self.f_sbold if self.sort_key == "latest" else self.f_small)
             if not self.latest_lb.winfo_manager():
@@ -1589,7 +1589,7 @@ class SearchWindow:
         self._paint_tabs()
         self._paint_nearby_panel()
         if self.mode in ("nearby", "recent"):
-            self._mark()
+            self._paint_sort()
 
     def _nearby_record(self):
         """Shift+click on the Live line: save 60 s of game traffic for fixing the decoder."""
