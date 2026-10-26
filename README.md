@@ -9,7 +9,7 @@ profile in the app.
   and more results load as you scroll — so even a common name with thousands of matches stays smooth.
 - Each character's **<Legion>** is shown next to their name.
 - Click any character for a full profile: gear, skills, Daevanion boards, stats, cosmetics and titles.
-- Star characters to keep them in **★ Favorites**.
+- Star characters to keep them in **★ Favorites**; drag them by the grip (⋮⋮) to put them in your own order.
 - Toggle region and faction filters on and off instantly. Pin the window on top of the game.
 - Updates itself from this repo's releases.
 
@@ -64,6 +64,7 @@ Everything is saved immediately.
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
 | right-click a card | profile / favorite / copy name / refresh |
+| drag ⋮⋮ on a favorite | reorder Favorites (with Sort: Default) |
 | 📌 | keep the window above other windows |
 
 The profile has tabs for **Gear** (equipment, accessories and Arcana with grade and enchant level),

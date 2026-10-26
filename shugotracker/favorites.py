@@ -92,5 +92,19 @@ class Favorites:
         if c.key in self._items:
             self._items[c.key] = {k: getattr(c, k) for k in _KEEP}
 
+    def keys(self) -> list[str]:
+        return list(self._items)
+
+    def move(self, key: str, index: int) -> None:
+        """Put a favorite at position `index` (counted without it) and save."""
+        if key not in self._items:
+            return
+        item = self._items.pop(key)
+        order = list(self._items.items())
+        index = max(0, min(index, len(order)))
+        order.insert(index, (key, item))
+        self._items = dict(order)
+        self.save()
+
     def characters(self) -> list[Character]:
         return [Character(**{k: d.get(k) for k in _KEEP}) for d in self._items.values()]

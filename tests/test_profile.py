@@ -218,6 +218,16 @@ class FavoritesTests(unittest.TestCase):
         self.assertFalse(again.toggle(restored))
         self.assertEqual(len(Favorites(path)), 0)
 
+    def test_move_keeps_order_on_disk(self):
+        path = os.path.join(tempfile.mkdtemp(), "favorites.json")
+        fav = Favorites(path)
+        cs = [char(char_id=f"c{i}", name=f"N{i}") for i in range(4)]
+        for c in cs:
+            fav.toggle(c)
+        fav.move(cs[3].key, 0)
+        fav.move(cs[0].key, 3)
+        self.assertEqual([c.name for c in Favorites(path).characters()], ["N3", "N1", "N2", "N0"])
+
     def test_corrupt_file_is_ignored(self):
         path = os.path.join(tempfile.mkdtemp(), "favorites.json")
         with open(path, "w") as f:

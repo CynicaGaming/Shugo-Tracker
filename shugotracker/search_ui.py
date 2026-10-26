@@ -164,6 +164,106 @@ class FlowFrame(tk.Frame):
             self.configure(height=h)
 
 
+class StyledMenu:
+    """
+    A right-click menu in the app's own style (Windows draws tk.Menu natively and ignores most colours).
+    Same calls as tk.Menu where the app uses them: add_command / add_separator / delete / entryconfigure /
+    tk_popup / post / unpost. Closes on a click elsewhere, Esc, or when the window loses focus.
+    """
+
+    def __init__(self, root: tk.Tk, font):
+        self.root, self.font = root, font
+        self.items: list[dict | None] = []          # None = separator
+        self.win: tk.Toplevel | None = None
+        self._click_bind = None
+
+    # tk.Menu-like API
+    def add_command(self, label: str, command, state: str = "normal", selected: bool = False):
+        self.items.append({"label": label, "command": command, "state": state, "selected": selected})
+
+    def add_separator(self):
+        self.items.append(None)
+
+    def delete(self, first, last=None):
+        start = int(first)
+        end = len(self.items) if last == "end" else (int(last) + 1 if last is not None else start + 1)
+        del self.items[start:end]
+
+    def entryconfigure(self, index: int, **kw):
+        item = self.items[index]
+        if item is not None:
+            item.update({k: v for k, v in kw.items() if k in ("label", "state", "command", "selected")})
+
+    def tk_popup(self, x: int, y: int):
+        self.post(x, y)
+
+    def post(self, x: int, y: int, right: bool = False):
+        self.unpost()
+        win = self.win = tk.Toplevel(self.root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.configure(bg=BORDER)
+        box = tk.Frame(win, bg=SURFACE_2, padx=0, pady=4)
+        box.pack(padx=1, pady=1, fill="both", expand=True)
+        win.minsize(150, 1)
+        for item in self.items:
+            if item is None:
+                tk.Frame(box, bg=BORDER, height=1).pack(fill="x", padx=8, pady=4)
+                continue
+            on = item["state"] != "disabled"
+            rest = ACCENT if item.get("selected") else FG
+            row = tk.Label(box, text=item["label"], bg=SURFACE_2, fg=rest if on else FG_FAINT, font=self.font,
+                           anchor="w", padx=14, pady=5, cursor="hand2" if on else "")
+            row.pack(fill="x")
+            if on:
+                row.bind("<Enter>", lambda e, r=row: r.config(bg=HOVER, fg=ACCENT))
+                row.bind("<Leave>", lambda e, r=row, c=rest: r.config(bg=SURFACE_2, fg=c))
+                row.bind("<ButtonRelease-1>", lambda e, c=item["command"]: self._choose(c))
+        win.update_idletasks()
+        w, h = max(win.winfo_reqwidth(), 150), win.winfo_reqheight()
+        if right:
+            x -= w
+        x = max(4, min(x, win.winfo_screenwidth() - w - 4))
+        y = y if y + h < win.winfo_screenheight() - 4 else y - h
+        win.geometry(f"+{x}+{y}")
+        win.bind("<Escape>", lambda e: self.unpost())
+        win.bind("<FocusOut>", lambda e: self.root.after(50, self._maybe_close))
+        win.focus_force()
+        # a click anywhere else in the app closes it (bound after this click has finished dispatching)
+        self.root.after(1, self._watch_clicks)
+
+    def _watch_clicks(self):
+        if self.win is not None and not self._click_bind:
+            self._click_bind = self.root.bind_all("<ButtonPress>", self._outside, add="+")
+
+    def _outside(self, e):
+        w, me = str(e.widget), str(self.win)
+        if self.win is not None and w != me and not w.startswith(me + "."):
+            self.unpost()
+
+    def _maybe_close(self):
+        if self.win is not None and self.root.focus_get() is None:
+            self.unpost()
+
+    def _choose(self, command):
+        self.unpost()
+        command()
+
+    def unpost(self):
+        if self._click_bind:
+            try:
+                self.root.unbind_all("<ButtonPress>")
+            except tk.TclError:
+                pass
+            self._click_bind = None
+        if self.win is not None:
+            try:
+                self.win.destroy()
+            except tk.TclError:
+                pass
+            self.win = None
+
+
 class ThinScrollbar(tk.Canvas):
     """A slim scrollbar in the app's colours (the Windows one can't be themed). Hidden when nothing scrolls."""
 
@@ -391,6 +491,8 @@ class SearchWindow:
         self.inbox: queue.Queue = queue.Queue()
         self.hover_index = -1
         self.hover_star = False
+        self.hover_grip = False
+        self._drag: dict | None = None             # favorites being dragged by the grip: {"key", "to"}
         self._dirty = True
         self._debounce = None
         self._update_look = None
@@ -591,10 +693,7 @@ class SearchWindow:
         self.status = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, anchor="w",
                                padx=PAD)
         self.status.pack(side="left", fill="x", expand=True)
-        self.sort_menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
-                                 activeforeground=FG, bd=0)
-        for key, label in SORTS:
-            self.sort_menu.add_command(label=label, command=lambda k=key: self._set_sort(k))
+        self.sort_menu = StyledMenu(self.root, self.f_small)
         self._paint_sort()
         self.status.bind("<Shift-Button-1>", lambda e: self._nearby_record())   # hidden: Nearby capture
         # virtualized card list
@@ -612,6 +711,8 @@ class SearchWindow:
         self.canvas.bind("<Motion>", self._motion)
         self.canvas.bind("<Leave>", lambda e: self._set_hover(-1, False))
         self.canvas.bind("<Button-1>", self._click)
+        self.canvas.bind("<B1-Motion>", self._fav_drag)
+        self.canvas.bind("<ButtonRelease-1>", self._fav_drop)
         self.canvas.bind("<Button-3>", self._right_click)
 
         self.nearby_panel = tk.Frame(self.list_wrap, bg=BG)
@@ -633,18 +734,15 @@ class SearchWindow:
             self._edges[3].place(relx=1.0, x=-1, y=0, width=1, relheight=1)
             self._lift_chrome()
 
-        self.menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
-                            activeforeground=FG, bd=0)
+        self.menu = StyledMenu(self.root, self.f_small)
         self.menu.add_command(label="View profile", command=lambda: self._menu(self.open_profile))
         self.menu.add_command(label="Add to favorites", command=lambda: self._menu(self.toggle_favorite))
         self.menu.add_command(label="Copy name", command=lambda: self._menu(self._copy_name))
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
         self._menu_base = 4                                  # Nearby / Recent add a Clear item below these
-        self.list_menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
-                                 activeforeground=FG, bd=0)
+        self.list_menu = StyledMenu(self.root, self.f_small)
         self.list_menu.add_command(label="Clear", command=self._clear_list)
-        self.tab_menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
-                                activeforeground=FG, bd=0)
+        self.tab_menu = StyledMenu(self.root, self.f_small)
         self._menu_char: Character | None = None
 
     def _chip(self, parent, text, cmd, pack: bool = True):
@@ -993,7 +1091,12 @@ class SearchWindow:
         return {}
 
     def _sort_menu_open(self, e):
-        self.sort_menu.tk_popup(e.x_root, e.y_root)
+        self.sort_menu.delete(0, "end")
+        for key, label in SORTS:
+            self.sort_menu.add_command(label=label, command=lambda k=key: self._set_sort(k),
+                                       selected=key == self.sort_key)
+        w = self.sort_lb
+        self.sort_menu.post(w.winfo_rootx() + w.winfo_width(), w.winfo_rooty() + w.winfo_height() + 2, right=True)
 
     def _set_sort(self, key: str):
         self.sort_key = key
@@ -1043,6 +1146,11 @@ class SearchWindow:
         if not shimmer_only:
             self._dirty = False
             self._view = self._visible()
+            if self._drag:
+                keys = [c.key for c in self._view]
+                if self._drag["key"] in keys:
+                    c = self._view.pop(keys.index(self._drag["key"]))
+                    self._view.insert(max(0, min(self._drag["to"], len(self._view))), c)
         view = self._view
         width = max(cv.winfo_width(), 200)
         view_h = max(cv.winfo_height(), 1)
@@ -1072,7 +1180,8 @@ class SearchWindow:
                     self.nearby.want(c.name)        # on screen: ask NCSOFT who this is
             elif c.status == "none" or c.stale:
                 self.api.want(c, lambda ch: self.inbox.put(("detail",)))
-            has_skel |= self._draw_card(cv, c, y, width, i == self.hover_index, a, b)
+            dragging = self._drag is not None and c.key == self._drag["key"]
+            has_skel |= self._draw_card(cv, c, y, width, i == self.hover_index or dragging, a, b, dragging)
         if not view and not loading_any:
             self._draw_empty(cv, width)
         self._update_status(view)
@@ -1119,11 +1228,27 @@ class SearchWindow:
         x1 = width - 6
         return x1 - 34, y + 8, x1 - 6, y + 36
 
-    def _draw_card(self, cv, c: Character, y, width, hover: bool, a, b) -> bool:
+    def _reorderable(self) -> bool:
+        """Favorites can be dragged into your own order while the list shows that order."""
+        return self.mode == "favorites" and self.sort_key == "default" and len(self.fav_chars) > 1
+
+    def _draw_grip(self, cv, y, hot: bool):
+        col = ACCENT if hot else FG_FAINT
+        cy = y + CARD_H / 2
+        for dx in (0, 5):
+            for dy in (-5, 0, 5):
+                cv.create_oval(8 + dx - 1.3, cy + dy - 1.3, 8 + dx + 1.3, cy + dy + 1.3, fill=col, outline="",
+                               tags="card")
+
+    def _draw_card(self, cv, c: Character, y, width, hover: bool, a, b, dragging: bool = False) -> bool:
         x1 = width - 6
         round_rect(cv, 0, y, x1, y + CARD_H, 12, fill=HOVER if hover else SURFACE,
-                   outline=BORDER if hover else "", tags="card")
-        px, py = 12, y + 12
+                   outline=ACCENT if dragging else BORDER if hover else "", tags="card")
+        shift = 0
+        if self._reorderable():
+            shift = 12
+            self._draw_grip(cv, y, dragging or (hover and self.hover_grip))
+        px, py = 12 + shift, y + 12
         img = self.images.get(c.portrait, PORTRAIT, crop_top=True)
         if img:
             cv.create_image(px, py, image=img, anchor="nw", tags="card")
@@ -1132,7 +1257,7 @@ class SearchWindow:
             round_rect(cv, px, py, px + PORTRAIT, py + PORTRAIT, 10, fill=SURFACE_2, outline="", tags="card")
             cv.create_text(px + PORTRAIT / 2, py + PORTRAIT / 2, text=(c.class_name[:1] or "?"), fill=col,
                            font=self.f_name, tags="card")
-        tx = 72
+        tx = 72 + shift
         if self.mode in ("nearby", "recent"):
             side = self._nearby_side.get(c.name)
             if side in ("enemy", "ally"):          # a slim marker on the left edge: red enemy, green ally
@@ -1235,18 +1360,71 @@ class SearchWindow:
         sx0, sy0, sx1, sy1 = self._star_box(max(self.canvas.winfo_width(), 200), i * (CARD_H + CARD_GAP))
         return i, sx0 - 4 <= x <= sx1 + 4 and sy0 - 4 <= y <= sy1 + 4
 
+    def _on_grip(self, x) -> bool:
+        return self._reorderable() and x <= 22
+
     def _motion(self, e):
-        self._set_hover(*self._hit(e.x, e.y))
+        if self._drag:
+            return
+        i, on_star = self._hit(e.x, e.y)
+        grip = i >= 0 and self._on_grip(e.x)
+        if grip != self.hover_grip:
+            self.hover_grip = grip
+            self.hover_index = -2                   # force a repaint below
+        self._set_hover(i, on_star)
 
     def _set_hover(self, i, on_star):
         if i != self.hover_index or on_star != self.hover_star:
             self.hover_index, self.hover_star = i, on_star
-            self.canvas.config(cursor="hand2" if i >= 0 else "")
+            self.canvas.config(cursor="fleur" if i >= 0 and self.hover_grip else "hand2" if i >= 0 else "")
             self._mark()
+
+    # drag a favorite by its grip
+    def _drag_target(self, y_widget) -> int:
+        y = self.canvas.canvasy(y_widget)
+        return max(0, min(int(y // (CARD_H + CARD_GAP)), len(self._view) - 1))
+
+    def _fav_drag(self, e):
+        if not self._drag:
+            return
+        h = self.canvas.winfo_height()
+        if e.y < 16:
+            self.canvas.yview_scroll(-1, "units")
+        elif e.y > h - 16:
+            self.canvas.yview_scroll(1, "units")
+        to = self._drag_target(e.y)
+        if to != self._drag["to"]:
+            self._drag["to"] = to
+            self._mark()
+
+    def _fav_drop(self, e):
+        d, self._drag = self._drag, None
+        if not d:
+            return
+        view = self._view                          # already shows the new order
+        keys = [c.key for c in view]
+        if d["key"] in keys and len(keys) > 1:
+            t = keys.index(d["key"])
+            full = [k for k in self.favorites.keys() if k != d["key"]]
+            if t + 1 < len(keys) and keys[t + 1] in full:
+                pos = full.index(keys[t + 1])
+            elif t > 0 and keys[t - 1] in full:
+                pos = full.index(keys[t - 1]) + 1
+            else:
+                pos = len(full)
+            self.favorites.move(d["key"], pos)
+            order = {k: n for n, k in enumerate(self.favorites.keys())}
+            self.fav_chars.sort(key=lambda c: order.get(c.key, len(order)))
+        self._motion(e)
+        self._mark()
 
     def _click(self, e):
         i, on_star = self._hit(e.x, e.y)
         if i < 0:
+            return
+        if self._on_grip(e.x):
+            self._drag = {"key": self._view[i].key, "to": i}
+            self._mark()
             return
         c = self._view[i]
         if not c.char_id:                          # a nearby player NCSOFT hasn't identified (yet)
@@ -1261,7 +1439,7 @@ class SearchWindow:
         if self.nearby is None or not self._nearby_on():
             return
         rows = self._recent_rows if which == "recent" else self._nearby_rows
-        label = "Clear Recent" if which == "recent" else "Clear Nearby (move everyone to Recent)"
+        label = "Clear Recent" if which == "recent" else "Clear Nearby"
         self.tab_menu.delete(0, "end")
         self.tab_menu.add_command(label=label, command=lambda: self._clear_which(which),
                                   state="normal" if rows else "disabled")
@@ -1279,7 +1457,7 @@ class SearchWindow:
             return None
         if self.mode == "recent":
             return "Clear Recent" if self._recent_rows else None
-        return "Clear Nearby (move everyone to Recent)" if self._nearby_rows else None
+        return "Clear Nearby" if self._nearby_rows else None
 
     def _right_click(self, e, demo: bool = False):
         i, _ = self._hit(e.x, e.y)
@@ -1718,6 +1896,19 @@ class SearchWindow:
         self._right_click(ev, demo=True)
         self.root.update_idletasks()
 
+    def _demo_fav_drag(self, start: bool):
+        """Screenshots only: pick up the first favorite by its grip and hold it over the second slot."""
+        ev = type("E", (), {"x": 10, "y": 30})()
+        if start:
+            if len(self._view) > 1:
+                self._click(ev)
+                ev.y = CARD_H + CARD_GAP + 30
+                self._fav_drag(ev)
+                self._render()
+        elif self._drag:
+            self._drag = None                   # drop without saving: the CI favorites stay as they were
+            self._mark()
+
     def _demo_update_state(self, state):
         """Screenshots only: show how the title bar looks with an update waiting."""
         if self.updater is None:
@@ -1778,6 +1969,9 @@ class SearchWindow:
             (t + 3500, lambda: self._grab(f"{base}-filters.png")),
             (t + 3600, lambda: self._set_sort("cp")),
             (t + 3800, lambda: self._grab(f"{base}-sort.png")),
+            (t + 3820, lambda: self._sort_menu_open(None)),
+            (t + 3860, lambda: self._grab(f"{base}-sort-menu.png")),
+            (t + 3880, lambda: self.sort_menu.unpost()),
             (t + 3900, lambda: self._set_sort("default")),
             (t + 3950, self._clear_filters),
         ]
@@ -1800,6 +1994,9 @@ class SearchWindow:
         t += 6600
         steps += [
             (t, lambda: self._set_mode("favorites")),
+            (t + 300, lambda: self._demo_fav_drag(True)),
+            (t + 450, lambda: self._grab(f"{base}-favorites-drag.png")),
+            (t + 500, lambda: self._demo_fav_drag(False)),
             (t + 600, lambda: self._toggle_faction("2")),
             (t + 2500, lambda: self._grab(f"{base}-favorites.png")),
             (t + 2700, self.open_settings),
