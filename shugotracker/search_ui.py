@@ -626,16 +626,18 @@ class SearchWindow:
         self.clear_chip = tk.Label(bar, text="Clear", bg=ACCENT, fg=ACCENT_FG, font=self.f_small,
                                    cursor="hand2", padx=10, pady=2)
         self.clear_chip.bind("<Button-1>", lambda e: self._clear_filters())
-        flow = FlowFrame(bar, bg=BG, height=1, gap_x=8, gap_y=6)      # the two groups wrap when narrow
+        # every option wraps on its own when the window is narrow; a small gap separates regions from factions
+        flow = FlowFrame(bar, bg=BG, height=1, gap_x=2, gap_y=4)
         flow.pack(side="left", fill="x", expand=True)
-        seg = flow.add(tk.Frame(flow, bg=SURFACE, padx=2, pady=2))
-        self.region_all = self._segment(seg, "All", self._all_regions, small=True)
-        self.region_chips = [(r, self._segment(seg, REGION_NAMES[r], lambda k=r: self._toggle_region(k), small=True))
-                             for r in SUB_REGIONS]
-        seg = flow.add(tk.Frame(flow, bg=SURFACE, padx=2, pady=2))
-        self.faction_chips = [(f, self._segment(seg, "Asmo" if f == "2" else label,
-                                                lambda k=f: self._toggle_faction(k), small=True))
-                              for f, label in FACTIONS]
+
+        def option(text, cmd):
+            lb = self._segment(flow, text, cmd, small=True, pack=False)
+            lb.config(pady=4)
+            return flow.add(lb)
+        self.region_all = option("All", self._all_regions)
+        self.region_chips = [(r, option(REGION_NAMES[r], lambda k=r: self._toggle_region(k))) for r in SUB_REGIONS]
+        flow.add(tk.Frame(flow, bg=BG, width=6, height=1))
+        self.faction_chips = [(f, option(label, lambda k=f: self._toggle_faction(k))) for f, label in FACTIONS]
 
         self.adv = tk.Frame(self.filters, bg=BG)
         self.adv.columnconfigure(1, weight=1)
