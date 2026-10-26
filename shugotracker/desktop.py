@@ -209,7 +209,8 @@ def make_bubble_image(size: int = 46):
 
 
 def ui_icon(name: str, size: int, color: tuple, accent: tuple | None = None):
-    """Small line-weight UI icons drawn at 8x and scaled down: cog, pin, pin_on, minimize, close, refresh."""
+    """Small line-weight UI icons drawn at 8x and scaled down: cog, pin, minimize, close, refresh, update, search,
+    back, star, star_fill."""
     import math
     from PIL import Image, ImageDraw
     ss = 8
@@ -260,6 +261,23 @@ def ui_icon(name: str, size: int, color: tuple, accent: tuple | None = None):
         tip = (c + S * 0.32 * math.cos(ang), c + S * 0.32 * math.sin(ang))
         d.polygon([(tip[0] - S * 0.16, tip[1] - S * 0.02), (tip[0] + S * 0.1, tip[1] - S * 0.14),
                    (tip[0] + S * 0.05, tip[1] + S * 0.16)], fill=col)
+    elif name == "search":
+        r = S * 0.27
+        cx, cy = S * 0.43, S * 0.43
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=col, width=w)
+        d.line([(cx + r * 0.72, cy + r * 0.72), (S * 0.86, S * 0.86)], fill=col, width=w)
+    elif name == "back":
+        d.line([(S * 0.62, S * 0.2), (S * 0.32, c), (S * 0.62, S * 0.8)], fill=col, width=w, joint="curve")
+    elif name in ("star", "star_fill"):
+        pts = []
+        for i in range(10):
+            ang = -math.pi / 2 + i * math.pi / 5
+            r = S * (0.45 if i % 2 == 0 else 0.19)
+            pts.append((c + r * math.cos(ang), c * 1.06 + r * math.sin(ang)))
+        if name == "star_fill":
+            d.polygon(pts, fill=col)
+        else:
+            d.line(pts + pts[:2], fill=col, width=int(w * 0.85), joint="curve")
     return im.resize((size, size), Image.LANCZOS)
 
 

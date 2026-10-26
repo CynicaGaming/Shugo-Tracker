@@ -1,4 +1,4 @@
-"""In-app character profile (gear, skills, Daevanion, stats, cosmetics, titles), styled like Shugo.GG's."""
+"""In-app character profile: identity, a stat strip, and tabs (gear table, skills, Daevanion, stats, …)."""
 from __future__ import annotations
 
 import time
@@ -6,16 +6,16 @@ from dataclasses import asdict
 import tkinter as tk
 from typing import TYPE_CHECKING
 
-from .aion2api import REGION_LABELS, Character
+from .aion2api import Character
 from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile
 from .search_ui import (ACCENT, ASMO, BG, BORDER, CLASS_COLORS, ELYOS, FG, FG_DIM, FG_FAINT, GRADE_COLORS, HOVER,
-                        LEGION, PAD, RED, SKEL_A, SKEL_B, SURFACE, SURFACE_2, fmt_int, round_rect, ThinScrollbar)
+                        LINE, PAD, RED, REGION_SHORT, SURFACE, SURFACE_2, fmt_int, round_rect, ThinScrollbar)
 
 if TYPE_CHECKING:
     from .search_ui import SearchWindow
 
 ICON = 36
-HERO = 84
+HERO = 44
 
 
 class ProfileView:
@@ -43,64 +43,69 @@ class ProfileView:
     # ───── chrome ─────
     def _build_header(self):
         f = self.app
-        bar = tk.Frame(self.frame, bg=BG)
-        bar.pack(fill="x", padx=PAD, pady=(PAD, 6))
-        back = tk.Label(bar, text="←  Back", bg=BG, fg=FG_DIM, font=f.f_bold, cursor="hand2")
-        back.pack(side="left")
-        back.bind("<Button-1>", lambda e: f.close_profile())
-        self.star = tk.Label(bar, bg=BG, font=f.f_small, cursor="hand2", padx=6)
-        self.star.pack(side="right")
-        self.star.bind("<Button-1>", lambda e: f.toggle_favorite(self.char))
-        refresh = tk.Label(bar, text="⟳ Refresh", bg=BG, fg=FG_DIM, font=f.f_small, cursor="hand2", padx=6)
-        refresh.pack(side="right")
-        refresh.bind("<Button-1>", lambda e: self.reload())
-        self.paint_star()
-
-        hero = tk.Frame(self.frame, bg=SURFACE, highlightthickness=1, highlightbackground=BORDER)
-        hero.pack(fill="x", padx=PAD, pady=(0, 8))
-        inner = tk.Frame(hero, bg=SURFACE)
-        inner.pack(fill="x", padx=12, pady=12)
-        self.portrait = tk.Label(inner, bg=SURFACE_2, image=self._blank(HERO), bd=0)
+        top = tk.Frame(self.frame, bg=BG)
+        top.pack(fill="x", padx=PAD, pady=(12, 10))
+        self.portrait = tk.Label(top, bg=SURFACE, image=self._blank(HERO), bd=0)
         self.portrait.pack(side="left")
-        mid = tk.Frame(inner, bg=SURFACE)
+        # actions (right): favorite, refresh
+        self.star = tk.Label(top, bg=BG, cursor="hand2", width=30, height=28)
+        self.star.pack(side="right", anchor="n")
+        self.star.bind("<Button-1>", lambda e: f.toggle_favorite(self.char))
+        refresh = tk.Label(top, bg=BG, cursor="hand2", width=30, height=28)
+        f._set_icon(refresh, "refresh", FG_DIM)
+        refresh.pack(side="right", anchor="n")
+        refresh.bind("<Button-1>", lambda e: self.reload())
+        refresh.bind("<Enter>", lambda e: f._set_icon(refresh, "refresh", FG))
+        refresh.bind("<Leave>", lambda e: f._set_icon(refresh, "refresh", FG_DIM))
+        self.paint_star()
+        mid = tk.Frame(top, bg=BG)
         mid.pack(side="left", fill="x", expand=True, padx=(12, 0))
-        top = tk.Frame(mid, bg=SURFACE)
-        top.pack(fill="x", anchor="w")
-        self.h_name = tk.Label(top, bg=SURFACE, fg=FG, font=f.f_big, anchor="w")
+        line1 = tk.Frame(mid, bg=BG)
+        line1.pack(fill="x", anchor="w")
+        self.h_name = tk.Label(line1, bg=BG, fg=FG, font=f.f_name, anchor="w")
         self.h_name.pack(side="left")
-        self.h_legion = tk.Label(top, bg=SURFACE, fg=LEGION, font=f.f_title, anchor="w")
-        self.h_legion.pack(side="left", padx=(6, 0), pady=(4, 0))
-        self.h_faction = tk.Label(top, bg=SURFACE, font=f.f_tiny, padx=6, pady=1, highlightthickness=1)
-        self.h_faction.pack(side="left", padx=(8, 0), pady=(6, 0))
-        self.h_line = tk.Label(mid, bg=SURFACE, fg=FG_DIM, font=f.f_small, anchor="w")
-        self.h_line.pack(fill="x")
-        self.h_line2 = tk.Label(mid, bg=SURFACE, fg=FG_FAINT, font=f.f_small, anchor="w")
-        self.h_line2.pack(fill="x")
-        right = tk.Frame(inner, bg=SURFACE)
-        right.pack(side="right", anchor="n")
-        self.h_cp = tk.Label(right, bg=SURFACE, fg=ACCENT, font=f.f_big, anchor="e")
-        self.h_cp.pack(anchor="e")
-        tk.Label(right, text="COMBAT POWER", bg=SURFACE, fg=FG_FAINT, font=f.f_tiny, anchor="e").pack(anchor="e")
-        self.h_gs = tk.Label(right, bg=SURFACE, fg=FG, font=f.f_bold, anchor="e")
-        self.h_gs.pack(anchor="e", pady=(6, 0))
-        tk.Label(right, text="GEAR SCORE", bg=SURFACE, fg=FG_FAINT, font=f.f_tiny, anchor="e").pack(anchor="e")
+        self.h_legion = tk.Label(line1, bg=BG, fg=FG_DIM, font=f.f_small, anchor="w")
+        self.h_legion.pack(side="left", padx=(6, 0), pady=(3, 0))
+        self.h_faction = tk.Canvas(line1, width=10, height=10, bg=BG, highlightthickness=0)
+        self.h_faction.pack(side="left", padx=(4, 0), pady=(4, 0))
+        line2 = tk.Frame(mid, bg=BG)
+        line2.pack(fill="x", anchor="w", pady=(2, 0))
+        self.h_class = tk.Label(line2, bg=BG, font=f.f_small, anchor="w")
+        self.h_class.pack(side="left")
+        self.h_line = self._fit_label(line2, "", f.f_small, bg=BG, fg=FG_DIM)
+        self.h_line.pack(side="left", fill="x", expand=True)
+
+        # stat strip
+        strip = tk.Frame(self.frame, bg=SURFACE)
+        strip.pack(fill="x", padx=PAD)
+        self.h_stats = {}
+        for i, (key, label) in enumerate((("cp", "Combat power"), ("gs", "Gear score"), ("ench", "Avg enchant"),
+                                          ("lv", "Level"))):
+            strip.columnconfigure(i * 2, weight=1, uniform="strip")
+            if i:
+                tk.Frame(strip, bg=BORDER, width=1).grid(row=0, column=i * 2 - 1, sticky="ns", pady=8)
+            cell = tk.Frame(strip, bg=SURFACE, padx=12, pady=7)
+            cell.grid(row=0, column=i * 2, sticky="ew")
+            tk.Label(cell, text=label, bg=SURFACE, fg=FG_DIM, font=f.f_tiny, anchor="w").pack(fill="x")
+            v = tk.Label(cell, bg=SURFACE, fg=ACCENT if key == "cp" else FG, font=f.f_title, anchor="w")
+            v.pack(fill="x")
+            self.h_stats[key] = v
         self._paint_hero()
 
     def _build_tabs(self):
         f = self.app
-        bar = tk.Frame(self.frame, bg=BG)
-        bar.pack(fill="x", padx=PAD)
+        bar = tk.Frame(self.frame, bg=SURFACE, padx=3, pady=3)
+        bar.pack(fill="x", padx=PAD, pady=(12, 0))
         self.tab_labels = {}
         for name in self.TABS:
-            lb = tk.Label(bar, text=name, bg=BG, font=f.f_bold, padx=8, pady=6, cursor="hand2")
-            lb.pack(side="left")
+            lb = tk.Label(bar, text=name, bg=SURFACE, fg=FG_DIM, font=f.f_small, pady=4, cursor="hand2")
+            lb.pack(side="left", fill="x", expand=True, padx=(0, 1))
             lb.bind("<Button-1>", lambda e, n=name: self.show_tab(n))
             self.tab_labels[name] = lb
-        tk.Frame(self.frame, bg=BORDER, height=1).pack(fill="x", padx=PAD)
 
     def _build_body(self):
         wrap = tk.Frame(self.frame, bg=BG)
-        wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(6, PAD))
+        wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(6, 10))
         self.canvas = tk.Canvas(wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=16)
         sb = ThinScrollbar(wrap, command=self.canvas.yview)
         sb.pack(side="right", fill="y")
@@ -168,7 +173,7 @@ class ProfileView:
 
     def paint_star(self):
         fav = self.char.key in self.app.favorites
-        self.star.config(text="★ Favorite" if fav else "☆ Favorite", fg=ACCENT if fav else FG_DIM)
+        self.app._set_icon(self.star, "star_fill" if fav else "star", ACCENT if fav else FG_DIM)
 
     def _paint_hero(self):
         c, p = self.char, self.profile
@@ -178,22 +183,34 @@ class ProfileView:
         level = p.level if p and p.level else c.level
         server = p.server_name if p and p.server_name else c.server_name
         self.h_name.config(text=name)
-        col = ELYOS if race == 1 else ASMO if race == 2 else FG_DIM
-        self.h_faction.config(text={1: "Elyos", 2: "Asmodian"}.get(race, "?"), fg=col, bg=SURFACE_2,
-                              highlightbackground=col)
-        self.h_line.config(text=f"{cls}  ·  Lv {level}  ·  {server} ({REGION_LABELS.get(c.region, c.region)})",
-                           fg=CLASS_COLORS.get(cls, FG_DIM))
         legion = (p.legion if p else None) or c.legion
         self.h_legion.config(text=f"<{legion}>" if legion else "")
-        bits = []
-        if p and p.title:
-            bits.append(f"“{p.title}”")
-        self.h_line2.config(text="   ".join(bits))
+        self.h_faction.delete("all")
+        if race in (1, 2):
+            self.h_faction.create_oval(2, 2, 8, 8, fill=ELYOS if race == 1 else ASMO, outline="")
+        self.h_class.config(text=cls, fg=CLASS_COLORS.get(cls, FG_DIM))
+        bits = [f"Lv {level}" if level else "", f"{server} · {REGION_SHORT.get(c.region, c.region)}" if server else "",
+                {1: "Elyos", 2: "Asmodian"}.get(race, ""), p.title if p and p.title else ""]
+        self._set_fit(self.h_line, "  ·  " + "  ·  ".join(b for b in bits if b))
         cp = p.combat_power if p else c.combat_power
         gs = p.gear_score if p else c.gear_score
-        self.h_cp.config(text=fmt_int(cp) if cp is not None or not self.loading else "…")
-        self.h_gs.config(text=fmt_int(gs) if gs is not None or not self.loading else "…")
+        wait = "…" if self.loading else "—"
+        self.h_stats["cp"].config(text=fmt_int(cp) if cp is not None else wait)
+        self.h_stats["gs"].config(text=fmt_int(gs) if gs is not None else wait)
+        self.h_stats["lv"].config(text=str(level) if level else wait)
+        ench = self._avg_enchant(p)
+        self.h_stats["ench"].config(text=f"+{ench:.1f}" if ench is not None else
+                                    ("…" if self.loading or (p and p.equipment_pending) else "—"))
         self._set_image(self.portrait, (p.portrait if p and p.portrait else c.portrait), HERO, crop_top=True)
+
+    @staticmethod
+    def _avg_enchant(p: Profile | None) -> float | None:
+        """Average enchant over the worn weapons, armor and accessories."""
+        if not p or p.equipment_pending or p.equipment_error:
+            return None
+        items = [p.gear.get(s) for s in GEAR_MAIN + GEAR_ACCESSORIES]
+        items = [it for it in items if it is not None]
+        return sum(it.enchant or 0 for it in items) / len(items) if items else None
 
     # ───── images ─────
     def _blank(self, size: int) -> tk.PhotoImage:
@@ -233,7 +250,9 @@ class ProfileView:
         """Show the current tab. Each tab is built once per profile and then just shown again."""
         self._hide_tip()
         for name, lb in self.tab_labels.items():
-            lb.config(fg=ACCENT if name == self.tab else FG_DIM)
+            on = name == self.tab
+            lb.config(bg=SURFACE_2 if on else SURFACE, fg=FG if on else FG_DIM,
+                      font=self.app.f_sbold if on else self.app.f_small)
         if not hasattr(self, "_frames"):
             self._drop_frames()
         y = self.canvas.yview()[0] if keep_scroll else 0
@@ -299,7 +318,7 @@ class ProfileView:
     def _section(self, parent, title: str, extra: str = ""):
         row = tk.Frame(parent, bg=BG)
         row.pack(fill="x", pady=(10, 4))
-        tk.Label(row, text=title.upper(), bg=BG, fg=FG_DIM, font=self.app.f_tiny).pack(side="left")
+        tk.Label(row, text=title, bg=BG, fg=FG_DIM, font=self.app.f_small).pack(side="left")
         if extra:
             tk.Label(row, text=extra, bg=BG, fg=FG_FAINT, font=self.app.f_tiny).pack(side="left", padx=6)
 
@@ -310,14 +329,23 @@ class ProfileView:
         self._set_image(lb, url, size)
         return box
 
+    def _set_fit(self, lb: tk.Label, text: str):
+        lb._full = text
+        lb._fit()
+
     def _fit_label(self, parent, text: str, font, tip: bool = True, **kw) -> tk.Label:
         """A label that never pushes its neighbours out: long text is cut to the space it gets, with "…",
         and the full text shows on hover."""
         lb = tk.Label(parent, text=text, font=font, width=1, anchor="w", **kw)
+        lb._full = text
         state = {"cut": False}
 
-        def fit(e):
-            avail = e.width - 2
+        def fit(e=None):
+            text = lb._full
+            avail = (e.width if e is not None else lb.winfo_width()) - 2
+            if avail <= 1:
+                lb.config(text=text)
+                return
             if font.measure(text) <= avail:
                 shown, state["cut"] = text, False
             else:
@@ -332,8 +360,9 @@ class ProfileView:
             if lb.cget("text") != shown:
                 lb.config(text=shown)
         lb.bind("<Configure>", fit, add="+")
+        lb._fit = fit
         if tip:
-            lb.bind("<Enter>", lambda e: state["cut"] and self._show_tip(lb, text, []), add="+")
+            lb.bind("<Enter>", lambda e: state["cut"] and self._show_tip(lb, lb._full, []), add="+")
             lb.bind("<Leave>", lambda e: state["cut"] and self._hide_tip(), add="+")
         return lb
 
@@ -372,21 +401,40 @@ class ProfileView:
             tk.Label(self.body, text="Couldn't load gear.", bg=BG, fg=RED,
                      font=self.app.f_small).pack(anchor="w", pady=8)
             return
-        left, right = self._columns()
-        self._section(left, "Equipment")
-        for slot in GEAR_MAIN:
-            it = p.gear.get(slot)
-            self._item_row(left, it, it.slot_label if it else slot)
-        self._section(right, "Accessories")
-        for slot in GEAR_ACCESSORIES:
-            it = p.gear.get(slot)
-            self._item_row(right, it, it.slot_label if it else slot)
-        arc = [p.gear.get(s) for s in GEAR_ARCANA]
-        if any(arc):
-            self._section(self.body, "Arcana")
-            for it in arc:
-                if it:
-                    self._item_row(self.body, it, "Arcana")
+        rows = [(it.slot_label if (it := p.gear.get(s)) else s, it) for s in GEAR_MAIN + GEAR_ACCESSORIES]
+        rows += [("Arcana", it) for s in GEAR_ARCANA if (it := p.gear.get(s))]
+        self._gear_table(rows)
+
+    def _gear_table(self, rows: list[tuple[str, Item | None]]):
+        """Slot | Item | Grade | +, one line each, so a whole loadout reads at a glance."""
+        f = self.app
+        t = tk.Frame(self.body, bg=BG)
+        t.pack(fill="x", pady=(6, 0))
+        t.columnconfigure(0, minsize=84)
+        t.columnconfigure(1, weight=1)
+        t.columnconfigure(2, minsize=64)
+        t.columnconfigure(3, minsize=56)
+        for i, (text, anchor) in enumerate((("Slot", "w"), ("Item", "w"), ("Grade", "w"), ("+", "e"))):
+            tk.Label(t, text=text, bg=BG, fg=FG_DIM, font=f.f_tiny, anchor=anchor).grid(
+                row=0, column=i, sticky="ew", padx=(8 if i == 0 else 0, 8), pady=(0, 4))
+        tk.Frame(t, bg=LINE, height=1).grid(row=1, column=0, columnspan=4, sticky="ew", pady=(0, 2))
+        for r, (label, it) in enumerate(rows, start=2):
+            tk.Label(t, text=label, bg=BG, fg=FG_DIM, font=f.f_small, anchor="w").grid(
+                row=r, column=0, sticky="ew", padx=(8, 8), pady=3)
+            cell = tk.Frame(t, bg=BG)
+            cell.grid(row=r, column=1, sticky="ew", padx=(0, 8), pady=3)
+            if it is None:
+                tk.Label(cell, text="—", bg=BG, fg=FG_FAINT, font=f.f_small, anchor="w").pack(side="left")
+                continue
+            col = GRADE_COLORS.get(it.grade, FG)
+            self._icon(cell, it.icon, 20, border=col).pack(side="left")
+            self._fit_label(cell, it.name, f.f_body, bg=BG, fg=col).pack(side="left", fill="x", expand=True,
+                                                                          padx=(8, 0))
+            tk.Label(t, text=it.grade or "", bg=BG, fg=col, font=f.f_small, anchor="w").grid(
+                row=r, column=2, sticky="ew", padx=(0, 8), pady=3)
+            ench = (f"+{it.enchant}" if it.enchant else "") + (f" ✦{it.exceed}" if it.exceed else "")
+            tk.Label(t, text=ench, bg=BG, fg=ACCENT if (it.enchant or 0) >= 10 else FG, font=f.f_bold,
+                     anchor="e").grid(row=r, column=3, sticky="ew", padx=(0, 8), pady=3)
 
     def _tab_skills(self, p: Profile):
         if p.equipment_error:

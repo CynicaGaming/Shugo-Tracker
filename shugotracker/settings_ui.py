@@ -100,18 +100,10 @@ class SettingsView:
         self.app = app
         self.cfg = app.cfg
         self.services = services
-        f = app
         self.frame = tk.Frame(app.root, bg=BG)
 
-        bar = tk.Frame(self.frame, bg=BG)
-        bar.pack(fill="x", padx=PAD, pady=(10, 4))
-        back = tk.Label(bar, text="←  Back", bg=BG, fg=FG_DIM, font=f.f_bold, cursor="hand2")
-        back.pack(side="left")
-        back.bind("<Button-1>", lambda e: app.close_settings())
-        tk.Label(bar, text="Settings", bg=BG, fg=FG, font=f.f_title).pack(side="left", padx=(14, 0))
-
         wrap = tk.Frame(self.frame, bg=BG)
-        wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(4, PAD))
+        wrap.pack(fill="both", expand=True, padx=(PAD, 4), pady=(6, PAD))
         self.canvas = tk.Canvas(wrap, bg=BG, highlightthickness=0, bd=0, yscrollincrement=16)
         sb = ThinScrollbar(wrap, command=self.canvas.yview)
         sb.pack(side="right", fill="y")
@@ -136,7 +128,7 @@ class SettingsView:
 
     # ───── layout helpers ─────
     def _section(self, title: str):
-        tk.Label(self.body, text=title.upper(), bg=BG, fg=FG_DIM, font=self.app.f_tiny, anchor="w").pack(
+        tk.Label(self.body, text=title, bg=BG, fg=FG_DIM, font=self.app.f_small, anchor="w").pack(
             fill="x", pady=(14, 4))
         card = tk.Frame(self.body, bg=SURFACE)
         card.pack(fill="x")
