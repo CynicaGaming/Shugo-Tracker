@@ -261,6 +261,12 @@ def ui_icon(name: str, size: int, color: tuple, accent: tuple | None = None):
         tip = (c + S * 0.32 * math.cos(ang), c + S * 0.32 * math.sin(ang))
         d.polygon([(tip[0] - S * 0.16, tip[1] - S * 0.02), (tip[0] + S * 0.1, tip[1] - S * 0.14),
                    (tip[0] + S * 0.05, tip[1] + S * 0.16)], fill=col)
+    elif name.startswith("progress"):            # "progress:NN": a ring that fills clockwise (downloading)
+        pct = max(0, min(100, int(name.split(":")[1]) if ":" in name else 0))
+        box = (S * 0.14, S * 0.14, S * 0.86, S * 0.86)
+        d.ellipse(box, outline=tuple(accent or (60, 62, 70)) + (255,), width=w)
+        if pct:
+            d.arc(box, start=-90, end=-90 + 360 * pct / 100, fill=col, width=w)
     elif name == "search":
         r = S * 0.27
         cx, cy = S * 0.43, S * 0.43

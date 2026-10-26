@@ -52,7 +52,8 @@ windowed** mode):
 | ✕ | quit (with *Close to tray* on in ⚙: hide; a tray icon appears until you bring it back) |
 
 Starting it again while it's running (even hidden) brings the running copy forward. When an update is
-available, a green download icon appears next to 📌: click it to download, then again to restart.
+available, a green download icon appears next to 📌: click it once and it downloads the update (the icon becomes
+a gold progress ring) and restarts into the new version by itself. Hover it to see which step it's on.
 
 ### Settings (⚙)
 
@@ -123,11 +124,11 @@ update is available):
 |---|---|
 | Check for updates | asks GitHub for the latest release |
 | ✓ Up to date | you have the newest version (goes back to *Check for updates* after a few seconds) |
-| ⬇ Download v1.x.y | a newer version exists — click to download it (shows progress) |
-| Restart | downloaded and checksum-verified — click to switch to the new version |
+| Update to v1.x.y | a newer version exists — click once: it downloads (shows progress) and restarts into it |
+| Restart to update | downloaded and checksum-verified (e.g. by an earlier session) — click to switch to it |
 
 The app also checks quietly at start-up and every 30 minutes, so the button may already say
-**Download** when you open it; nothing is downloaded until you click. If you quit with an update
+**Update to …** when you open it; nothing is downloaded until you click. If you quit with an update
 downloaded, it's installed on exit. `config.json`, favorites and the cache are kept. Set
 `"auto_update": false` to turn off the automatic checks (the button still works).
 

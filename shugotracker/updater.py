@@ -244,12 +244,12 @@ class Updater:
         if st == "checking":
             return "Checking…", "busy"
         if st == "available":
-            return (f"⬇ Download v{self.latest}" if self.can_install else f"⬇ Get v{self.latest}"), "accent"
+            return (f"Update to v{self.latest}" if self.can_install else f"⬇ Get v{self.latest}"), "accent"
         if st == "downloading":
             pct = f" {int((self.progress or 0) * 100)}%" if self.progress else ""
             return f"Downloading…{pct}", "busy"
         if st == "ready":
-            return "Restart", "accent"
+            return "Restart to update", "accent"
         if st == "error":
             return "Update failed · Retry", "error"
         recent = time.time() - self.checked_at < 5

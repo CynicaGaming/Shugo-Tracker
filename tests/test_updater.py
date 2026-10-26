@@ -136,7 +136,7 @@ class ButtonFlowTests(UpdateFlowTests):
         self.assertEqual(u.button(), ("Check for updates", "plain"))
         u.check()
         self.assertEqual(u.state, "available")
-        self.assertEqual(u.button(), ("⬇ Download v1.4.0", "accent"))
+        self.assertEqual(u.button(), ("Update to v1.4.0", "accent"))
         self.assertFalse(os.path.exists(self.exe + ".new"))
 
     def test_button_walkthrough(self):
@@ -147,7 +147,7 @@ class ButtonFlowTests(UpdateFlowTests):
         self.assertIsNone(u.click(lambda url: None))       # Download v1.4.0
         self.wait_idle(u)
         self.assertEqual(u.state, "ready")
-        self.assertEqual(u.button(), ("Restart", "accent"))
+        self.assertEqual(u.button(), ("Restart to update", "accent"))
         self.assertEqual(u.click(lambda url: None), "restart")
         with mock.patch.object(up.subprocess, "Popen"):
             self.assertTrue(u.apply(restart=False))

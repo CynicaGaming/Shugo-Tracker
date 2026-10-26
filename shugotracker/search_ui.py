@@ -535,6 +535,7 @@ class SearchWindow:
         if initial_query:
             self.search_var.set(initial_query)
             self.root.after(300, lambda: self._start_search(now=True))
+        self._screenshot = bool(screenshot)
         if screenshot:
             self._schedule_screenshots(screenshot)
 
@@ -585,6 +586,10 @@ class SearchWindow:
         # update available: a green download icon left of the pin (hidden otherwise)
         self.upd_btn = self._title_button(head, "update", self._update_click, hover=GREEN,
                                           repaint=lambda: self._paint_gear())
+        # one click does it all: download, then restart into the new version. Hovering says which step it's on.
+        self._restart_when_ready = False
+        self.upd_btn.bind("<Enter>", lambda e: (self.upd_btn.config(bg=SURFACE_2), self._update_tip(True)))
+        self.upd_btn.bind("<Leave>", lambda e: (self.upd_btn.config(bg=BG), self._update_tip(False)))
         self._sync_update_button()
 
         self.top = tk.Frame(self.root, bg=BG)
@@ -2012,23 +2017,67 @@ class SearchWindow:
     def _sync_update_button(self):
         if self.updater is None or not hasattr(self, "upd_btn"):
             return
-        look = self.updater.button()
+        if self._restart_when_ready and self.updater.state == "ready" and not getattr(self, "_screenshot", False):
+            self._restart_when_ready = False
+            self.root.after(300, self._restart_now)        # downloaded after a click: finish the job
+        look = (self.updater.button(), self._restart_when_ready)
         if look == self._update_look:
             return
         self._update_look = look
         self._paint_gear()
 
+    def _update_look_now(self) -> tuple[str, str, str] | None:
+        """(icon, colour, words) for the title-bar update button, or None to hide it."""
+        u = self.updater
+        st = u.state if u is not None else None
+        if st == "available":
+            return "update", GREEN, f"Update to v{u.latest}"
+        if st == "downloading":
+            pct = int((u.progress or 0) * 100)
+            return f"progress:{pct}", ACCENT, f"Downloading v{u.latest}" + (f"  {pct}%" if u.progress else "…")
+        if st == "ready":
+            return "refresh", GREEN, f"Restart to finish updating to v{u.latest}"
+        if st == "error" and self._restart_when_ready:
+            return "update", RED, "Update failed: click to try again"
+        return None
+
     def _paint_gear(self):
         self._set_icon(self.gear, "cog", FG_DIM)
         self.gear.config(bg=BG)
-        st = self.updater.state if self.updater is not None else None
-        if st in ("available", "downloading", "ready"):
-            self._set_icon(self.upd_btn, "update", FG_DIM if st == "downloading" else GREEN)
-            self.upd_btn.config(bg=BG, cursor="watch" if st == "downloading" else "hand2")
+        look = self._update_look_now()
+        if look:
+            icon, col, _words = look
+            self._set_icon(self.upd_btn, icon, col, accent=BORDER if icon.startswith("progress") else None)
+            self.upd_btn.config(cursor="watch" if icon.startswith("progress") else "hand2")
             if not self.upd_btn.winfo_manager():
                 self.upd_btn.pack(side="right", after=self.pin)
         elif self.upd_btn.winfo_manager():
             self.upd_btn.pack_forget()
+        if getattr(self, "_upd_tip", None) is not None:
+            self._update_tip(True)
+
+    def _update_tip(self, show: bool):
+        """A small label under the update button saying what clicking it does / how far along it is."""
+        tip = getattr(self, "_upd_tip", None)
+        look = self._update_look_now() if show else None
+        if not look:
+            if tip is not None:
+                tip.destroy()
+                self._upd_tip = None
+            return
+        if tip is None:
+            tip = self._upd_tip = tk.Toplevel(self.root)
+            tip.overrideredirect(True)
+            tip.attributes("-topmost", True)
+            tip.configure(bg=BORDER)
+            tk.Label(tip, bg=SURFACE_2, fg=FG, font=self.f_small, padx=8, pady=3).pack(padx=1, pady=1)
+        lb = tip.winfo_children()[0]
+        if lb.cget("text") != look[2]:
+            lb.config(text=look[2])
+        tip.update_idletasks()
+        b = self.upd_btn
+        x = b.winfo_rootx() + b.winfo_width() - tip.winfo_reqwidth()
+        tip.geometry(f"+{max(0, x)}+{b.winfo_rooty() + b.winfo_height() + 4}")
 
     def _demo_card_menu(self):
         """Screenshots only: the right-click menu on the first card."""
@@ -2052,27 +2101,38 @@ class SearchWindow:
             self._drag = None                   # drop without saving: the CI favorites stay as they were
             self._mark()
 
-    def _demo_update_state(self, state):
+    def _demo_update_state(self, state, progress=None):
         """Screenshots only: show how the title bar looks with an update waiting."""
         if self.updater is None:
             return
         if state:
-            self._saved_update = (self.updater.state, self.updater.latest)
+            if not getattr(self, "_saved_update", None):
+                self._saved_update = (self.updater.state, self.updater.latest)
             self.updater.state, self.updater.latest = state, "9.9.9"
+            self.updater.progress = progress
         elif getattr(self, "_saved_update", None):
             self.updater.state, self.updater.latest = self._saved_update
+            self._saved_update = None
         self._update_look = None
         self._sync_update_button()
         self.root.update_idletasks()
 
     def _update_click(self):
-        if self.updater is None:
+        """Update button (title bar or Settings): one click downloads the update and restarts into it."""
+        u = self.updater
+        if u is None:
             return
-        if self.updater.click(webbrowser.open) == "restart":
-            if self.on_update():         # installed; the app relaunches it once we're fully closed
-                self.close()
-                return
+        if u.state in ("available", "error") and u.can_install:
+            self._restart_when_ready = True
+        if u.click(webbrowser.open) == "restart":
+            self._restart_now()
+            return
         self._sync_update_button()
+
+    def _restart_now(self):
+        self._update_tip(False)
+        if self.on_update():             # installed; the app relaunches it once we're fully closed
+            self.close()
 
     # ═════ screenshots (CI) ═════
     def _schedule_screenshots(self, path: str):
@@ -2144,7 +2204,11 @@ class SearchWindow:
             (t + 3500, lambda: self._grab(f"{base}-settings.png")),
             (t + 3700, self.close_settings),
             (t + 3750, lambda: self._demo_update_state("available")),
+            (t + 3800, lambda: self._update_tip(True)),
             (t + 3850, lambda: self._grab(f"{base}-update-available.png")),
+            (t + 3860, lambda: self._demo_update_state("downloading", 0.6)),
+            (t + 3870, lambda: self._grab(f"{base}-update-downloading.png")),
+            (t + 3875, lambda: self._update_tip(False)),
             (t + 3880, lambda: self._demo_update_state(None)),
             (t + 3900, self.collapse),
             (t + 4900, self.expand),
