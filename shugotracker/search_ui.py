@@ -2063,11 +2063,8 @@ class SearchWindow:
             (500, self._update_click),
             (900, lambda: self._grab(f"{base}-loading.png")),
             (7000, lambda: self._grab(f"{base}.png")),
-            (7010, lambda: self.root.geometry("420x720")),
-            (7080, lambda: self._grab(f"{base}-narrow.png")),
-            (7090, lambda: self.root.geometry("900x720")),
-            (7160, lambda: self._grab(f"{base}-wide.png")),
-            (7170, lambda: self.root.geometry("600x720")),
+            (7010, lambda: self._grab_at_width(f"{base}-narrow.png", 420)),
+            (7100, lambda: self._grab_at_width(f"{base}-wide.png", 900)),
             (7200, lambda: self._view and self.toggle_favorite(self._view[0])),
             (7250, lambda: len(self._view) > 2 and self.toggle_favorite(self._view[2])),   # 2 to show the grips
             (7300, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
@@ -2169,6 +2166,19 @@ class SearchWindow:
                                  y + widget.winfo_height() + 2 * pad)).save(path)
         except Exception as e:  # noqa: BLE001
             print(f"screenshot failed: {e}")
+
+    def _grab_at_width(self, path: str, width: int):
+        """Screenshots only: resize, let everything reflow, capture, and put the size back."""
+        old = (self.root.winfo_width(), self.root.winfo_height())
+        for w in (width, None):
+            self.root.geometry(f"{w or old[0]}x{old[1]}")
+            for _ in range(3):
+                self.root.update()
+                time.sleep(0.05)
+            self._render()
+            self.root.update()
+            if w:
+                self._grab(path)
 
     def _grab(self, path: str):
         try:
