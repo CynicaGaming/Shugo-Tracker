@@ -486,6 +486,8 @@ class SearchWindow:
         self.tab_near.bind("<Button-1>", lambda e: self._set_mode("nearby"))
         self.tab_recent = tk.Label(tabs, font=self.f_bold, padx=2, pady=4, cursor="hand2", bg=BG)
         self.tab_recent.bind("<Button-1>", lambda e: self._set_mode("recent"))
+        self.tab_near.bind("<Button-3>", lambda e: self._tab_menu(e, "nearby"))
+        self.tab_recent.bind("<Button-3>", lambda e: self._tab_menu(e, "recent"))
         self.tab_line = tk.Frame(self.top, bg=BORDER, height=1)
         self.tab_line.pack(fill="x")
 
@@ -628,6 +630,8 @@ class SearchWindow:
         self.list_menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
                                  activeforeground=FG, bd=0)
         self.list_menu.add_command(label="Clear", command=self._clear_list)
+        self.tab_menu = tk.Menu(self.root, tearoff=0, bg=SURFACE_2, fg=FG, activebackground=HOVER,
+                                activeforeground=FG, bd=0)
         self._menu_char: Character | None = None
 
     def _chip(self, parent, text, cmd, pack: bool = True):
@@ -1250,6 +1254,24 @@ class SearchWindow:
             self.toggle_favorite(c)
         else:
             self.open_profile(c)
+
+    def _tab_menu(self, e, which: str):
+        """Right-click on the Nearby / Recent tab: Clear that list (wherever you are)."""
+        if self.nearby is None or not self._nearby_on():
+            return
+        rows = self._recent_rows if which == "recent" else self._nearby_rows
+        label = "Clear Recent" if which == "recent" else "Clear Nearby (move everyone to Recent)"
+        self.tab_menu.delete(0, "end")
+        self.tab_menu.add_command(label=label, command=lambda: self._clear_which(which),
+                                  state="normal" if rows else "disabled")
+        self.tab_menu.tk_popup(e.x_root, e.y_root)
+
+    def _clear_which(self, which: str):
+        if which == "recent":
+            self.nearby.clear_recent()
+        else:
+            self.nearby.clear_nearby()
+        self._refresh_nearby(force=True)
 
     def _clear_label(self) -> str | None:
         if self.mode not in ("nearby", "recent") or not self._nearby_on():
