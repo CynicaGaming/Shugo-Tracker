@@ -11,12 +11,19 @@ GEAR_ACCESSORIES = ["Necklace", "Earring1", "Earring2", "Ring1", "Ring2", "Brace
                     "Amulet", "Rune1", "Rune2"]
 GEAR_ARCANA = ["Arcana1", "Arcana2", "Arcana3", "Arcana4", "Arcana5"]
 SLOT_LABELS = {
-    "MainHand": "Main hand", "SubHand": "Off hand", "Earring1": "Earring", "Earring2": "Earring",
-    "Ring1": "Ring", "Ring2": "Ring", "Bracelet1": "Bracelet", "Bracelet2": "Bracelet",
-    "Rune1": "Rune", "Rune2": "Rune", "Cape": "Cloak", "Torso": "Chest", "Pants": "Legs",
-    "SwordMain": "Weapon", "Arcana1": "Arcana", "Arcana2": "Arcana", "Arcana3": "Arcana",
-    "Arcana4": "Arcana", "Arcana5": "Arcana",
+    "MainHand": "Main hand", "SubHand": "Off hand", "Earring1": "Earring 1", "Earring2": "Earring 2",
+    "Ring1": "Ring 1", "Ring2": "Ring 2", "Bracelet1": "Bracelet 1", "Bracelet2": "Bracelet 2",
+    "Rune1": "Rune 1", "Rune2": "Rune 2", "Cape": "Cloak", "Torso": "Chest", "Pants": "Legs",
+    "SwordMain": "Weapon", "Arcana1": "Arcana 1", "Arcana2": "Arcana 2", "Arcana3": "Arcana 3",
+    "Arcana4": "Arcana 4", "Arcana5": "Arcana 5",
 }
+
+
+def slot_name(slot: str) -> str:
+    """What a gear slot is called on screen, equipped or not."""
+    return SLOT_LABELS.get(slot, slot)
+
+
 SKILL_CATEGORIES = [("Active", "Active"), ("Passive", "Passive"), ("Dp", "Stigma")]
 PRIMARY_STATS = ["STR", "DEX", "INT", "CON", "AGI", "WIS"]
 

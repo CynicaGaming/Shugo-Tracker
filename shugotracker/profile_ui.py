@@ -7,7 +7,7 @@ import tkinter as tk
 from typing import TYPE_CHECKING
 
 from .aion2api import Character
-from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile
+from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile, slot_name
 from .search_ui import (ACCENT, ASMO, BG, BORDER, CLASS_COLORS, ELYOS, FG, FG_DIM, FG_FAINT, GRADE_COLORS, HOVER,
                         LINE, PAD, RED, REGION_NAMES, SURFACE, SURFACE_2, fmt_int, round_rect, ThinScrollbar)
 
@@ -79,8 +79,7 @@ class ProfileView:
         strip = tk.Frame(self.frame, bg=SURFACE)
         strip.pack(fill="x", padx=PAD)
         self.h_stats = {}
-        for i, (key, label) in enumerate((("cp", "Combat power"), ("gs", "Gear score"), ("ench", "Avg enchant"),
-                                          ("lv", "Level"))):
+        for i, (key, label) in enumerate((("cp", "Combat power"), ("gs", "Gear score"), ("lv", "Level"))):
             strip.columnconfigure(i * 2, weight=1, uniform="strip")
             if i:
                 tk.Frame(strip, bg=BORDER, width=1).grid(row=0, column=i * 2 - 1, sticky="ns", pady=8)
@@ -198,19 +197,7 @@ class ProfileView:
         self.h_stats["cp"].config(text=fmt_int(cp) if cp is not None else wait)
         self.h_stats["gs"].config(text=fmt_int(gs) if gs is not None else wait)
         self.h_stats["lv"].config(text=str(level) if level else wait)
-        ench = self._avg_enchant(p)
-        self.h_stats["ench"].config(text=f"+{ench:.1f}" if ench is not None else
-                                    ("…" if self.loading or (p and p.equipment_pending) else "—"))
         self._set_image(self.portrait, (p.portrait if p and p.portrait else c.portrait), HERO, crop_top=True)
-
-    @staticmethod
-    def _avg_enchant(p: Profile | None) -> float | None:
-        """Average enchant over the worn weapons, armor and accessories."""
-        if not p or p.equipment_pending or p.equipment_error:
-            return None
-        items = [p.gear.get(s) for s in GEAR_MAIN + GEAR_ACCESSORIES]
-        items = [it for it in items if it is not None]
-        return sum(it.enchant or 0 for it in items) / len(items) if items else None
 
     # ───── images ─────
     def _blank(self, size: int) -> tk.PhotoImage:
@@ -373,7 +360,6 @@ class ProfileView:
             self._icon(row, None).pack(side="left")
             tk.Label(row, text=label, bg=SURFACE, fg=FG_FAINT, font=self.app.f_small, anchor="w").pack(
                 side="left", padx=8)
-            tk.Label(row, text="empty", bg=SURFACE, fg=FG_FAINT, font=self.app.f_tiny).pack(side="right")
             return
         col = GRADE_COLORS.get(item.grade, FG)
         self._icon(row, item.icon, border=col).pack(side="left")
@@ -401,8 +387,8 @@ class ProfileView:
             tk.Label(self.body, text="Couldn't load gear.", bg=BG, fg=RED,
                      font=self.app.f_small).pack(anchor="w", pady=8)
             return
-        rows = [(it.slot_label if (it := p.gear.get(s)) else s, it) for s in GEAR_MAIN + GEAR_ACCESSORIES]
-        rows += [("Arcana", it) for s in GEAR_ARCANA if (it := p.gear.get(s))]
+        rows = [(slot_name(s), p.gear.get(s)) for s in GEAR_MAIN + GEAR_ACCESSORIES]
+        rows += [(slot_name(s), it) for s in GEAR_ARCANA if (it := p.gear.get(s))]
         self._gear_table(rows)
 
     def _gear_table(self, rows: list[tuple[str, Item | None]]):
@@ -423,8 +409,8 @@ class ProfileView:
                 row=r, column=0, sticky="ew", padx=(8, 8), pady=3)
             cell = tk.Frame(t, bg=BG)
             cell.grid(row=r, column=1, sticky="ew", padx=(0, 8), pady=3)
-            if it is None:
-                tk.Label(cell, text="—", bg=BG, fg=FG_FAINT, font=f.f_small, anchor="w").pack(side="left")
+            if it is None:                          # nothing worn here: just the empty slot
+                self._icon(cell, None, 20).pack(side="left")
                 continue
             col = GRADE_COLORS.get(it.grade, FG)
             self._icon(cell, it.icon, 20, border=col).pack(side="left")
