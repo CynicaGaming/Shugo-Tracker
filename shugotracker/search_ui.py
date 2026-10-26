@@ -48,8 +48,8 @@ CARD_GAP = 8
 PAD = 14
 PORTRAIT = 48
 PAGE_SIZE = 30
-SORTS = [("default", "Default"), ("name", "Name (A–Z)"), ("cp", "Combat power"), ("gs", "Gear score"),
-         ("level", "Level")]
+SORTS = [("default", "Default"), ("latest", "Latest"), ("name", "Name (A–Z)"), ("cp", "Combat power"),
+         ("gs", "Gear score"), ("level", "Level")]
 SIDE_ORDER = {"enemy": 0, "ally": 1}
 LOCAL_FILTER_PAGES = 20       # with a level range, look through at most this many pages per region
 
@@ -67,6 +67,25 @@ FACTIONS = [("1", "Elyos"), ("2", "Asmodian")]
 
 def fmt_int(n: int | None) -> str:
     return "—" if n is None else f"{n:,}"
+
+
+def sort_chars(chars: list, key: str, side_of: dict | None = None, when: dict | None = None) -> list:
+    """Sort cards. side_of (name -> 'enemy'/'ally') keeps sides grouped, enemies first; when (key or name ->
+    time) drives 'latest', newest first. Unknown numbers go last; with nothing to sort by, order is kept."""
+    when = when or {}
+    side = (lambda c: SIDE_ORDER.get(side_of.get(c.name), 2)) if side_of is not None else (lambda c: 0)
+    if key == "latest" and when:
+        k = lambda c: (side(c), -when.get(c.key, when.get(c.name, 0)))                       # noqa: E731
+    elif key == "name":
+        k = lambda c: (side(c), c.name.casefold())                                             # noqa: E731
+    elif key in ("cp", "gs", "level"):
+        attr = {"cp": "combat_power", "gs": "gear_score", "level": "level"}[key]
+        k = lambda c: (side(c), not getattr(c, attr), -(getattr(c, attr) or 0))               # noqa: E731
+    elif side_of is not None:
+        k = side                                                                               # noqa: E731
+    else:
+        return list(chars)
+    return sorted(chars, key=k)
 
 
 def ago(seconds: float) -> str:
@@ -569,12 +588,6 @@ class SearchWindow:
         self.sort_lb = tk.Label(self.status_row, bg=BG, fg=FG_DIM, font=self.f_small, cursor="hand2", padx=PAD)
         self.sort_lb.pack(side="right")
         self.sort_lb.bind("<Button-1>", self._sort_menu_open)
-        # Nearby: move everyone to Recent / Recent: empty it (shown on those tabs only)
-        self.list_clear = tk.Label(self.status_row, text="Clear", bg=BG, fg=FG_DIM, font=self.f_small,
-                                   cursor="hand2", padx=4)
-        self.list_clear.bind("<Button-1>", lambda e: self._clear_list())
-        self.list_clear.bind("<Enter>", lambda e: self.list_clear.config(fg=ACCENT))
-        self.list_clear.bind("<Leave>", lambda e: self.list_clear.config(fg=FG_DIM))
         self.status = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, anchor="w",
                                padx=PAD)
         self.status.pack(side="left", fill="x", expand=True)
@@ -957,38 +970,18 @@ class SearchWindow:
 
     def _sorted(self, chars: list[Character]) -> list[Character]:
         """Apply the chosen sort. Nearby / Recent keep enemies and allies in their own groups."""
-        k = self.sort_key
         grouped = self.mode in ("nearby", "recent")
-        if k == "default" and not grouped:
-            return chars
-        side = (lambda c: SIDE_ORDER.get(self._nearby_side.get(c.name), 2)) if grouped else (lambda c: 0)
-        if k == "name":
-            key = lambda c: (side(c), c.name.casefold())                                     # noqa: E731
-        elif k in ("cp", "gs", "level"):
-            attr = {"cp": "combat_power", "gs": "gear_score", "level": "level"}[k]
-            # highest first; characters whose numbers aren't known yet go last
-            key = lambda c: (side(c), getattr(c, attr) is None or not getattr(c, attr),     # noqa: E731
-                             -(getattr(c, attr) or 0))
-        else:
-            key = lambda c: side(c)                                                           # noqa: E731
-        return sorted(chars, key=key)
+        return sort_chars(chars, self.sort_key, self._nearby_side if grouped else None, self._latest_times())
 
-    def _clear_list(self):
-        if self.nearby is None or not self._nearby_on():
-            return
+    def _latest_times(self) -> dict:
+        """When each listed character arrived: Nearby = first seen, Recent = left, Favorites = starred."""
+        if self.mode == "nearby":
+            return getattr(self, "_nearby_seen_at", {})
         if self.mode == "recent":
-            self.nearby.clear_recent()
-        elif self.mode == "nearby":
-            self.nearby.clear_nearby()
-        self._refresh_nearby(force=True)
-
-    def _paint_list_clear(self):
-        show = self.mode in ("nearby", "recent") and self._nearby_on() and (
-            self._recent_rows if self.mode == "recent" else self._nearby_rows)
-        if show and not self.list_clear.winfo_manager():
-            self.list_clear.pack(side="right", before=self.sort_lb)
-        elif not show and self.list_clear.winfo_manager():
-            self.list_clear.pack_forget()
+            return {c.name: t for _s, c, t, _f in self._recent_rows}
+        if self.mode == "favorites":
+            return {c.key: i for i, c in enumerate(self.fav_chars)}    # starred order acts as the time
+        return {}
 
     def _sort_menu_open(self, e):
         self.sort_menu.tk_popup(e.x_root, e.y_root)
@@ -1197,7 +1190,6 @@ class SearchWindow:
         return True
 
     def _update_status(self, view):
-        self._paint_list_clear()
         if self.mode in ("nearby", "recent"):
             self.status.config(text=self._nearby_status_text(view), fg=FG_DIM)
             return
@@ -1328,6 +1320,7 @@ class SearchWindow:
         self._nearby_seen = v
         rows = self.nearby.snapshot() if self._nearby_on() else []
         self._nearby_rows = [(side, c) for side, c, _p in rows]
+        self._nearby_seen_at = {c.name: p.first_seen for _side, c, p in rows}
         self._recent_rows = self.nearby.recent() if self._nearby_on() else []
         self._nearby_side = {c.name: side for side, c, _t, _f in self._recent_rows}
         self._nearby_side.update({c.name: side for side, c in self._nearby_rows})

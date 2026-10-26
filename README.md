@@ -60,7 +60,7 @@ Everything is saved immediately.
 | type a name, press Enter | search (it also searches by itself after you pause typing) |
 | Region / Faction chips; Class and Level under *Advanced filters* | click to filter, click again to remove; nothing selected = everything; **Clear** resets all filters |
 | Lv [min] – [max] | level range; fill in either or both |
-| Sort: … ▾ | Default, Name, Combat power, Gear score or Level (Nearby / Recent keep enemies and allies grouped) |
+| Sort: … ▾ | Default, Latest (newest arrivals / most recently left / most recently starred), Name, Combat power, Gear score or Level (Nearby / Recent keep enemies and allies grouped) |
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
 | right-click a card | profile / favorite / copy name / refresh |
@@ -174,7 +174,7 @@ game traffic may be against AION 2's terms of service — use it at your own ris
 | red / green edge on a card | enemy / ally |
 | Faction / Class / Level | the usual filters apply here too (Faction = Elyos or Asmodian) |
 | a card still shimmering | the game showed the player; NCSOFT hasn't identified them yet |
-| Clear (status line, or right-click the tab or the list) | Nearby: move everyone to Recent (they come back as the game shows them again, or at once if they fight you); Recent: empty it |
+| Clear (right-click the tab or the list) | Nearby: move everyone to Recent (they come back as the game shows them again, or at once if they fight you); Recent: empty it |
 | ↺ Recent tab | who was around you in the last hour: players who left view, and everyone from your previous area when you teleport or change zone; ⚔ = they fought you |
 
 ### Who shows up, and where
