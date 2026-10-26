@@ -35,7 +35,7 @@ class ParseProfileTests(unittest.TestCase):
         g = self.p.gear
         self.assertEqual(g["MainHand"].name, "Spiritforged Longsword")
         self.assertEqual((g["MainHand"].enchant, g["MainHand"].grade), (15, "Unique"))
-        self.assertEqual(g["Bracelet2"].slot_label, "Bracelet 2")
+        self.assertEqual(g["Bracelet2"].slot_label, "Bracelet")
         self.assertIn("Arcana1", g)
         self.assertNotIn("Helmet", g)  # missing slots stay missing
 
