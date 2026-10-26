@@ -2206,10 +2206,12 @@ class SearchWindow:
             (t + 3750, lambda: self._demo_update_state("available")),
             (t + 3800, lambda: self._update_tip(True)),
             (t + 3850, lambda: self._grab(f"{base}-update-available.png")),
-            (t + 3860, lambda: self._demo_update_state("downloading", 0.6)),
-            (t + 3870, lambda: self._grab(f"{base}-update-downloading.png")),
-            (t + 3875, lambda: self._update_tip(False)),
-            (t + 3880, lambda: self._demo_update_state(None)),
+            (t + 9700, lambda: self._demo_update_state("downloading", 0.6)),
+            (t + 9750, lambda: self._update_tip(True)),
+            (t + 10000, lambda: self._grab(f"{base}-update-downloading.png")),
+            (t + 10100, lambda: self._update_tip(False)),
+            (t + 10200, lambda: self._demo_update_state(None)),
+            (t + 3880, lambda: (self._update_tip(False), self._demo_update_state(None))),
             (t + 3900, self.collapse),
             (t + 4900, self.expand),
             (t + 5500, lambda: self._grab(f"{base}-expanded.png")),
@@ -2226,7 +2228,7 @@ class SearchWindow:
             (t + 8000, lambda: self.set_borderless(False)),
             (t + 8800, lambda: self._grab(f"{base}-framed.png")),
             (t + 8900, lambda: self.set_borderless(True)),
-            (t + 9600, self.close),
+            (t + 10400, self.close),
         ]
         for delay, fn in steps:
             self.root.after(delay, fn)
