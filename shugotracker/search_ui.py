@@ -18,7 +18,7 @@ import requests
 from .aion2api import (CLASSES, REGION_LABELS, SUB_REGIONS, USER_AGENT, Api, Character, rank,
                        search_filters)
 from .favorites import Favorites
-from .columns import layout_columns
+from .columns import DEFAULT_COLUMNS, LABELS as COLUMN_LABELS, MENU_LABELS, clean_columns, layout_columns
 from .sorting import SORTS, sort_chars
 
 try:  # images are optional
@@ -479,6 +479,8 @@ class SearchWindow:
         self.hover_star = False
         self.hover_grip = False
         self._drag: dict | None = None             # favorites being dragged by the grip: {"key", "to"}
+        self._col_drag: dict | None = None         # a column header being dragged to a new place
+        self.columns = clean_columns(cfg.get("columns", DEFAULT_COLUMNS))
         self._dirty = True
         self._debounce = None
         self._update_look = None
@@ -675,7 +677,10 @@ class SearchWindow:
         self.list_wrap.pack(fill="both", expand=True, padx=(PAD - 8, 4), pady=(8, 0))
         self.hdr = tk.Canvas(self.list_wrap, bg=BG, height=28, highlightthickness=0, bd=0)
         self.hdr.pack(fill="x")
-        self.hdr.bind("<Button-1>", self._header_click)
+        self.hdr.bind("<ButtonPress-1>", self._header_press)
+        self.hdr.bind("<B1-Motion>", self._header_motion)
+        self.hdr.bind("<ButtonRelease-1>", self._header_release)
+        self.hdr.bind("<Button-3>", self._header_menu)
         self.hdr.bind("<Motion>", lambda e: self.hdr.config(cursor="hand2" if self._header_hit(e.x) else ""))
         body = tk.Frame(self.list_wrap, bg=BG)
         body.pack(fill="both", expand=True)
@@ -730,6 +735,7 @@ class SearchWindow:
         self.menu.add_command(label="Copy name", command=lambda: self._menu(self._copy_name))
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
         self._menu_base = 4                                  # Nearby / Recent add a Clear item below these
+        self.col_menu = StyledMenu(self.root, self.f_small)
         self.list_menu = StyledMenu(self.root, self.f_small)
         self.list_menu.add_command(label="Clear", command=self._clear_list)
         self._menu_char: Character | None = None
@@ -1128,15 +1134,18 @@ class SearchWindow:
             return {c.key: i for i, c in enumerate(self.fav_chars)}    # starred order acts as the time
         return {}
 
-    # ───── table columns ─────
-    COLUMNS = [("name", "Name"), ("legion", "Legion"), ("class", "Class"), ("level", "Lv"), ("server", "Server"),
-               ("gs", "GS"), ("cp", "CP")]
+    # ───── table columns (right-click the header to show / hide them, drag one to move it) ─────
+    def _column_keys(self) -> list[str]:
+        """The columns to show after Name, in the user's order. Last seen only means something on Recent."""
+        recent = self.mode in ("nearby", "recent") and self.nearby_view == "recent"
+        return [k for k in self.columns if k != "seen" or recent]
 
     def _cols(self, width: int) -> dict:
         """Where each column sits for a list this wide (columns grow with the window and drop out when it's
-        narrow: see columns.py). Cached per width."""
-        if getattr(self, "_cols_cache", (None,))[0] != width:
-            self._cols_cache = (width, layout_columns(width))
+        narrow: see columns.py). Cached per width and column set."""
+        key = (width, tuple(self._column_keys()))
+        if getattr(self, "_cols_cache", (None,))[0] != key:
+            self._cols_cache = (key, layout_columns(width, list(key[1])))
         return self._cols_cache[1]
 
     def _draw_header(self, width: int):
@@ -1145,18 +1154,22 @@ class SearchWindow:
         if not self._view and self.mode != "search":
             return
         k = self._cols(width)
-        for key, label in self.COLUMNS:
-            if key not in k["spans"]:
-                continue
-            x0, xr, anchor = k["spans"][key]
+        hh = int(hv.cget("height"))
+        moving = self._col_drag["key"] if self._col_drag and self._col_drag.get("moved") else None
+        for key, (x0, xr, anchor) in k["spans"].items():
+            label = COLUMN_LABELS[key]
             on = self.sort_key == key
             if on:
                 natural_desc = SORTS[key][1]
                 arrow = "↓" if natural_desc != self.sort_rev else "↑"
                 label = f"{label} {arrow}" if anchor == "w" else f"{arrow} {label}"
-            hv.create_text(x0 if anchor == "w" else xr, int(hv.cget("height")) // 2, text=label, anchor=anchor,
-                           fill=ACCENT if on else FG_DIM, font=self.f_sbold if on else self.f_small)
-        hh = int(hv.cget("height"))
+            hv.create_text(x0 if anchor == "w" else xr, hh // 2, text=label, anchor=anchor,
+                           fill=ACCENT if on or key == moving else FG_DIM,
+                           font=self.f_sbold if on or key == moving else self.f_small)
+        if moving:                                  # where the dragged column will land
+            x = self._col_drop_x(k, self._col_drag["x"])
+            if x is not None:
+                hv.create_line(x, 3, x, hh - 3, fill=ACCENT, width=2)
         hv.create_line(0, hh - 1, k["x1"], hh - 1, fill=LINE)
 
     def _header_hit(self, x: int) -> str | None:
@@ -1166,10 +1179,75 @@ class SearchWindow:
                 return key
         return None
 
-    def _header_click(self, e):
+    def _col_slot(self, k: dict, x: int) -> int:
+        """Index in the shown (non-Name) columns that a drop at x lands before."""
+        shown = [key for key in k["spans"] if key != "name"]
+        for i, key in enumerate(shown):
+            x0, xr, _a = k["spans"][key]
+            if x < (x0 + xr) / 2:
+                return i
+        return len(shown)
+
+    def _col_drop_x(self, k: dict, x: int) -> float | None:
+        shown = [key for key in k["spans"] if key != "name"]
+        if not shown:
+            return None
+        i = self._col_slot(k, x)
+        if i < len(shown):
+            return k["spans"][shown[i]][0] - 5
+        return k["spans"][shown[-1]][1] + 5
+
+    def _header_press(self, e):
         key = self._header_hit(e.x)
-        if key:
-            self._set_sort(key)
+        self._col_drag = {"key": key, "x0": e.x, "x": e.x, "moved": False} if key else None
+
+    def _header_motion(self, e):
+        d = self._col_drag
+        if not d or d["key"] == "name":
+            return
+        d["x"] = e.x
+        if abs(e.x - d["x0"]) > 6:
+            d["moved"] = True
+            self.hdr.config(cursor="sb_h_double_arrow")
+        if d["moved"]:
+            self._draw_header(max(self.canvas.winfo_width(), 200))
+
+    def _header_release(self, e):
+        d, self._col_drag = self._col_drag, None
+        self.hdr.config(cursor="hand2" if self._header_hit(e.x) else "")
+        if not d:
+            return
+        if not d["moved"]:
+            self._set_sort(d["key"])                 # a plain click sorts
+            return
+        k = self._cols(max(self.canvas.winfo_width(), 200))
+        shown = [key for key in k["spans"] if key != "name"]
+        i = self._col_slot(k, e.x)
+        before = shown[i] if i < len(shown) else None
+        cols = [c for c in self.columns if c != d["key"]]
+        cols.insert(cols.index(before) if before in cols else len(cols), d["key"])
+        self._set_columns(cols)
+
+    def _set_columns(self, cols: list[str]):
+        self.columns = clean_columns(cols)
+        self.cfg["columns"] = list(self.columns)
+        self.save_cfg()
+        self._mark()
+
+    def _header_menu(self, e):
+        """Right-click the header: tick the columns to show."""
+        m = self.col_menu
+        m.delete(0, "end")
+        for key in DEFAULT_COLUMNS:
+            on = key in self.columns
+            label = MENU_LABELS[key] + ("  (Recent)" if key == "seen" else "")
+
+            def toggle(k=key, on=on):
+                self._set_columns([c for c in self.columns if c != k] if on else self.columns + [k])
+            m.add_command(label=("✓   " if on else "      ") + label, command=toggle, selected=on)
+        m.add_separator()
+        m.add_command(label="Reset columns", command=lambda: self._set_columns(list(DEFAULT_COLUMNS)))
+        m.post(e.x_root, e.y_root)
 
     def _set_sort(self, key: str):
         """A column click: sort by it, then the other way, then back to the list's own order."""
@@ -1351,10 +1429,13 @@ class SearchWindow:
         tx = x + self.portrait_px + 9
         # name cell: when they left (Recent), or the legion when its column doesn't fit, gives way first
         extra = f"<{c.legion}>" if c.legion and "legion" not in sp else ""
+        seen = ""
         if self.mode in ("nearby", "recent") and self.nearby_view == "recent":
             left_at, fought = getattr(self, "_recent_info", {}).get(c.name, (None, False))
             if left_at:
-                extra = f"{'⚔ ' if fought else ''}{ago(time.time() - left_at)}"
+                seen = f"{'⚔ ' if fought else ''}{ago(time.time() - left_at)}"
+                if "seen" not in sp:                 # its column doesn't fit (or is hidden): next to the name
+                    extra = seen
         name = elide(self.f_bold, c.name, name_r - tx - 12)
         nid = cv.create_text(tx, cy, text=name, fill=FG, font=self.f_bold, anchor="w", tags="card")
         nx = cv.bbox(nid)[2] + 6
@@ -1375,6 +1456,7 @@ class SearchWindow:
         cell("legion", c.legion or "", FG_DIM)
         cell("class", c.class_name or "", cls_col)
         cell("level", str(c.level) if c.level else "", FG)
+        cell("seen", seen, FG_DIM)
         if c.server_name:
             region = REGION_NAMES.get(c.region, (c.region or "").upper())
             cell("server", f"{c.server_name} · {region}" if region else c.server_name, FG_DIM)
@@ -1388,22 +1470,30 @@ class SearchWindow:
                 cv.create_image(k["star"], cy, image=simg, tags="card")
             else:
                 cv.create_text(k["star"], cy, text="★" if fav else "☆", fill=col, font=self.f_star, tags="card")
-        # numbers
-        gs_r, cp_r = sp["gs"][1], sp["cp"][1]
+        # numbers (either column may be hidden or moved)
+        gs, cp = sp.get("gs"), sp.get("cp")
         if c.status == "ok":
-            cv.create_text(gs_r, cy, text=fmt_int(c.gear_score), fill=FG, font=self.f_small, anchor="e",
-                           tags="card")
-            cv.create_text(cp_r, cy, text=fmt_int(c.combat_power), fill=ACCENT, font=self.f_bold, anchor="e",
-                           tags="card")
+            if gs:
+                cv.create_text(gs[1], cy, text=fmt_int(c.gear_score), fill=FG, font=self.f_small, anchor="e",
+                               tags="card")
+            if cp:
+                cv.create_text(cp[1], cy, text=fmt_int(c.combat_power), fill=ACCENT, font=self.f_bold,
+                               anchor="e", tags="card")
             return False
+        note = cp or gs
         if c.status == "unresolved":                 # a nearby player NCSOFT couldn't identify: no numbers
-            cv.create_text(cp_r, cy, text="—", fill=FG_FAINT, font=self.f_bold, anchor="e", tags="card")
+            if note:
+                cv.create_text(note[1], cy, text="—", fill=FG_FAINT, font=self.f_bold, anchor="e", tags="card")
             return False
         if c.status == "error":
-            cv.create_text(cp_r, cy, text="Couldn't load", fill=RED, font=self.f_small, anchor="e", tags="card")
+            if note:
+                cv.create_text(note[1], cy, text=elide(self.f_small, "Couldn't load", note[1] - note[0] + 40),
+                               fill=RED, font=self.f_small, anchor="e", tags="card")
             return False
-        round_rect(cv, gs_r - 34, cy - 5, gs_r, cy + 5, 5, fill=b, outline="", tags="card")
-        round_rect(cv, cp_r - 50, cy - 5, cp_r, cy + 5, 5, fill=a, outline="", tags="card")
+        for span, w, tone in ((gs, 34, b), (cp, 50, a)):
+            if span:
+                w = min(w, span[1] - span[0])
+                round_rect(cv, span[1] - w, cy - 5, span[1], cy + 5, 5, fill=tone, outline="", tags="card")
         return True
 
     def _update_status(self, view):
@@ -2088,6 +2178,12 @@ class SearchWindow:
         self._right_click(ev, demo=True)
         self.root.update_idletasks()
 
+    def _demo_header_menu(self):
+        """Screenshots only: the header's column menu."""
+        x, y = self.hdr.winfo_rootx() + 160, self.hdr.winfo_rooty() + 14
+        self._header_menu(type("E", (), {"x": 160, "y": 14, "x_root": x, "y_root": y})())
+        self.root.update_idletasks()
+
     def _demo_fav_drag(self, start: bool):
         """Screenshots only: pick up the first favorite by its grip and hold it over the second slot."""
         ev = type("E", (), {"x": 10, "y": self.row_h // 2})()
@@ -2188,6 +2284,9 @@ class SearchWindow:
             (t + 4600, lambda: self.nearby and self.nearby.state == "capturing" and self.demo_teleport()),
             (t + 5200, lambda: self._set_mode("recent")),
             (t + 5800, lambda: self._grab(f"{base}-nearby-recent.png")),
+            (t + 5850, lambda: self._demo_header_menu()),
+            (t + 5900, lambda: self._grab(f"{base}-columns-menu.png")),
+            (t + 5950, lambda: self.col_menu.unpost()),
             (t + 6000, lambda: self._set_mode("nearby")),
             (t + 6100, lambda: self.set_nearby_enabled(False)),
             (t + 6300, lambda: self._set_mode("search")),

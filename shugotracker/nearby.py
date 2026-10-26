@@ -16,7 +16,7 @@ from typing import Callable
 
 from . import servers as sv
 from .aion2api import Api, Character, class_pc_ids
-from .protocol import Hit, MapLoaded, Opcodes, SelfSeen, StreamDecoder
+from .protocol import EntityActive, Hit, MapLoaded, Opcodes, SelfSeen, StreamDecoder
 from .tracker import ALLY, ENEMY, UNKNOWN, Lookup, Player, Tracker
 
 NPCAP_URL = "https://npcap.com/#download"
@@ -75,6 +75,9 @@ class NearbyService:
         self._last_players: dict[str, Player] = {}
         self._recent_players: dict[str, Player] = {}
         self._recent_ids: dict[int, str] = {}         # entity id -> name, for players on Recent
+        # players moved to Recent while possibly still around (Clear Nearby, gone quiet): any record about them
+        # puts them back on Nearby. Not those who left view or were left behind by a map change.
+        self._parked: dict[int, str] = {}
         self._map_loads_seen = False
         self._my_region: str | None = cfg.get("nearby_region") or None
         self.on_region: Callable[[str], None] = lambda r: None   # remember it (set by the app)
@@ -138,6 +141,7 @@ class NearbyService:
         with self._lock:
             self.tracker.clear()
             self._decoders.clear()
+            self._parked.clear()
         self._set_state(OFF, "")
 
     def start_demo(self, feed: Callable[["NearbyService"], None]) -> None:
@@ -162,6 +166,7 @@ class NearbyService:
             with self._lock:
                 self.tracker.clear()
                 self._background.clear()
+                self._parked.clear()
         elif "error" in low:
             self._set_state(ERROR, msg)
 
@@ -180,14 +185,28 @@ class NearbyService:
             dec = self._decoders.get(flow)
             if dec is None:
                 dec = self._decoders[flow] = StreamDecoder(emit=self._on_event, known_servers=sv.KNOWN_SERVERS,
-                                                           opcodes=self.opcodes)
+                                                           opcodes=self.opcodes, watch=self._watching)
             if gap:
                 dec.reset()
             dec.feed(data)
 
+    def _watching(self, eid: int) -> bool:     # decoder callback (lock held)
+        return eid in self._parked or eid in self.tracker.by_id
+
     def _on_event(self, ev) -> None:          # called with self._lock held
+        if isinstance(ev, EntityActive):
+            name = self.tracker.by_id.get(ev.entity_id)
+            if name in self.tracker.players:
+                self.tracker.players[name].last_seen = time.time()     # still here: don't let them expire
+            else:
+                name = self._parked.pop(ev.entity_id, None)
+                if name and name in self._recent and name not in self.tracker.players:
+                    self._restore(name, ev.entity_id)
+            return
         if isinstance(ev, MapLoaded):
             self._map_loads_seen = True
+            if ev.map_id != self.tracker.map_id:
+                self._parked.clear()                # a new area: those ids mean other things now
         elif isinstance(ev, SelfSeen) and self.tracker.players and not self._map_loads_seen:
             # Fallback when map-load records aren't coming through: your own record is sent on every area
             # load. (With map loads seen, those decide: same map = respawn, keep everyone.)
@@ -217,9 +236,12 @@ class NearbyService:
             self._recent_players.pop(n, None)
         self._last_players.update(self.tracker.players)
 
-    def _to_recent(self, players: list[Player]) -> None:
+    def _to_recent(self, players: list[Player], park: bool = False) -> None:
         now = time.time()
         for p in players:
+            if park:
+                for eid in p.entity_ids:
+                    self._parked[eid] = p.name
             side = self.tracker.side(p)
             self._recent[p.name] = (side, self._character(p), now, bool(p.last_combat))
             self._recent.move_to_end(p.name)
@@ -236,7 +258,7 @@ class NearbyService:
         with self._lock:
             players = list(self.tracker.players.values())
             if players:
-                self._to_recent(players)
+                self._to_recent(players, park=True)
                 self.tracker.clear()
 
     def clear_recent(self) -> None:
@@ -244,6 +266,7 @@ class NearbyService:
             self._recent.clear()
             self._recent_players.clear()
             self._recent_ids.clear()
+            self._parked.clear()
             self._v += 1
 
     def _restore(self, name: str, eid: int) -> None:
@@ -401,7 +424,7 @@ class NearbyService:
                 self.tracker.expire(now)
                 gone = before - set(self.tracker.players)
                 if gone:
-                    self._to_recent([self._last_players[n] for n in gone if n in self._last_players])
+                    self._to_recent([self._last_players[n] for n in gone if n in self._last_players], park=True)
             me = self.tracker.me
             if not me.server:
                 # Until the game names you: the side most players around you are on is almost always yours.

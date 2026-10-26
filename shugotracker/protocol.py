@@ -79,7 +79,15 @@ class MapLoaded:
     map_id: int
 
 
-Event = SelfSeen | PlayerSeen | OwnerRecord | Hit | EntityGone | MapLoaded
+@dataclass(frozen=True)
+class EntityActive:
+    """A record about an entity we're watching (its id opens the record): the game is still sending us updates
+    about it, so it's in view."""
+    entity_id: int
+
+
+Event = SelfSeen | PlayerSeen | OwnerRecord | Hit | EntityGone | MapLoaded | EntityActive
+SPAWN_DEDUPE_S = 2.0     # the same spawn record repeated within this window is one sighting
 
 
 # ───────────────────────── opcodes ─────────────────────────
@@ -294,14 +302,17 @@ class StreamDecoder:
     """
 
     def __init__(self, emit: Callable[[Event], None], known_servers: set[int],
-                 opcodes: Opcodes | None = None, debug: Callable[[str], None] | None = None):
+                 opcodes: Opcodes | None = None, debug: Callable[[str], None] | None = None,
+                 watch: Callable[[int], bool] | None = None):
         self.emit = emit
+        self.watch = watch               # entity ids to report activity for (EntityActive)
         self.known_servers = known_servers
         self.op = (opcodes or Opcodes()).compiled()
         self.debug = debug
         self._buf = b""
-        # Identity records are often repeated in several places; dedupe recent ones.
-        self._recent: dict[tuple, None] = {}
+        # Identity records are repeated in several places of one burst: dedupe copies seen moments ago. (Only
+        # moments: the same player walking away and back sends the same record again, and that one counts.)
+        self._recent: dict[tuple, float] = {}
         self._self_at: dict[tuple, float] = {}
 
     # ---- stream entry ----
@@ -333,12 +344,23 @@ class StreamDecoder:
             if f.bundle:
                 self._bundle(inner[f.payload_start:], depth + 1)
             else:
+                self._activity(inner, f.payload_start)
                 self._parse_damage(inner, f.payload_start)
                 self._parse_lifecycle(inner, f.payload_start)
         self._scan_identities(data)
         self._scan_ownership(data)
 
+    def _activity(self, packet: bytes, body_off: int) -> None:
+        if self.watch is None or body_off + 3 > len(packet):
+            return
+        if _at(packet, body_off, self.op.object_gone) or _at(packet, body_off, self.op.death):
+            return                       # "left view" / "died" is about the entity too, but not "still here"
+        eid, ln = read_varint(packet, body_off + 2)
+        if ln > 0 and 1 <= eid <= MAX_ENTITY_ID and self.watch(eid):
+            self.emit(EntityActive(eid))
+
     def _packet(self, packet: bytes, body_off: int) -> None:
+        self._activity(packet, body_off)
         self._parse_damage(packet, body_off)
         self._parse_lifecycle(packet, body_off)
         self._scan_identities(packet)
@@ -503,8 +525,11 @@ class StreamDecoder:
             self._self_at[key] = now
             self.emit(SelfSeen(eid, name, server, cls, level))
             return o
-        if key not in self._recent:
-            self._recent[key] = None
+        import time as _time
+        now = _time.monotonic()
+        if now - self._recent.get(key, -1e9) >= SPAWN_DEDUPE_S:
+            self._recent.pop(key, None)
+            self._recent[key] = now
             if len(self._recent) > 4096:
                 self._recent.pop(next(iter(self._recent)))
             if is_self:

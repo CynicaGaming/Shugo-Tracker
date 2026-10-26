@@ -72,10 +72,12 @@ Everything is saved immediately.
 | type a name, press Enter | search (it also searches by itself after you pause typing) |
 | Region / Faction toggles; Class and Level under **More** | click to filter, click again to remove; **All** (or nothing selected) = every region; **Clear** resets all filters |
 | Lv [min] – [max] | level range; fill in either or both |
-| column headers (Name, Legion, Class, Lv, Server, GS, CP) | click to sort by that column, again to flip it, a third time to go back to the list's own order (Nearby / Recent keep enemies and allies grouped) |
+| column headers (Name, Legion, Class, Lv, Server, GS, CP, and on Recent: Last seen) | click to sort by that column, again to flip it, a third time to go back to the list's own order (Nearby / Recent keep enemies and allies grouped) |
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
 | right-click a card | profile / favorite / copy name / refresh |
+| right-click the column headers | tick which columns to show (Reset columns brings back the default set) |
+| drag a column header | move that column (Name stays first) |
 | drag ⋮⋮ on a favorite | reorder Favorites (switches back to your own order if a column sort is on) |
 | window edges and corners | drag to resize; columns widen with the window, and Server, then Legion, then Class step aside when it's narrow |
 | 📌 | keep the window above other windows |

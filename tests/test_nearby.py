@@ -322,3 +322,46 @@ class ManualClearTests(unittest.TestCase):
         self.assertEqual([c.name for _s, c, _p in svc.snapshot()], ["Foe"])
         svc.clear_recent()
         self.assertEqual(svc.recent(), [])
+
+
+class ComingBackTests(unittest.TestCase):
+    def make(self):
+        svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae"})
+        feed = lambda *b: svc.on_bytes(("a", 1, "b", 2), b"".join(frame(x) for x in b), False)  # noqa: E731
+        return svc, feed
+
+    def names(self, svc):
+        return sorted(c.name for _s, c, _p in svc.snapshot())
+
+    def test_same_player_walking_back_into_view_returns(self):
+        # v1.25 and earlier: a re-sent spawn record (same entity id) was dropped as a duplicate forever
+        from shugotracker import protocol as P
+        from tests.test_scout import gone
+        old, P.SPAWN_DEDUPE_S = P.SPAWN_DEDUPE_S, 0.0             # (the walk back takes longer than 2 s)
+        self.addCleanup(setattr, P, "SPAWN_DEDUPE_S", old)
+        svc, feed = self.make()
+        feed(self_record(100, "Mine", 1101), other_record(300, "Pal"))
+        feed(gone(300))
+        self.assertEqual(self.names(svc), [])
+        feed(other_record(300, "Pal"))                             # Pal walks back: the game re-sends them
+        self.assertEqual(self.names(svc), ["Pal"])
+        self.assertEqual(svc.recent(), [])
+
+    def test_cleared_players_still_around_come_back(self):
+        from shugotracker.protocol import encode_varint
+        svc, feed = self.make()
+        feed(self_record(100, "Mine", 1101), other_record(200, "Foe"), other_record(300, "Pal"))
+        svc.clear_nearby()
+        self.assertEqual(self.names(svc), [])
+        feed(b"\x1d\x37" + encode_varint(300) + b"\x00" * 12)       # any update about Pal: Pal's still here
+        self.assertEqual(self.names(svc), ["Pal"])
+        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Foe"])
+
+    def test_left_behind_players_dont_come_back_on_an_id_match(self):
+        from shugotracker.protocol import encode_varint
+        from tests.test_scout import map_load
+        svc, feed = self.make()
+        feed(map_load(61), self_record(100, "Mine", 1101), other_record(300, "Pal"))
+        feed(map_load(12))                                         # a new area: 300 is someone else here
+        feed(b"\x1d\x37" + encode_varint(300) + b"\x00" * 12)
+        self.assertEqual(self.names(svc), [])

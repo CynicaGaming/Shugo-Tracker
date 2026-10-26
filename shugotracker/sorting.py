@@ -6,6 +6,7 @@ SIDE_ORDER = {"enemy": 0, "ally": 1}
 SORTS = {
     "default": (None, False),
     "latest": (None, True),
+    "seen": (None, True),             # Recent: when they left, newest first
     "name": (lambda c: c.name.casefold(), False),
     "legion": (lambda c: (c.legion or "").casefold() or None, False),
     "class": (lambda c: (c.class_name or "").casefold() or None, False),
@@ -22,7 +23,7 @@ def sort_chars(chars: list, key: str, side_of: dict | None = None, when: dict | 
     -> time) drives 'latest'. Each column has a natural direction (numbers biggest first, text A–Z); reverse
     flips it. Rows with nothing to sort by go last either way; with no sort at all, order is kept."""
     when = when or {}
-    if key == "latest" and when:
+    if key in ("latest", "seen") and when:
         value = lambda c: when.get(c.key, when.get(c.name))             # noqa: E731
         desc = True
     else:

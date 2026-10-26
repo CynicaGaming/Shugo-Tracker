@@ -12,17 +12,35 @@ SPEC = [
     ("server", 90, 200, 2, "w", 1),
     ("gs", 44, 52, 0, "e", 0),
     ("cp", 60, 72, 0, "e", 0),
+    ("seen", 64, 96, 0, "w", 2),
 ]
+SPEC_BY_KEY = {c[0]: c for c in SPEC}
+LABELS = {"name": "Name", "legion": "Legion", "class": "Class", "level": "Lv", "server": "Server", "gs": "GS",
+          "cp": "CP", "seen": "Last seen"}
+MENU_LABELS = {**LABELS, "level": "Level", "gs": "Gear score", "cp": "Combat power"}
+DEFAULT_COLUMNS = ["legion", "class", "level", "server", "gs", "cp", "seen"]   # Name always comes first
 
 
-def layout_columns(width: int) -> dict:
-    """{"x1": right edge, "star": star centre x, "spans": {key: (left, right, anchor)}} for a list `width` wide.
-    Columns grow with the window (each by its share, up to its max; Name takes the rest) and drop out in
-    order (Server, then Legion, then Class) when it gets narrow."""
+def clean_columns(cols) -> list[str]:
+    """A saved column list, made safe: known keys, no repeats, no Name (it's always there)."""
+    if not isinstance(cols, list):
+        return list(DEFAULT_COLUMNS)
+    out = []
+    for k in cols:
+        if k in SPEC_BY_KEY and k != "name" and k not in out:
+            out.append(k)
+    return out
+
+
+def layout_columns(width: int, keys: list[str] | None = None) -> dict:
+    """{"x1": right edge, "star": star centre x, "spans": {key: (left, right, anchor)}} for a list `width` wide,
+    showing Name then `keys` in that order. Columns grow with the window (each by its share, up to its max;
+    Name takes the rest) and drop out in order (Server, then Legion / Last seen, then Class) when it's narrow."""
     x1 = width - 6
     left, right = 8, x1 - STAR_W
     avail = right - left
-    cols = list(SPEC)
+    keys = DEFAULT_COLUMNS[:-1] if keys is None else keys
+    cols = [SPEC_BY_KEY["name"]] + [SPEC_BY_KEY[k] for k in keys if k in SPEC_BY_KEY and k != "name"]
 
     def need(cs):
         return sum(c[1] for c in cs) + GAP * (len(cs) - 1)
