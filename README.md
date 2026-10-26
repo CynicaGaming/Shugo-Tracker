@@ -23,9 +23,19 @@ or affiliated with NCSOFT or Shugo.GG.*
 2. Run it. SmartScreen may warn the first time because the exe isn't code-signed: *More info → Run anyway*.
    No administrator rights or extra installs are needed.
 
-`config.json`, `favorites.json`, the cache (`cache\shugo.db`: card numbers, profiles and Nearby name lookups in one small
-SQLite file, plus `cache\images`) and `shugo-tracker.log` are kept in `%APPDATA%\ShugoTracker`, so they
-survive updates and moving the exe (older versions kept them next to the exe; they're moved over on first start).
+Shugo Tracker is portable: everything it keeps lives in its own folder, next to the exe, so you can move or
+copy the whole folder anywhere (another drive, a USB stick, another PC) and it carries on where it left off.
+
+```
+ShugoTracker.exe
+data\    config.json, favorites.json
+cache\   shugo.db (card numbers, profiles and Nearby name lookups in one small SQLite file), images\
+logs\    shugo-tracker.log, diagnostics\ (Nearby recordings)
+```
+
+Updates replace only the exe, so all of this stays. Versions up to 1.22 kept these files in
+`%APPDATA%\ShugoTracker`; they're moved into the app's folder on first start and the old folder is removed.
+(Only if the app's folder can't be written to, e.g. inside Program Files, does it use `%APPDATA%\ShugoTracker`.)
 `ShugoTracker.exe --demo` shows the window with made-up characters (no network).
 
 ## The overlay
@@ -50,7 +60,7 @@ available, a green download icon appears next to 📌: click it to download, the
 |---|---|
 | Window | layout (Full or Compact rows); borderless window (off = the normal Windows frame); opacity (100% by default); always on top; close to tray |
 | Updates | check for updates automatically; check now |
-| Data | cache size and Clear; open the folder with settings, favorites and cache |
+| Data | cache size and Clear; open the app folder |
 
 Everything is saved immediately.
 

@@ -20,22 +20,44 @@ FROZEN = getattr(sys, "frozen", False)
 HERE = os.path.dirname(sys.executable) if FROZEN else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _data_dir() -> str:
-    """
-    Where settings, favorites and caches live. The packaged app uses %APPDATA%\\ShugoTracker so they survive
-    updates, moving the exe, or running a freshly downloaded copy from somewhere else.
-    """
-    if FROZEN and os.name == "nt" and os.environ.get("APPDATA"):
-        return os.path.join(os.environ["APPDATA"], "ShugoTracker")
-    return HERE
+def _writable(folder: str) -> bool:
+    try:
+        os.makedirs(folder, exist_ok=True)
+        probe = os.path.join(folder, ".write-test")
+        with open(probe, "w") as f:
+            f.write("ok")
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
 
 
-DATA = _data_dir()
+def _app_root() -> str:
+    """
+    Everything the app keeps lives in its own folder, so the whole folder can be moved or copied anywhere:
+
+        ShugoTracker.exe
+        data\\    config.json, favorites.json
+        cache\\   shugo.db (card numbers, profiles, Nearby lookups), images\\
+        logs\\    shugo-tracker.log, diagnostics\\ (Nearby recordings)
+
+    Only if that folder can't be written to (e.g. Program Files) does it fall back to %APPDATA%\\ShugoTracker.
+    """
+    if _writable(os.path.join(HERE, "data")):
+        return HERE
+    return os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "ShugoTracker")
+
+
+ROOT = _app_root()
+DATA = os.path.join(ROOT, "data")
+CACHE = os.path.join(ROOT, "cache")
+LOGS = os.path.join(ROOT, "logs")
+OLD_APPDATA = os.path.join(os.environ["APPDATA"], "ShugoTracker") if os.environ.get("APPDATA") else None
 USER_FILES = ("config.json", "favorites.json", "character_cache.json")   # (the last is imported into cache/shugo.db)
 
 
 def migrate_user_files(old_dir: str, new_dir: str) -> list[str]:
-    """Bring files that older versions kept next to the exe into the data folder. Returns what moved."""
+    """Bring settings / favorites an older version kept in old_dir into the data folder. Returns what moved."""
     import shutil
     moved = []
     if os.path.normcase(os.path.abspath(old_dir)) == os.path.normcase(os.path.abspath(new_dir)):
@@ -60,6 +82,8 @@ def migrate_user_files(old_dir: str, new_dir: str) -> list[str]:
         except OSError:
             pass
     return moved
+
+
 DEFAULT_CONFIG = {
     "my_server": "",
     "lookup_allies": True,
@@ -79,6 +103,41 @@ DEFAULT_CONFIG = {
     "window_pos": [80, 80],
     "opcodes": {},
 }
+
+
+def migrate_to_app_folder(root: str | None = None, old: str | None = None) -> list[str]:
+    """
+    v1.22 and earlier kept everything in %APPDATA%\\ShugoTracker (and before that, loose next to the exe). Move it
+    all into the app's own folders, then remove the old folder. Returns what moved.
+    """
+    import shutil
+    root = root or ROOT
+    old = OLD_APPDATA if old is None else old
+    data, cache, logs = (os.path.join(root, d) for d in ("data", "cache", "logs"))
+    moved = migrate_user_files(root, data)                  # loose files next to the exe (oldest versions)
+    if not old or not os.path.isdir(old) or \
+            os.path.normcase(os.path.abspath(old)) == os.path.normcase(os.path.abspath(root)):
+        return moved
+    moved += migrate_user_files(old, data)
+    failed = False
+    for src, dst in ((os.path.join(old, "cache"), cache),
+                     (os.path.join(old, "diagnostics"), os.path.join(logs, "diagnostics"))):
+        if not os.path.isdir(src):
+            continue
+        for dirpath, _dirs, files in os.walk(src):
+            target = os.path.join(dst, os.path.relpath(dirpath, src))
+            os.makedirs(target, exist_ok=True)
+            for f in files:
+                if not os.path.exists(os.path.join(target, f)):
+                    try:
+                        shutil.move(os.path.join(dirpath, f), os.path.join(target, f))
+                        moved.append(os.path.relpath(os.path.join(dirpath, f), old))
+                    except OSError:
+                        failed = True
+    failed = failed or any(os.path.isfile(os.path.join(old, n)) for n in ("config.json", "favorites.json"))
+    if not failed:
+        shutil.rmtree(old, ignore_errors=True)              # what's left: old logs and ".moved" traces
+    return moved
 
 
 def load_config(path: str) -> dict:
@@ -105,7 +164,8 @@ class App:
         self.log_lines: list[str] = []
         self._log_file = None
         try:
-            self._log_file = open(os.path.join(DATA, "shugo-tracker.log"), "w", encoding="utf-8")
+            os.makedirs(LOGS, exist_ok=True)
+            self._log_file = open(os.path.join(LOGS, "shugo-tracker.log"), "w", encoding="utf-8")
         except OSError:
             pass
         self.capture = None
@@ -308,7 +368,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     if demo:
         from .demo import DemoSession
         session = DemoSession()
-    cache_dir = None if (demo or screenshot) else os.path.join(DATA, "cache")
+    cache_dir = None if (demo or screenshot) else CACHE
     api = Api(db_path=os.path.join(cache_dir, "shugo.db") if cache_dir else None, session=session, log=log,
               migrate_from=(None, None) if demo else (os.path.join(DATA, "character_cache.json"),
                                                       os.path.join(cache_dir, "profiles") if cache_dir else None))
@@ -350,11 +410,11 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     if demo:
         from .demo import find_nearby
         nearby_find = find_nearby(session)
-    nearby = NearbyService(api, cfg, log=log, data_dir=DATA, find=nearby_find)
+    nearby = NearbyService(api, cfg, log=log, data_dir=LOGS, find=nearby_find)
 
     from .favorites import Favorites
     favorites = Favorites(None if (demo or screenshot) else os.path.join(DATA, "favorites.json"), log=log)
-    log(f"data folder: {DATA}  ·  {len(favorites)} favorites")
+    log(f"app folder: {ROOT}  ·  {len(favorites)} favorites")
     if screenshot:
         cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [],
                "factions": [], "classes": [], "level_min": None, "level_max": None, "nearby_enabled": False}
@@ -381,7 +441,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
                         pass
         return max(0, before - cache_size())
 
-    win.settings_services = SettingsServices(clear_cache=clear_cache, cache_size=cache_size, data_dir=DATA)
+    win.settings_services = SettingsServices(clear_cache=clear_cache, cache_size=cache_size, data_dir=ROOT)
     if instance:
         instance.on_show = lambda: post(("show",))
     if not screenshot:
@@ -555,7 +615,8 @@ def _bench(name: str) -> int:
 
 def _file_logger():
     try:
-        f = open(os.path.join(DATA, "shugo-tracker.log"), "w", encoding="utf-8")
+        os.makedirs(LOGS, exist_ok=True)
+        f = open(os.path.join(LOGS, "shugo-tracker.log"), "w", encoding="utf-8")
     except OSError:
         f = None
 
@@ -649,9 +710,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.selftest_relaunch:
         return _selftest_relaunch(args.selftest_relaunch, child=args.selftest_child)
 
-    if DATA != HERE and args.config == os.path.join(DATA, "config.json"):
+    if args.config == os.path.join(DATA, "config.json"):
         try:
-            migrate_user_files(HERE, DATA)
+            os.makedirs(DATA, exist_ok=True)
+            migrate_to_app_folder()
         except OSError:
             pass
     cfg = load_config(args.config)

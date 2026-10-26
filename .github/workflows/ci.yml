@@ -59,19 +59,19 @@ jobs:
           $mb = [math]::Round((Get-Item dist\ShugoTracker.exe).Length / 1MB, 1)
           Write-Output "::notice title=exe::ShugoTracker.exe is $mb MB"
           "exe size: $mb MB" | Set-Content ui-exe-size.txt
-          $fav = Join-Path $env:APPDATA "ShugoTracker\favorites.json"
-          Remove-Item $fav -ErrorAction SilentlyContinue
+          # portable: everything lives next to the exe, and moving the whole folder keeps it
+          Remove-Item dist\data, dist\cache, dist\logs -Recurse -ErrorAction SilentlyContinue
           $r1 = Join-Path $env:RUNNER_TEMP "fav1.txt"; $r2 = Join-Path $env:RUNNER_TEMP "fav2.txt"
           Start-Process dist\ShugoTracker.exe -ArgumentList "--selftest-favorites", "`"$r1`"" -Wait
-          New-Item -ItemType Directory -Force moved | Out-Null
-          Copy-Item dist\ShugoTracker.exe moved\ShugoTracker.exe
+          Copy-Item dist -Destination moved -Recurse
+          $fav = "moved\data\favorites.json"
           Start-Process moved\ShugoTracker.exe -ArgumentList "--selftest-favorites", "`"$r2`"" -Wait
           $a = Get-Content $r1 -ErrorAction SilentlyContinue; $b = Get-Content $r2 -ErrorAction SilentlyContinue
           Write-Output "::notice title=favorites::first run: $a"
           Write-Output "::notice title=favorites::second run: $b"
           "first: $a`nsecond: $b" | Set-Content ui-favorites-check.txt
           if (Test-Path $fav) { Get-Content $fav | Set-Content ui-favorites-file.txt }
-          $log = Join-Path $env:APPDATA "ShugoTracker\shugo-tracker.log"
+          $log = "moved\logs\shugo-tracker.log"
           if (Test-Path $log) { Get-Content $log | Set-Content ui-favorites-log.txt }
           if (-not ($b -like "loaded*")) { Write-Error "favorites did not survive a restart"; exit 1 }
 

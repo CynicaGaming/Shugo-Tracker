@@ -56,6 +56,27 @@ class FavoritesOnDiskTests(unittest.TestCase):
             self.assertEqual(app.migrate_user_files(old, new), [])      # nothing left to move
 
 
+class AppFolderTests(unittest.TestCase):
+    def test_appdata_moves_into_the_app_folder(self):
+        from shugotracker import app
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as appdata:
+            old = os.path.join(appdata, "ShugoTracker")
+            os.makedirs(os.path.join(old, "cache", "images"))
+            os.makedirs(os.path.join(old, "diagnostics"))
+            with open(os.path.join(old, "config.json"), "w") as f:
+                json.dump({"always_on_top": False}, f)
+            for rel in (("cache", "shugo.db"), ("cache", "images", "a.png"), ("diagnostics", "rec.bin"),
+                        ("shugo-tracker.log",)):
+                with open(os.path.join(old, *rel), "w") as f:
+                    f.write("x")
+            app.migrate_to_app_folder(root, old)
+            for rel in (("data", "config.json"), ("cache", "shugo.db"), ("cache", "images", "a.png"),
+                        ("logs", "diagnostics", "rec.bin")):
+                self.assertTrue(os.path.exists(os.path.join(root, *rel)), rel)
+            self.assertFalse(os.path.exists(old))            # the old folder is gone
+            self.assertEqual(app.migrate_to_app_folder(root, old), [])
+
+
 class RequestCeilingTests(unittest.TestCase):
     def test_recovery_never_passes_the_ceiling(self):
         api = a.Api()

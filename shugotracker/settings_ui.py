@@ -195,7 +195,7 @@ class SettingsView:
         self._button(r, "Clear", self._clear_cache).pack(side="right")
         self._show_cache_size()
         if self.services:
-            r, _ = self._row(card, "Settings & favorites folder")
+            r, _ = self._row(card, "App folder")
             self._button(r, "Open", lambda: desktop.open_folder(self.services.data_dir)).pack()
 
         about = tk.Frame(self.body, bg=BG)
