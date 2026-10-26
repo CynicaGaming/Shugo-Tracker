@@ -109,7 +109,8 @@ class FetchProfileTests(unittest.TestCase):
         return got[-1]
 
     def make(self, sess=None, profile_dir=None):
-        api = a.Api(session=sess or FakeSession(), rate=1000, profile_dir=profile_dir)
+        api = a.Api(session=sess or FakeSession(), rate=1000,
+                    db_path=os.path.join(profile_dir, "shugo.db") if profile_dir else None)
         self.addCleanup(api.close)
         return api
 

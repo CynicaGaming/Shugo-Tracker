@@ -8,8 +8,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from . import desktop
-from .search_ui import (ACCENT, ACCENT_FG, BG, BORDER, FG, FG_DIM, FG_FAINT, GREEN, PAD, RED, SURFACE, SURFACE_2,
-                        ThinScrollbar)
+from .search_ui import (ACCENT, ACCENT_FG, BG, BORDER, FG, FG_DIM, FG_FAINT, GOLD_SOFT, GOLD_TEXT, GREEN, PAD, RED,
+                        SURFACE, SURFACE_2, ThinScrollbar)
 from .settings import OPACITY_MIN, clamp_opacity
 
 if TYPE_CHECKING:
@@ -163,6 +163,11 @@ class SettingsView:
         a, cfg = self.app, self.cfg
 
         card = self._section("Window")
+        r, _ = self._row(card, "Layout")
+        self._choice(r, [("full", "Full"), ("compact", "Compact")], cfg.get("layout", "full"),
+                     lambda v: a.set_layout(v == "compact") or self._save())
+        r, _ = self._row(card, "Borderless window")
+        Switch(r, bool(cfg.get("borderless", True)), lambda on: (a.set_borderless(on), self._save())).pack()
         r, _ = self._row(card, "Opacity")
         Slider(r, clamp_opacity(cfg.get("window_opacity", 1.0)), OPACITY_MIN, 1.0, self._opacity).pack()
         r, _ = self._row(card, "Always on top")
@@ -176,11 +181,7 @@ class SettingsView:
             r, _ = self._row(card, "Show nearby players", "Reads AION 2's network traffic on this PC through Npcap")
             Switch(r, bool(cfg.get("nearby_enabled")), self._nearby).pack()
 
-        card = self._section("Startup & updates")
-        r, _ = self._row(card, "Start with Windows",
-                         None if desktop.autostart_supported() else "Available in the installed app")
-        Switch(r, desktop.get_autostart() if desktop.autostart_supported() else False, self._autostart,
-               enabled=desktop.autostart_supported()).pack()
+        card = self._section("Updates")
         r, _ = self._row(card, "Check for updates automatically")
         Switch(r, bool(cfg["auto_update"]), lambda on: self._set("auto_update", on)).pack()
         if a.updater is not None:
@@ -225,10 +226,27 @@ class SettingsView:
         self.app.root.attributes("-topmost", on)
         self.app._paint_pin()
 
-    def _autostart(self, on: bool):
-        ok = desktop.set_autostart(on)
-        self.cfg["start_with_windows"] = on if ok else desktop.get_autostart()
-        self._save()
+    def _choice(self, parent, options, current, on_pick):
+        """A small segmented control: one of options [(value, label)]."""
+        seg = tk.Frame(parent, bg=SURFACE_2, padx=2, pady=2)
+        seg.pack()
+        labels = {}
+
+        def paint(v):
+            for val, lb in labels.items():
+                on = val == v
+                lb.config(bg=GOLD_SOFT if on else SURFACE_2, fg=GOLD_TEXT if on else FG_DIM,
+                          font=self.app.f_sbold if on else self.app.f_small)
+
+        def pick(v):
+            paint(v)
+            on_pick(v)
+        for val, text in options:
+            lb = tk.Label(seg, text=text, padx=10, pady=2, cursor="hand2")
+            lb.pack(side="left", padx=(0, 1))
+            lb.bind("<Button-1>", lambda e, v=val: pick(v))
+            labels[val] = lb
+        paint(current)
 
     def _update_click(self):
         self.app._update_click()

@@ -1,5 +1,6 @@
 """Settings: migration from older versions, opacity, cache clearing, request ceiling, favorites on disk."""
 import json
+import time
 import os
 import tempfile
 import unittest
@@ -70,14 +71,18 @@ class ClearCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cp, pd = os.path.join(tmp, "details.json"), os.path.join(tmp, "profiles")
             with open(cp, "w") as f:
-                json.dump({"x": {"combat_power": 1, "ts": 9e12}}, f)
-            api = a.Api(cache_path=cp, profile_dir=pd)
-            self.addCleanup(api.close)
+                json.dump({"x": {"combat_power": 1, "legion": None, "ts": time.time()}}, f)
+            os.makedirs(pd)
             with open(os.path.join(pd, "p.json"), "w") as f:
                 f.write("{}")
+            api = a.Api(db_path=os.path.join(tmp, "shugo.db"), migrate_from=(cp, pd))
+            self.addCleanup(api.close)
+            # the old files were imported and removed
+            self.assertEqual((os.path.exists(cp), os.path.exists(pd)), (False, False))
+            self.assertIn("x", api._cache)
             api._search_cache[("a",)] = (0, {})
             api.clear_caches()
-            self.assertEqual((api._cache, api._search_cache, os.listdir(pd), os.path.exists(cp)), ({}, {}, [], False))
+            self.assertEqual((api._cache, api._search_cache, api.store.counts()["details"]), ({}, {}, 0))
 
 
 if __name__ == "__main__":

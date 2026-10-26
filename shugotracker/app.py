@@ -31,7 +31,7 @@ def _data_dir() -> str:
 
 
 DATA = _data_dir()
-USER_FILES = ("config.json", "favorites.json", "character_cache.json")
+USER_FILES = ("config.json", "favorites.json", "character_cache.json")   # (the last is imported into cache/shugo.db)
 
 
 def migrate_user_files(old_dir: str, new_dir: str) -> list[str]:
@@ -296,14 +296,22 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     migrate(cfg)
     log = _file_logger()
     log(f"Shugo Tracker v{__version__}" + (" (demo data)" if demo else ""))
+    if not demo and not screenshot:
+        try:                                    # "Start with Windows" is gone: undo it for anyone who had it on
+            from . import desktop
+            if desktop.autostart_supported() and desktop.get_autostart():
+                desktop.set_autostart(False)
+                log("startup: removed the Start with Windows entry")
+        except Exception:  # noqa: BLE001
+            pass
     session = None
     if demo:
         from .demo import DemoSession
         session = DemoSession()
     cache_dir = None if (demo or screenshot) else os.path.join(DATA, "cache")
-    api = Api(cache_path=None if demo else os.path.join(DATA, "character_cache.json"), session=session,
-              profile_dir=os.path.join(cache_dir, "profiles") if cache_dir else None,
-              log=log)
+    api = Api(db_path=os.path.join(cache_dir, "shugo.db") if cache_dir else None, session=session, log=log,
+              migrate_from=(None, None) if demo else (os.path.join(DATA, "character_cache.json"),
+                                                      os.path.join(cache_dir, "profiles") if cache_dir else None))
     updater = Updater(repo=cfg.get("update_repo") or "CynicaGaming/Shugo-Tracker",
                       enabled=bool(cfg.get("auto_update", True)) and not demo and not screenshot, log=log)
     updater.start()
@@ -358,15 +366,14 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         win.save_cfg = lambda: save_config(config_path, cfg)
 
     def cache_size() -> int:
-        size = folder_size(cache_dir) if cache_dir and os.path.isdir(cache_dir) else 0
-        cp = api.cache_path
-        return size + (os.path.getsize(cp) if cp and os.path.exists(cp) else 0)
+        return folder_size(cache_dir) if cache_dir and os.path.isdir(cache_dir) else 0
 
     def clear_cache() -> int:
         before = cache_size()
-        api.clear_caches()
-        if cache_dir and os.path.isdir(cache_dir):
-            for root, _dirs, files in os.walk(cache_dir):
+        api.clear_caches()                       # the database empties itself; the image files go here
+        images = os.path.join(cache_dir, "images") if cache_dir else None
+        if images and os.path.isdir(images):
+            for root, _dirs, files in os.walk(images):
                 for f in files:
                     try:
                         os.remove(os.path.join(root, f))
@@ -485,7 +492,7 @@ def _bench(name: str) -> int:
 
     def run(label: str) -> None:
         t0 = time.perf_counter()
-        api = Api(cache_path=os.path.join(tmp, "details.json"), profile_dir=os.path.join(tmp, "profiles"),
+        api = Api(db_path=os.path.join(tmp, "shugo.db"),
                   log=lambda m: print(f"  [{time.perf_counter() - t0:5.2f}s] {m}"))
         first, done, found, lock, left = [None], _t.Event(), [], _t.Lock(), [len(SUB_REGIONS)]
 

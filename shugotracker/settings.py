@@ -6,14 +6,16 @@ SETTING_DEFAULTS = {
     "always_on_top": True,
     "close_to_tray": False,         # ✕ hides to the tray instead of quitting
     "auto_update": True,
-    "start_with_windows": False,
+    "layout": "full",               # full | compact
+    "borderless": True,             # our own title bar; off = the normal Windows frame
 }
 
 OPACITY_MIN = 0.3   # never so faint that you lose the window
 
 # Keys older versions wrote that no longer mean anything (removed on load).
 RETIRED = ("pill_pos", "overlay", "idle_opacity", "opacity", "opacity_focused", "opacity_unfocused", "opacity_full_on_hover",
-           "requests_per_second", "detail_workers", "region", "faction", "max_level_only", "stat_details")
+           "requests_per_second", "detail_workers", "region", "faction", "max_level_only", "stat_details",
+           "start_with_windows")
 
 
 def migrate(cfg: dict) -> dict:
@@ -26,6 +28,8 @@ def migrate(cfg: dict) -> dict:
     for k, v in SETTING_DEFAULTS.items():
         cfg.setdefault(k, v)
     cfg["window_opacity"] = clamp_opacity(cfg["window_opacity"])
+    if cfg.get("layout") not in ("full", "compact"):
+        cfg["layout"] = "full"
     return cfg
 
 

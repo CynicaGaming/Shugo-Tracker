@@ -458,7 +458,8 @@ class SearchWindow:
         self.regions: set[str] = {r for r in cfg.get("regions", []) if r in SUB_REGIONS}
         self.factions: set[str] = {f for f in cfg.get("factions", []) if f in ("1", "2")}
         self.classes: set[str] = {c for c in cfg.get("classes", []) if c in CLASSES}
-        self.sort_key = cfg.get("sort", "default") if cfg.get("sort") in SORTS else "default"
+        self.sort_key = cfg.get("sort", "default") if cfg.get("sort") in SORTS and cfg.get("sort") != "latest" \
+            else "default"
         self.sort_rev = bool(cfg.get("sort_rev")) and self.sort_key not in ("default", "latest")
         self.level_min: int | None = _level_or_none(cfg.get("level_min"))
         self.level_max: int | None = _level_or_none(cfg.get("level_max"))
@@ -490,7 +491,7 @@ class SearchWindow:
 
         self.root = tk.Tk()
         self.root.title("Shugo Tracker")
-        self.overlay = True                      # frameless window with our own title bar (always)
+        self.overlay = bool(cfg.get("borderless", True))   # frameless window with our own title bar (Settings)
         self.root.configure(bg=BG)
         self.root.minsize(400, 380)
         w, h = cfg.get("window_size", [600, 760])
@@ -503,10 +504,6 @@ class SearchWindow:
         self._compact = None
         self.tray_ok = False                     # tray icons work here (set by the app)
         self.tray_icon = (lambda: False, lambda: None)   # (show, remove) the tray icon; set by the app
-        if self.overlay:
-            self.root.overrideredirect(True)   # our own title bar replaces the Windows frame
-        else:
-            self._dark_titlebar()
         from .settings import migrate
         migrate(cfg)
         self.save_cfg: Callable[[], None] = lambda: None   # set by the app
@@ -527,9 +524,12 @@ class SearchWindow:
         self.f_big = tkfont.Font(family=base, size=18, weight="bold")
         self.f_star = tkfont.Font(family="Segoe UI Symbol", size=11)
 
+        self.compact = cfg.get("layout") == "compact"
+        self.row_h, self.portrait_px = CARD_H, PORTRAIT
         self.images = ImageLoader(os.path.join(cache_dir, "images") if cache_dir else None)
         self._prefetch_job = None
         self._build(version)
+        self.set_layout(self.compact)
         self.root.after(30, self._tick)
         self.search_entry.focus_set()
         if initial_query:
@@ -564,22 +564,19 @@ class SearchWindow:
         self.tab_fav = self._segment(self.tabs, "Favorites", lambda: self._set_mode("favorites"))
         self.tab_near = self._segment(self.tabs, "Nearby", lambda: self._set_mode("nearby"))
         self.tab_recent = self._segment(self.tabs, "Recent", lambda: self._set_mode("recent"), pack=False)
-        self.tab_near.bind("<Button-3>", lambda e: self._tab_menu(e, "nearby"))
-        self.tab_recent.bind("<Button-3>", lambda e: self._tab_menu(e, "recent"))
         self.back_btn = tk.Label(head, bg=BG, fg=FG_DIM, font=self.f_bold, cursor="hand2", compound="left", padx=2)
         self._back_cmd = lambda: None
         self.back_btn.bind("<Button-1>", lambda e: self._back_cmd())
         self.back_btn.bind("<Enter>", lambda e: self.back_btn.config(fg=FG))
         self.back_btn.bind("<Leave>", lambda e: self.back_btn.config(fg=FG_DIM))
-        if self.overlay:
-            for w in (head, logo):
-                w.bind("<ButtonPress-1>", self._drag_start)
-                w.bind("<B1-Motion>", self._drag_move)
-                w.bind("<ButtonRelease-1>", lambda e: self._save_geometry())
-            close = self._title_button(head, "close", self.close_button, hover=RED)
-            close.pack(side="right")
-            collapse = self._title_button(head, "minimize", self.collapse)
-            collapse.pack(side="right")
+        for w in (head, logo):                   # drag the window by its title bar (borderless only)
+            w.bind("<ButtonPress-1>", self._drag_start)
+            w.bind("<B1-Motion>", self._drag_move)
+            w.bind("<ButtonRelease-1>", lambda e: self.overlay and self._save_geometry())
+        self.btn_close = self._title_button(head, "close", self.close_button, hover=RED)
+        self.btn_close.pack(side="right")
+        self.btn_min = self._title_button(head, "minimize", self.collapse)
+        self.btn_min.pack(side="right")
         self.gear = self._title_button(head, "cog", self.open_settings, hover=ACCENT)
         self.gear.pack(side="right")
         self.pin = self._title_button(head, "pin", self._toggle_pin, hover=ACCENT, repaint=lambda: self._paint_pin())
@@ -591,7 +588,7 @@ class SearchWindow:
         self._sync_update_button()
 
         self.top = tk.Frame(self.root, bg=BG)
-        self.top.pack(fill="x", padx=PAD, pady=(10, 0))
+        self.top.pack(fill="x", padx=PAD, pady=getattr(self, "_top_pad", (10, 0)))
         # a frame that loses all its packed children keeps its old height in Tk: this one is always there
         tk.Frame(self.top, bg=BG, height=1).pack(fill="x")
 
@@ -659,13 +656,10 @@ class SearchWindow:
         self._paint_chips()
         self._paint_tabs()
 
-        # footer: what's shown on the left, "Latest first" (Favorites / Nearby / Recent) on the right
+        # footer: what's shown
         self.status_row = tk.Frame(self.root, bg=BG)
         self.status_row.pack(side="bottom", fill="x")
         tk.Frame(self.status_row, bg=LINE, height=1).pack(fill="x")
-        self.latest_lb = tk.Label(self.status_row, text="Latest first", bg=BG, fg=FG_DIM, font=self.f_small,
-                                  cursor="hand2", padx=PAD, pady=6)
-        self.latest_lb.bind("<Button-1>", lambda e: self._toggle_latest())
         self.status = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, anchor="w",
                                padx=PAD, pady=6)
         self.status.pack(side="left", fill="x", expand=True)
@@ -699,34 +693,31 @@ class SearchWindow:
 
         self.nearby_panel = tk.Frame(self.list_wrap, bg=BG)
 
-        if self.overlay:
-            self.grip = tk.Label(self.root, text="◢", bg=BG, fg=FG_FAINT, font=self.f_tiny, cursor="size_nw_se")
-            self.grip.place(relx=1.0, rely=1.0, anchor="se")
-            self._bind_resize(self.grip, "se")
-            # resize from any edge or corner: thin grab zones along the border
-            self._zones = []
-            for edge, cursor, place in (
-                    ("n", "sb_v_double_arrow", dict(x=12, y=0, relwidth=1, width=-24, height=4)),
-                    ("s", "sb_v_double_arrow", dict(x=12, rely=1.0, y=-4, relwidth=1, width=-24, height=4)),
-                    ("w", "sb_h_double_arrow", dict(x=0, y=12, width=4, relheight=1, height=-24)),
-                    ("e", "sb_h_double_arrow", dict(relx=1.0, x=-4, y=12, width=4, relheight=1, height=-24)),
-                    ("nw", "size_nw_se", dict(x=0, y=0, width=10, height=10)),
-                    ("ne", "size_ne_sw", dict(relx=1.0, x=-10, y=0, width=10, height=10)),
-                    ("sw", "size_ne_sw", dict(x=0, rely=1.0, y=-10, width=10, height=10))):
-                z = tk.Frame(self.root, bg=BG, cursor=cursor)
-                z.place(**place)
-                self._bind_resize(z, edge)
-                self._zones.append(z)
-            # A click on a frameless window doesn't activate it on Windows: do it ourselves
-            self.root.bind_all("<ButtonPress-1>", self._activate_on_click, add="+")
-            self.root.after(50, self._style_window)
-            # 1px border drawn as four edge lines (placed above the packed content)
-            self._edges = [tk.Frame(self.root, bg=BORDER) for _ in range(4)]
-            self._edges[0].place(x=0, y=0, relwidth=1, height=1)
-            self._edges[1].place(x=0, rely=1.0, y=-1, relwidth=1, height=1)
-            self._edges[2].place(x=0, y=0, width=1, relheight=1)
-            self._edges[3].place(relx=1.0, x=-1, y=0, width=1, relheight=1)
-            self._lift_chrome()
+        # borderless chrome: resize grip, grab zones on every edge and corner, and a 1px border
+        self.grip = tk.Label(self.root, text="◢", bg=BG, fg=FG_FAINT, font=self.f_tiny, cursor="size_nw_se")
+        self._bind_resize(self.grip, "se")
+        self._zones = []
+        for edge, cursor, place in (
+                ("n", "sb_v_double_arrow", dict(x=12, y=0, relwidth=1, width=-24, height=4)),
+                ("s", "sb_v_double_arrow", dict(x=12, rely=1.0, y=-4, relwidth=1, width=-24, height=4)),
+                ("w", "sb_h_double_arrow", dict(x=0, y=12, width=4, relheight=1, height=-24)),
+                ("e", "sb_h_double_arrow", dict(relx=1.0, x=-4, y=12, width=4, relheight=1, height=-24)),
+                ("nw", "size_nw_se", dict(x=0, y=0, width=10, height=10)),
+                ("ne", "size_ne_sw", dict(relx=1.0, x=-10, y=0, width=10, height=10)),
+                ("sw", "size_ne_sw", dict(x=0, rely=1.0, y=-10, width=10, height=10))):
+            z = tk.Frame(self.root, bg=BG, cursor=cursor)
+            z._place = place
+            self._bind_resize(z, edge)
+            self._zones.append(z)
+        self._edges = [tk.Frame(self.root, bg=BORDER) for _ in range(4)]
+        for z, place in zip(self._edges, (dict(x=0, y=0, relwidth=1, height=1),
+                                          dict(x=0, rely=1.0, y=-1, relwidth=1, height=1),
+                                          dict(x=0, y=0, width=1, relheight=1),
+                                          dict(relx=1.0, x=-1, y=0, width=1, relheight=1))):
+            z._place = place
+        # A click on a frameless window doesn't activate it on Windows: do it ourselves
+        self.root.bind_all("<ButtonPress-1>", lambda e: self.overlay and self._activate_on_click(e), add="+")
+        self._apply_frame()
 
         self.menu = StyledMenu(self.root, self.f_small)
         self.menu.add_command(label="View profile", command=lambda: self._menu(self.open_profile))
@@ -736,7 +727,6 @@ class SearchWindow:
         self._menu_base = 4                                  # Nearby / Recent add a Clear item below these
         self.list_menu = StyledMenu(self.root, self.f_small)
         self.list_menu.add_command(label="Clear", command=self._clear_list)
-        self.tab_menu = StyledMenu(self.root, self.f_small)
         self._menu_char: Character | None = None
 
     def _segment(self, parent, text, cmd, small: bool = False, pack: bool = True):
@@ -874,7 +864,7 @@ class SearchWindow:
             self.box.pack_forget()
             self._refresh_nearby(force=True)
         else:
-            self.box.pack(fill="x", pady=(0, 10), before=self.filters)
+            self.box.pack(fill="x", pady=(0, 6 if self.compact else 10), before=self.filters)
             self.search_entry.focus_set()
         self._paint_nearby_panel()
         self._paint_tabs()
@@ -1159,9 +1149,10 @@ class SearchWindow:
                 natural_desc = SORTS[key][1]
                 arrow = "↓" if natural_desc != self.sort_rev else "↑"
                 label = f"{label} {arrow}" if anchor == "w" else f"{arrow} {label}"
-            hv.create_text(x0 if anchor == "w" else xr, 14, text=label, anchor=anchor,
+            hv.create_text(x0 if anchor == "w" else xr, int(hv.cget("height")) // 2, text=label, anchor=anchor,
                            fill=ACCENT if on else FG_DIM, font=self.f_sbold if on else self.f_small)
-        hv.create_line(0, 27, k["x1"], 27, fill=LINE)
+        hh = int(hv.cget("height"))
+        hv.create_line(0, hh - 1, k["x1"], hh - 1, fill=LINE)
 
     def _header_hit(self, x: int) -> str | None:
         k = self._cols(max(self.canvas.winfo_width(), 200))
@@ -1190,17 +1181,7 @@ class SearchWindow:
         self.canvas.yview_moveto(0)
         self._mark()
 
-    def _toggle_latest(self):
-        self._set_sort("default" if self.sort_key == "latest" else "latest")
-
     def _paint_sort(self):
-        if self.mode == "favorites" or (self.mode in ("nearby", "recent") and self._nearby_on()):
-            self.latest_lb.config(fg=ACCENT if self.sort_key == "latest" else FG_DIM,
-                                  font=self.f_sbold if self.sort_key == "latest" else self.f_small)
-            if not self.latest_lb.winfo_manager():
-                self.latest_lb.pack(side="right", before=self.status)
-        else:
-            self.latest_lb.pack_forget()
         self._mark()
 
     def _mark(self):
@@ -1252,18 +1233,18 @@ class SearchWindow:
             st["loading"] for r, st in self.region_state.items() if not self.regions or r in self.regions)
         extra = 6 if loading_any else 0
         n = len(view) + extra
-        total_h = max(n * (CARD_H + CARD_GAP), view_h)
+        total_h = max(n * (self.row_h + CARD_GAP), view_h)
         cv.configure(scrollregion=(0, 0, width, total_h))
         top = cv.canvasy(0)
-        first = max(0, int(top // (CARD_H + CARD_GAP)) - 1)
-        last = min(n - 1, int((top + view_h) // (CARD_H + CARD_GAP)) + 1)
+        first = max(0, int(top // (self.row_h + CARD_GAP)) - 1)
+        last = min(n - 1, int((top + view_h) // (self.row_h + CARD_GAP)) + 1)
 
         cv.delete("card")
         phase = (time.monotonic() * 1.6) % 2.0
         a, b = (SKEL_B, SKEL_A) if phase < 1.0 else (SKEL_A, SKEL_B)
         has_skel = False
         for i in range(first, last + 1):
-            y = i * (CARD_H + CARD_GAP)
+            y = i * (self.row_h + CARD_GAP)
             if i >= len(view):
                 self._draw_skeleton(cv, y, width, a, b)
                 has_skel = True
@@ -1313,10 +1294,10 @@ class SearchWindow:
 
     def _draw_skeleton(self, cv, y, width, a, b):
         sp = self._cols(width)["spans"]
-        cy = y + CARD_H / 2
+        cy = y + self.row_h / 2
         n0, n1, _ = sp["name"]
-        round_rect(cv, n0, cy - 13, n0 + PORTRAIT, cy + 13, 7, fill=a, outline="", tags="card")
-        round_rect(cv, n0 + PORTRAIT + 9, cy - 5, max(n0 + PORTRAIT + 20, min(n1, n0 + PORTRAIT + 100)), cy + 5, 5,
+        round_rect(cv, n0, cy - self.portrait_px / 2, n0 + self.portrait_px, cy + self.portrait_px / 2, 7, fill=a, outline="", tags="card")
+        round_rect(cv, n0 + self.portrait_px + 9, cy - 5, max(n0 + self.portrait_px + 20, min(n1, n0 + self.portrait_px + 100)), cy + 5, 5,
                    fill=a, outline="", tags="card")
         for key, tone, w in (("legion", b, 50), ("class", b, 60), ("server", b, 70), ("gs", b, 34), ("cp", a, 50)):
             if key in sp:
@@ -1327,7 +1308,7 @@ class SearchWindow:
 
     def _star_box(self, width, y):
         x = self._cols(width)["star"]
-        return x - 10, y + CARD_H / 2 - 10, x + 10, y + CARD_H / 2 + 10
+        return x - 10, y + self.row_h / 2 - 10, x + 10, y + self.row_h / 2 + 10
 
     def _reorderable(self) -> bool:
         """Favorites can be dragged into your own order while the list shows that order."""
@@ -1335,7 +1316,7 @@ class SearchWindow:
 
     def _draw_grip(self, cv, y, hot: bool):
         col = ACCENT if hot else FG_FAINT
-        cy = y + CARD_H / 2
+        cy = y + self.row_h / 2
         for dx in (0, 4):
             for dy in (-4, 0, 4):
                 cv.create_oval(6 + dx - 1.2, cy + dy - 1.2, 6 + dx + 1.2, cy + dy + 1.2, fill=col, outline="",
@@ -1344,30 +1325,25 @@ class SearchWindow:
     def _draw_card(self, cv, c: Character, y, width, hover: bool, a, b, dragging: bool = False) -> bool:
         """One table row: portrait, name <legion> •faction | class | Lv | server | GS | CP | ★"""
         k = self._cols(width)
-        cy = y + CARD_H / 2
+        cy = y + self.row_h / 2
         if hover or dragging:
-            round_rect(cv, 0, y + 2, k["x1"], y + CARD_H - 2, 7, fill=HOVER, outline=ACCENT if dragging else "",
+            round_rect(cv, 0, y + 2, k["x1"], y + self.row_h - 2, 7, fill=HOVER, outline=ACCENT if dragging else "",
                        tags="card")
-        if self.mode in ("nearby", "recent"):
-            side = self._nearby_side.get(c.name)
-            if side in ("enemy", "ally"):          # a slim mark on the left edge: red enemy, green ally
-                round_rect(cv, 0, cy - 9, 3, cy + 9, 1.5, fill=RED if side == "enemy" else GREEN, outline="",
-                           tags="card")
         sp = k["spans"]
         x, name_r, _ = sp["name"]
         if self._reorderable():
             self._draw_grip(cv, y, dragging or (hover and self.hover_grip))
             x += 10
-        img = self.images.get(c.portrait, PORTRAIT, crop_top=True)
+        img = self.images.get(c.portrait, self.portrait_px, crop_top=True)
         cls_col = CLASS_COLORS.get(c.class_name, FG_DIM)
         if img:
-            cv.create_image(x, cy - PORTRAIT / 2, image=img, anchor="nw", tags="card")
+            cv.create_image(x, cy - self.portrait_px / 2, image=img, anchor="nw", tags="card")
         else:
-            round_rect(cv, x, cy - 13, x + PORTRAIT, cy + 13, 7, fill=SURFACE_2 if hover else SURFACE, outline="",
+            round_rect(cv, x, cy - self.portrait_px / 2, x + self.portrait_px, cy + self.portrait_px / 2, 7, fill=SURFACE_2 if hover else SURFACE, outline="",
                        tags="card")
-            cv.create_text(x + PORTRAIT / 2, cy, text=(c.class_name[:1] or "?"), fill=cls_col, font=self.f_sbold,
+            cv.create_text(x + self.portrait_px / 2, cy, text=(c.class_name[:1] or "?"), fill=cls_col, font=self.f_sbold,
                            tags="card")
-        tx = x + PORTRAIT + 9
+        tx = x + self.portrait_px + 9
         # name cell: when they left (Recent), or the legion when its column doesn't fit, gives way first
         extra = f"<{c.legion}>" if c.legion and "legion" not in sp else ""
         if self.mode in ("nearby", "recent") and self.nearby_view == "recent":
@@ -1456,10 +1432,10 @@ class SearchWindow:
     # ═════ list interaction ═════
     def _hit(self, x, y_widget) -> tuple[int, bool]:
         y = self.canvas.canvasy(y_widget)
-        i = int(y // (CARD_H + CARD_GAP))
-        if y - i * (CARD_H + CARD_GAP) > CARD_H or i < 0 or i >= len(self._view):
+        i = int(y // (self.row_h + CARD_GAP))
+        if y - i * (self.row_h + CARD_GAP) > self.row_h or i < 0 or i >= len(self._view):
             return -1, False
-        sx0, sy0, sx1, sy1 = self._star_box(max(self.canvas.winfo_width(), 200), i * (CARD_H + CARD_GAP))
+        sx0, sy0, sx1, sy1 = self._star_box(max(self.canvas.winfo_width(), 200), i * (self.row_h + CARD_GAP))
         return i, sx0 - 4 <= x <= sx1 + 4 and sy0 - 4 <= y <= sy1 + 4
 
     def _on_grip(self, x) -> bool:
@@ -1484,7 +1460,7 @@ class SearchWindow:
     # drag a favorite by its grip
     def _drag_target(self, y_widget) -> int:
         y = self.canvas.canvasy(y_widget)
-        return max(0, min(int(y // (CARD_H + CARD_GAP)), len(self._view) - 1))
+        return max(0, min(int(y // (self.row_h + CARD_GAP)), len(self._view) - 1))
 
     def _fav_drag(self, e):
         if not self._drag:
@@ -1540,24 +1516,6 @@ class SearchWindow:
             self.toggle_favorite(c)
         else:
             self.open_profile(c)
-
-    def _tab_menu(self, e, which: str):
-        """Right-click on the Nearby / Recent tab: Clear that list (wherever you are)."""
-        if self.nearby is None or not self._nearby_on():
-            return
-        rows = self._recent_rows if which == "recent" else self._nearby_rows
-        label = "Clear Recent" if which == "recent" else "Clear Nearby"
-        self.tab_menu.delete(0, "end")
-        self.tab_menu.add_command(label=label, command=lambda: self._clear_which(which),
-                                  state="normal" if rows else "disabled")
-        self.tab_menu.tk_popup(e.x_root, e.y_root)
-
-    def _clear_which(self, which: str):
-        if which == "recent":
-            self.nearby.clear_recent()
-        else:
-            self.nearby.clear_nearby()
-        self._refresh_nearby(force=True)
 
     def _clear_label(self) -> str | None:
         if self.mode not in ("nearby", "recent") or not self._nearby_on():
@@ -1649,8 +1607,7 @@ class SearchWindow:
                 self._rec_done_at = time.time()
             if time.time() - (self._rec_done_at or 0) < 10:
                 return f"Saved {os.path.basename(self.nearby.record_path)} in the diagnostics folder"
-        name, _server = self.nearby.me()
-        return "  ·  ".join(["● Live"] + ([name] if name else []) + ([f"{len(view):,} shown"] if view else []))
+        return f"{len(view):,} nearby" if view else ""
 
     def _nearby_empty_text(self) -> tuple[str, str]:
         if not self._nearby_on():
@@ -1785,7 +1742,7 @@ class SearchWindow:
 
     def _show_main(self):
         self.show_tabs()
-        self.top.pack(fill="x", padx=PAD, pady=(10, 0))
+        self.top.pack(fill="x", padx=PAD, pady=getattr(self, "_top_pad", (10, 0)))
         self.status_row.pack(side="bottom", fill="x")
         self.list_wrap.pack(fill="both", expand=True, padx=(PAD - 8, 4), pady=(8, 0))
         if self.overlay:
@@ -1853,6 +1810,60 @@ class SearchWindow:
         b.bind("<Leave>", lambda e: (b.config(bg=BG), repaint() if repaint else self._set_icon(b, name, FG_DIM)))
         return b
 
+    def set_layout(self, compact: bool):
+        """Full (roomy rows) or Compact (more rows on screen over the game). Applies at once."""
+        self.compact = compact
+        self.cfg["layout"] = "compact" if compact else "full"
+        self.row_h, self.portrait_px = (30, 20) if compact else (CARD_H, PORTRAIT)
+        self.f_bold.configure(size=9 if compact else 10)
+        self.f_input.configure(size=10 if compact else 11)
+        self.search_entry.pack_configure(ipady=4 if compact else 7)
+        if self.box.winfo_manager():
+            self.box.pack_configure(pady=(0, 6 if compact else 10))
+        self.hdr.configure(height=22 if compact else 28)
+        self.status.config(pady=3 if compact else 6)
+        self._top_pad = (6, 0) if compact else (10, 0)
+        if self.top.winfo_manager():
+            self.top.pack_configure(pady=self._top_pad)
+        self._mark()
+
+    def _apply_frame(self):
+        """Borderless (our own title bar, edges and grip) or the normal Windows frame."""
+        on = self.overlay
+        self.root.overrideredirect(on)
+        if on:
+            self.btn_min.pack(side="right", before=self.gear)
+            self.btn_close.pack(side="right", before=self.btn_min)
+            self.grip.place(relx=1.0, rely=1.0, anchor="se")
+            for z in self._zones + self._edges:
+                z.place(**z._place)
+            self._lift_chrome()
+            self.root.after(50, self._style_window)
+        else:
+            for w in (self.btn_close, self.btn_min):
+                w.pack_forget()
+            for z in self._zones + self._edges + [self.grip]:
+                z.place_forget()
+            self.root.after(50, self._dark_titlebar)
+            self.root.after(60, self.apply_opacity)
+        self._hwnd_cache = None
+
+    def set_borderless(self, on: bool):
+        """Settings: switch between borderless and the Windows frame without restarting."""
+        if on == self.overlay:
+            return
+        self._save_geometry()
+        self.overlay = on
+        self.cfg["borderless"] = on
+        self.root.withdraw()
+        self._apply_frame()
+        w, h = self.cfg.get("window_size", [600, 760])
+        x, y = self.cfg.get("window_pos", [80, 80])
+        self.root.geometry(f"{int(w)}x{int(h)}+{int(x)}+{int(y)}")
+        self.root.deiconify()
+        self.root.attributes("-topmost", bool(self.cfg.get("always_on_top", True)))
+        self._mark()
+
     def _lift_chrome(self):
         for w in getattr(self, "_zones", []) + getattr(self, "_edges", []):
             w.lift()
@@ -1873,10 +1884,15 @@ class SearchWindow:
             pass
 
     def _drag_start(self, e):
-        self._drag = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
+        if not self.overlay:
+            self._win_drag = None
+            return
+        self._win_drag = (e.x_root - self.root.winfo_x(), e.y_root - self.root.winfo_y())
 
     def _drag_move(self, e):
-        dx, dy = self._drag
+        if not getattr(self, "_win_drag", None):
+            return
+        dx, dy = self._win_drag
         self.root.geometry(f"+{e.x_root - dx}+{e.y_root - dy}")
 
     def _bind_resize(self, widget, edge: str):
@@ -2025,11 +2041,11 @@ class SearchWindow:
 
     def _demo_fav_drag(self, start: bool):
         """Screenshots only: pick up the first favorite by its grip and hold it over the second slot."""
-        ev = type("E", (), {"x": 10, "y": 30})()
+        ev = type("E", (), {"x": 10, "y": self.row_h // 2})()
         if start:
             if len(self._view) > 1:
                 self._click(ev)
-                ev.y = CARD_H + CARD_GAP + 30
+                ev.y = self.row_h + CARD_GAP + self.row_h // 2
                 self._fav_drag(ev)
                 self._render()
         elif self._drag:
@@ -2139,7 +2155,14 @@ class SearchWindow:
             (t + 6300, lambda: self._grab(f"{base}-narrow.png")),
             (t + 6400, lambda: self.root.geometry(f"900x{self.root.winfo_height()}")),
             (t + 7000, lambda: self._grab(f"{base}-wide.png")),
-            (t + 7600, self.close),
+            (t + 7100, lambda: self.root.geometry(f"600x{self.root.winfo_height()}")),
+            (t + 7200, lambda: self.set_layout(True)),
+            (t + 7800, lambda: self._grab(f"{base}-compact.png")),
+            (t + 7900, lambda: self.set_layout(False)),
+            (t + 8000, lambda: self.set_borderless(False)),
+            (t + 8800, lambda: self._grab(f"{base}-framed.png")),
+            (t + 8900, lambda: self.set_borderless(True)),
+            (t + 9600, self.close),
         ]
         for delay, fn in steps:
             self.root.after(delay, fn)

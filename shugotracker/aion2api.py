@@ -28,6 +28,7 @@ import requests
 
 from . import servers as sv
 from ._version import __version__
+from .store import Store
 
 SEARCH_URL = "https://api-search.plaync.com/aion2global/search/v2/character"
 INFO_URL = "https://aion2.plaync.com/api/character/info"
@@ -223,34 +224,36 @@ PROFILE_KEEP_S = 7 * 86400
 PROFILE_DISK_MAX = 300
 RECENT_INFO_S = 120                # a card's info response is reused for its profile for this long
 RECENT_INFO_MAX = 200
+LOOKUP_KEEP_S = 3 * 86400          # "who is called X here" answers are reused this long (Nearby: instant repeats)
+LOOKUP_EMPTY_S = 30 * 60           # …and "nobody" answers only this long (new characters take a while to show)
+_IDENTITY = ("char_id", "name", "race", "pc_id", "level", "server_id", "server_name", "region", "portrait")
 
 
 class Api:
     """Search (parallel over sub-regions) and lazily-fetched character details, with caching."""
 
-    def __init__(self, cache_path: str | None = None, workers: int = 6, rate: float = REQUESTS_PER_SECOND,
+    def __init__(self, db_path: str | None = None, workers: int = 6, rate: float = REQUESTS_PER_SECOND,
                  cache_ttl_s: float = DETAILS_FRESH_S, log: Callable[[str], None] | None = None,
-                 session: requests.Session | None = None, profile_dir: str | None = None):
+                 session: requests.Session | None = None, migrate_from: tuple = (None, None)):
         self.log = log or (lambda s: None)
         self.session = session or requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
         self.limiter = RateLimiter(rate=rate, max_rate=rate)   # recovers after a back-off, never above
-        self.cache_path = cache_path
         self.cache_ttl_s = cache_ttl_s
-        self._cache: dict[str, dict] = self._load_cache()
+        self.store = Store(db_path)
+        self.store.migrate(*migrate_from)
+        self.store.prune(DETAILS_KEEP_S, PROFILE_KEEP_S, PROFILE_DISK_MAX, LOOKUP_KEEP_S)
+        self._cache: dict[str, dict] = self.store.all_details(time.time() - DETAILS_KEEP_S)
+        self.lookup_hits = 0
         self._cache_lock = threading.Lock()
         self._search_pool = ThreadPoolExecutor(max_workers=len(SUB_REGIONS), thread_name_prefix="search")
         self._profile_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="profile")
         self._profiles: dict[str, tuple[float, dict, dict | None]] = {}   # key -> (ts, info, equipment)
-        self._profile_dir = profile_dir
         self._inflight: dict[str, list] = {}
         self._pflock = threading.Lock()
         self._search_cache: dict[tuple, tuple[float, dict]] = {}
         # the raw info response behind each card's numbers: opening that profile soon after reuses it
         self._recent_info: collections.OrderedDict[str, tuple[float, dict]] = collections.OrderedDict()
-        if profile_dir:
-            os.makedirs(profile_dir, exist_ok=True)
-            self._prune_profiles()
         # details: newest request first, stale generations dropped
         self._dq: queue.PriorityQueue = queue.PriorityQueue()
         self._seq = itertools.count()
@@ -270,7 +273,7 @@ class Api:
             self._dq.put((-1, 0, 0, None, None))
         self._search_pool.shutdown(wait=False, cancel_futures=True)
         self._profile_pool.shutdown(wait=False, cancel_futures=True)
-        self.save_cache()
+        self.store.close()
 
     # ───── HTTP ─────
     def _get_json(self, url: str, params: dict, timeout: float = 10) -> dict:
@@ -313,12 +316,23 @@ class Api:
         """Every character in `region` whose name is exactly `name` (any server), optionally narrowed by class
         and faction: one search request."""
         ids = pc_ids or (class_pc_ids(classes) if classes else None)
+        race = race if race in (1, 2) else None
+        q = Store.lookup_key(region, name, ids, race)
+        hit = self.store.get_lookup(q, LOOKUP_KEEP_S, LOOKUP_EMPTY_S)
+        if hit is not None:                     # asked before: same answer, no request
+            self.lookup_hits += 1
+            chars = [character_from_dict(d) for d in hit]
+            for c in chars:
+                self._apply_cached(c)
+            return chars
         filters = {"pcId": ",".join(str(i) for i in ids)} if ids else {}
-        if race in (1, 2):
+        if race:
             filters["race"] = race
         chars, _ = self.search_region(name, region, page=1, size=50, filters=filters)
         want = name.casefold()
-        return [c for c in chars if c.name.casefold() == want]
+        found = [c for c in chars if c.name.casefold() == want]
+        self.store.put_lookup(q, [{k: getattr(c, k) for k in _IDENTITY} for c in found])
+        return found
 
     def find_player(self, name: str, server_id: int) -> Character | None:
         """The character called `name` on `server_id` (exact name), via the search endpoint; None if not found."""
@@ -527,15 +541,10 @@ class Api:
 
     def _profile_get(self, key: str):
         hit = self._profiles.get(key)
-        if hit is None and self._profile_dir:
-            path = self._profile_path(key)
-            try:
-                with open(path, encoding="utf-8") as f:
-                    d = json.load(f)
-                hit = (float(d["ts"]), d["info"], d.get("equipment"))
+        if hit is None:
+            hit = self.store.get_profile(key)
+            if hit is not None:
                 self._profiles[key] = hit
-            except (OSError, ValueError, KeyError, TypeError):
-                return None
         if hit and time.time() - hit[0] < PROFILE_KEEP_S:
             return hit
         return None
@@ -543,37 +552,12 @@ class Api:
     def _profile_put(self, key: str, info: dict, eq: dict | None) -> None:
         ts = time.time()
         self._profiles[key] = (ts, info, eq)
-        if self._profile_dir:
-            try:
-                tmp = self._profile_path(key) + ".tmp"
-                with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump({"ts": ts, "info": info, "equipment": eq}, f)
-                os.replace(tmp, self._profile_path(key))
-            except OSError:
-                pass
-
-    def _profile_path(self, key: str) -> str:
-        import hashlib
-        return os.path.join(self._profile_dir, hashlib.sha1(key.encode()).hexdigest()[:20] + ".json")
-
-    def _prune_profiles(self) -> None:
-        try:
-            files = [os.path.join(self._profile_dir, f) for f in os.listdir(self._profile_dir) if f.endswith(".json")]
-            files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-            now = time.time()
-            for i, path in enumerate(files):
-                if i >= PROFILE_DISK_MAX or now - os.path.getmtime(path) > PROFILE_KEEP_S:
-                    os.remove(path)
-        except OSError:
-            pass
+        self.store.put_profile(key, info, eq, ts)
 
     def forget(self, c: Character) -> None:
         self._profiles.pop(c.key, None)
-        if self._profile_dir:
-            try:
-                os.remove(self._profile_path(c.key))
-            except OSError:
-                pass
+        self.store.drop_profile(c.key)
+        self.store.drop_details(c.key)
         with self._cache_lock:
             self._cache.pop(c.key, None)
             self._recent_info.pop(c.key, None)
@@ -596,48 +580,23 @@ class Api:
         return "stale"
 
     def _store(self, c: Character, info: dict) -> None:
+        now = time.time()
         with self._cache_lock:
-            self._cache[c.key] = {**info, "ts": time.time()}
-
-    def _load_cache(self) -> dict:
-        if not self.cache_path or not os.path.exists(self.cache_path):
-            return {}
-        try:
-            with open(self.cache_path, encoding="utf-8") as f:
-                data = json.load(f)
-            return data if isinstance(data, dict) else {}
-        except (OSError, ValueError):
-            return {}
+            self._cache[c.key] = {**info, "ts": now}
+        self.store.put_details(c.key, info, now)
 
     def clear_caches(self) -> None:
-        """Forget every cached search, card number and profile (memory and disk)."""
+        """Forget every cached search, card number, profile and name lookup (memory and disk)."""
         with self._cache_lock:
             self._cache.clear()
             self._recent_info.clear()
         with self._pflock:
             self._profiles.clear()
         self._search_cache.clear()
-        for path in [self.cache_path] + ([os.path.join(self._profile_dir, f) for f in os.listdir(self._profile_dir)]
-                                         if self._profile_dir and os.path.isdir(self._profile_dir) else []):
-            try:
-                if path and os.path.isfile(path):
-                    os.remove(path)
-            except OSError:
-                pass
+        self.store.clear()
 
     def save_cache(self) -> None:
-        if not self.cache_path:
-            return
-        now = time.time()
-        with self._cache_lock:
-            keep = {k: v for k, v in self._cache.items() if now - v.get("ts", 0) < DETAILS_KEEP_S}
-        try:
-            tmp = self.cache_path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(keep, f)
-            os.replace(tmp, self.cache_path)
-        except OSError:
-            pass
+        """Kept for callers: everything is written as it arrives now."""
 
 
 def character_from_dict(d: dict) -> Character:

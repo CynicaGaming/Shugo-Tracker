@@ -23,7 +23,8 @@ or affiliated with NCSOFT or Shugo.GG.*
 2. Run it. SmartScreen may warn the first time because the exe isn't code-signed: *More info → Run anyway*.
    No administrator rights or extra installs are needed.
 
-`config.json`, `favorites.json`, the cache and `shugo-tracker.log` are kept in `%APPDATA%\ShugoTracker`, so they
+`config.json`, `favorites.json`, the cache (`cache\shugo.db`: card numbers, profiles and Nearby name lookups in one small
+SQLite file, plus `cache\images`) and `shugo-tracker.log` are kept in `%APPDATA%\ShugoTracker`, so they
 survive updates and moving the exe (older versions kept them next to the exe; they're moved over on first start).
 `ShugoTracker.exe --demo` shows the window with made-up characters (no network).
 
@@ -35,7 +36,7 @@ windowed** mode):
 | | |
 |---|---|
 | drag the title bar | move it |
-| ◢ (bottom-right corner) | resize it |
+| any edge or corner (or ◢) | resize it |
 | — | minimize to the taskbar |
 | ⚙ | settings |
 | ✕ | quit (with *Close to tray* on in ⚙: hide; a tray icon appears until you bring it back) |
@@ -47,8 +48,8 @@ available, a green download icon appears next to 📌: click it to download, the
 
 | | |
 |---|---|
-| Window | opacity (100% by default); always on top; close to tray |
-| Startup & updates | start with Windows; check for updates automatically; check now |
+| Window | layout (Full or Compact rows); borderless window (off = the normal Windows frame); opacity (100% by default); always on top; close to tray |
+| Updates | check for updates automatically; check now |
 | Data | cache size and Clear; open the folder with settings, favorites and cache |
 
 Everything is saved immediately.
@@ -61,7 +62,6 @@ Everything is saved immediately.
 | Region / Faction toggles; Class and Level under **More** | click to filter, click again to remove; **All** (or nothing selected) = every region; **Clear** resets all filters |
 | Lv [min] – [max] | level range; fill in either or both |
 | column headers (Name, Legion, Class, Lv, Server, GS, CP) | click to sort by that column, again to flip it, a third time to go back to the list's own order (Nearby / Recent keep enemies and allies grouped) |
-| **Latest first** (bottom right in Favorites / Nearby / Recent) | newest arrivals / most recently left / your own favorites order, newest first |
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
 | right-click a card | profile / favorite / copy name / refresh |
@@ -153,6 +153,8 @@ Working locally:
 |---|---|---|
 | `regions` / `factions` | `[]` / `[]` | last filters used (empty = all) |
 | `always_on_top` | `true` | pin the window above other windows |
+| `layout` | `"full"` | `"full"` or `"compact"` rows |
+| `borderless` | `true` | our own title bar; `false` uses the normal Windows frame |
 | `auto_update` | `true` | check for new releases at start-up and every 6 hours |
 | `update_repo` | `"CynicaGaming/Shugo-Tracker"` | GitHub repo the updater follows |
 
@@ -177,7 +179,7 @@ game traffic may be against AION 2's terms of service — use it at your own ris
 | red / green edge on a card | enemy / ally |
 | Faction / Class / Level | the usual filters apply here too (Faction = Elyos or Asmodian) |
 | a card still shimmering | the game showed the player; NCSOFT hasn't identified them yet |
-| Clear (right-click the tab or the list) | Nearby: move everyone to Recent (they come back as the game shows them again, or at once if they fight you); Recent: empty it |
+| Clear (right-click the list) | Nearby: move everyone to Recent (they come back as the game shows them again, or at once if they fight you); Recent: empty it |
 | ↺ Recent tab | who was around you in the last hour: players who left view, and everyone from your previous area when you teleport or change zone; ⚔ = they fought you |
 
 ### Who shows up, and where

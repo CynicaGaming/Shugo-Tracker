@@ -193,6 +193,24 @@ class CachingTests(unittest.TestCase):
         api.search_region("Luna", "nae", page=2)
         self.assertEqual(len([1 for u, _ in sess.calls if u == a.SEARCH_URL]), 2)
 
+    def test_name_lookups_survive_a_restart(self):
+        import tempfile, os
+        db = os.path.join(tempfile.mkdtemp(), "shugo.db")
+        sess = FakeSession(default_handler)
+        api = a.Api(db_path=db, session=sess, rate=1000)
+        first = api.find_by_name("Luna", "nae")
+        api.close()
+        self.assertTrue(first)
+        sess2 = FakeSession(default_handler)
+        api2 = a.Api(db_path=db, session=sess2, rate=1000)
+        self.addCleanup(api2.close)
+        again = api2.find_by_name("luna", "nae")
+        self.assertEqual([c.key for c in again], [c.key for c in first])
+        self.assertEqual(sess2.calls, [])                 # answered from the database
+        self.assertEqual(api2.lookup_hits, 1)
+        api2.find_by_name("Luna", "nae", race=2)          # a different question still asks NCSOFT
+        self.assertEqual(len(sess2.calls), 1)
+
     def test_stale_numbers_show_instantly_then_refresh(self):
         api, sess = self.make()
         chars, _ = a.parse_search(SEARCH_JSON)
