@@ -76,13 +76,13 @@ class ClearCacheTests(unittest.TestCase):
             with open(os.path.join(pd, "p.json"), "w") as f:
                 f.write("{}")
             api = a.Api(db_path=os.path.join(tmp, "shugo.db"), migrate_from=(cp, pd))
-            self.addCleanup(api.close)
             # the old files were imported and removed
             self.assertEqual((os.path.exists(cp), os.path.exists(pd)), (False, False))
             self.assertIn("x", api._cache)
             api._search_cache[("a",)] = (0, {})
             api.clear_caches()
             self.assertEqual((api._cache, api._search_cache, api.store.counts()["details"]), ({}, {}, 0))
+            api.close()                    # (Windows can't delete the folder while the database is open)
 
 
 if __name__ == "__main__":
