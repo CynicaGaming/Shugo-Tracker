@@ -589,6 +589,8 @@ class SearchWindow:
 
         self.top = tk.Frame(self.root, bg=BG)
         self.top.pack(fill="x", padx=PAD, pady=(10, 0))
+        # a frame that loses all its packed children keeps its old height in Tk: this one is always there
+        tk.Frame(self.top, bg=BG, height=1).pack(fill="x")
 
         # search box (searches as you type; Enter searches now)
         self.box = tk.Frame(self.top, bg=SURFACE, highlightthickness=1, highlightbackground=BORDER,
