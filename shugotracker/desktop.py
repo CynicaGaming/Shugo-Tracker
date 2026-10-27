@@ -453,3 +453,28 @@ def folder_size(path: str) -> int:
             except OSError:
                 pass
     return total
+
+
+def monitor_rect(widget, x: int, y: int) -> tuple[int, int, int, int]:
+    """(left, top, right, bottom) of the work area of the monitor that holds point x, y (screen coordinates).
+    Popups are kept inside it, so a menu opened on a second monitor stays there."""
+    if os.name == "nt":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class MONITORINFO(ctypes.Structure):
+                _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                            ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+            user32 = ctypes.windll.user32
+            user32.MonitorFromPoint.restype = wintypes.HMONITOR
+            user32.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+            hmon = user32.MonitorFromPoint(wintypes.POINT(int(x), int(y)), 2)    # 2 = nearest monitor
+            info = MONITORINFO()
+            info.cbSize = ctypes.sizeof(MONITORINFO)
+            if hmon and user32.GetMonitorInfoW(hmon, ctypes.byref(info)):
+                r = info.rcWork
+                return r.left, r.top, r.right, r.bottom
+        except Exception:  # noqa: BLE001
+            pass
+    return 0, 0, widget.winfo_screenwidth(), widget.winfo_screenheight()

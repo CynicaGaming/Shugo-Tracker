@@ -572,9 +572,11 @@ class ProfileView:
         x = anchor.winfo_rootx()
         y = anchor.winfo_rooty() + anchor.winfo_height() + 4
         # keep it on screen: flip above the cell near the bottom edge
-        if y + tip.winfo_reqheight() > anchor.winfo_screenheight() - 8:
+        from .desktop import monitor_rect
+        left, top, right, bottom = monitor_rect(anchor, anchor.winfo_rootx(), anchor.winfo_rooty())
+        if y + tip.winfo_reqheight() > bottom - 8:
             y = anchor.winfo_rooty() - tip.winfo_reqheight() - 4
-        x = min(x, anchor.winfo_screenwidth() - tip.winfo_reqwidth() - 8)
+        x = max(left + 8, min(x, right - tip.winfo_reqwidth() - 8))
         tip.geometry(f"+{x}+{y}")
         self._tip = tip
 

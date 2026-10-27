@@ -207,8 +207,10 @@ class StyledMenu:
         w, h = max(win.winfo_reqwidth(), 150), win.winfo_reqheight()
         if right:
             x -= w
-        x = max(4, min(x, win.winfo_screenwidth() - w - 4))
-        y = y if y + h < win.winfo_screenheight() - 4 else y - h
+        from .desktop import monitor_rect
+        m_left, m_top, m_right, m_bottom = monitor_rect(win, x + w // 2, y)     # the monitor it opens on
+        x = max(m_left + 4, min(x, m_right - w - 4))
+        y = y if y + h < m_bottom - 4 else max(m_top + 4, y - h)
         win.geometry(f"+{x}+{y}")
         win.bind("<Escape>", lambda e: self.unpost())
         win.bind("<FocusOut>", lambda e: self.root.after(50, self._maybe_close))
@@ -786,16 +788,14 @@ class SearchWindow:
         img = self.images.get(c.portrait, 20, crop_top=True) if c and c.portrait else None
         if img is None:
             img = self._icon("person", FG_DIM)
-        name = "" if self._compact else (elide(self.f_small, c.name, 110) if c else "")
+        label = f"{c.name} · {c.server_name}" if c and c.server_name else (c.name if c else "")
+        name = "" if self._compact else elide(self.f_small, label, 170)
         self.me_btn.config(image=img or "", text=(f"  {name}" if name else ("" if img else "You")))
 
     def _me_menu(self):
         m, c = self.me_menu, self.my_char
         m.delete(0, "end")
         if c:
-            where = c.server_name or ""
-            m.add_command(label=f"{c.name}" + (f"  ·  {where}" if where else ""), command=lambda: None,
-                          state="disabled")
             m.add_command(label="My profile", command=lambda: self.open_profile(c),
                           state="normal" if c.char_id else "disabled")
             m.add_separator()
@@ -2259,8 +2259,10 @@ class SearchWindow:
             lb.config(text=look[2])
         tip.update_idletasks()
         b = self.upd_btn
+        from .desktop import monitor_rect
         x = b.winfo_rootx() + b.winfo_width() - tip.winfo_reqwidth()
-        tip.geometry(f"+{max(0, x)}+{b.winfo_rooty() + b.winfo_height() + 4}")
+        m_left = monitor_rect(b, b.winfo_rootx(), b.winfo_rooty())[0]
+        tip.geometry(f"+{max(m_left + 4, x)}+{b.winfo_rooty() + b.winfo_height() + 4}")
 
     def _demo_card_menu(self):
         """Screenshots only: the right-click menu on the first card."""
