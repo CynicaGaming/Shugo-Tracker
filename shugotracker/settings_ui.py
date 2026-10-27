@@ -39,7 +39,7 @@ class Slider(tk.Canvas):
 
     def __init__(self, parent, value: float, lo: float, hi: float, on_change, step: float = 0.05,
                  width: int = 180, fmt=lambda v: f"{v:.0%}"):
-        super().__init__(parent, width=width + 44, height=20, bg=SURFACE, highlightthickness=0, cursor="hand2")
+        super().__init__(parent, width=width + 54, height=20, bg=SURFACE, highlightthickness=0, cursor="hand2")
         self.lo, self.hi, self.step, self.fmt, self.on_change, self.track_w = lo, hi, step, fmt, on_change, width
         self.value = value
         for ev, final in (("<ButtonPress-1>", False), ("<B1-Motion>", False), ("<ButtonRelease-1>", True)):
@@ -59,7 +59,7 @@ class Slider(tk.Canvas):
         self.create_line(7, 10, self.track_w - 7, 10, fill=SURFACE_2, width=4, capstyle="round")
         self.create_line(7, 10, x, 10, fill=ACCENT, width=4, capstyle="round")
         self.create_oval(x - 6, 4, x + 6, 16, fill=FG, outline=ACCENT, width=2)
-        self.create_text(self.track_w + 42, 10, text=self.fmt(self.value), fill=FG, anchor="e",
+        self.create_text(self.track_w + 52, 10, text=self.fmt(self.value), fill=FG, anchor="e",
                          font=("Segoe UI Semibold", 9))
 
     def _set_from(self, x, final):
@@ -182,10 +182,12 @@ class SettingsView:
             Switch(r, bool(cfg.get("nearby_enabled")), self._nearby).pack()
             r, _ = self._row(card, "Auto-clear Nearby")
             Switch(r, bool(cfg.get("nearby_autoclear")), self._autoclear).pack()
-            r, _ = self._row(card, "Clear every")
-            self._every = self._button(r, "", self._every_menu)
-            self._every.pack()
-            self._paint_every()
+            r, _ = self._row(card, "Auto-clear interval")
+            secs = [c[0] for c in AUTOCLEAR_CHOICES]
+            names = [c[1] for c in AUTOCLEAR_CHOICES]
+            cur = secs.index(cfg.get("nearby_autoclear_s", 60)) if cfg.get("nearby_autoclear_s", 60) in secs else 2
+            Slider(r, cur, 0, len(secs) - 1, lambda v, final: self._set_every(secs[int(v)], final), step=1,
+                   fmt=lambda v: names[int(v)]).pack()
 
         card = self._section("Updates")
         r, _ = self._row(card, "Check for updates automatically")
@@ -227,28 +229,12 @@ class SettingsView:
     def _autoclear(self, on: bool):
         self._set("nearby_autoclear", on)
         self.app.autoclear_reset()
-        self._paint_every()
 
-    def _paint_every(self):
-        on = bool(self.cfg.get("nearby_autoclear"))
-        label = dict(AUTOCLEAR_CHOICES).get(self.cfg.get("nearby_autoclear_s", 60), "60 s")
-        self._every.config(text=f"{label}  ▾", fg=FG if on else FG_FAINT, cursor="hand2" if on else "")
-
-    def _every_menu(self):
-        if not self.cfg.get("nearby_autoclear"):
-            return
-        from .search_ui import StyledMenu
-        m = self._menu = StyledMenu(self.app.root, self.app.f_small)
-        cur = self.cfg.get("nearby_autoclear_s", 60)
-        for secs, label in AUTOCLEAR_CHOICES:
-            m.add_command(label=label, selected=secs == cur, command=lambda s_=secs: self._set_every(s_))
-        b = self._every
-        m.post(b.winfo_rootx() + b.winfo_width(), b.winfo_rooty() + b.winfo_height() + 2, right=True)
-
-    def _set_every(self, secs: int):
-        self._set("nearby_autoclear_s", secs)
+    def _set_every(self, secs: int, final: bool = True):
+        self.cfg["nearby_autoclear_s"] = secs
         self.app.autoclear_reset()
-        self._paint_every()
+        if final:
+            self._save()
 
     def _nearby(self, on: bool):
         self.app.set_nearby_enabled(on)
