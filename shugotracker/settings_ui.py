@@ -185,7 +185,7 @@ class SettingsView:
             r, _ = self._row(card, "Auto-clear interval")
             secs = [c[0] for c in AUTOCLEAR_CHOICES]
             names = [c[1] for c in AUTOCLEAR_CHOICES]
-            cur = secs.index(cfg.get("nearby_autoclear_s", 60)) if cfg.get("nearby_autoclear_s", 60) in secs else 2
+            cur = secs.index(cfg.get("nearby_autoclear_s", 60)) if cfg.get("nearby_autoclear_s", 60) in secs else 0
             Slider(r, cur, 0, len(secs) - 1, lambda v, final: self._set_every(secs[int(v)], final), step=1,
                    fmt=lambda v: names[int(v)]).pack()
 

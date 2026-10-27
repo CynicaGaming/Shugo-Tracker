@@ -194,7 +194,7 @@ game traffic may be against AION 2's terms of service — use it at your own ris
 | red / green edge on a card | enemy / ally |
 | Faction / Class / Level | the usual filters apply here too (Faction = Elyos or Asmodian) |
 | a card still shimmering | the game showed the player; NCSOFT hasn't identified them yet |
-| Auto-clear Nearby (⚙ Settings) | do that Clear by itself; slide *Auto-clear interval* from 15 s to 1 hour — anyone still around comes back on the next update the game sends about them |
+| Auto-clear Nearby (⚙ Settings) | do that Clear by itself; slide *Auto-clear interval*: 1m, 5m, 15m, 30m or 60m — anyone still around comes back on the next update the game sends about them |
 | Clear (right-click the list) | Nearby: move everyone to Recent (they come back as the game shows them again, or at once if they fight you); Recent: empty it |
 | ↺ Recent tab | who was around you in the last hour: players who left view, and everyone from your previous area when you teleport or change zone; ⚔ = they fought you |
 

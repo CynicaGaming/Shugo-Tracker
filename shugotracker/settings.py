@@ -11,8 +11,7 @@ SETTING_DEFAULTS = {
     "nearby_autoclear": False,      # move everyone on Nearby to Recent every so often (those still around return)
     "nearby_autoclear_s": 60,
 }
-AUTOCLEAR_CHOICES = [(15, "15 s"), (30, "30 s"), (60, "60 s"), (300, "5 min"), (900, "15 min"), (1800, "30 min"),
-                     (3600, "1 hour")]
+AUTOCLEAR_CHOICES = [(60, "1m"), (300, "5m"), (900, "15m"), (1800, "30m"), (3600, "60m")]
 
 OPACITY_MIN = 0.3   # never so faint that you lose the window
 
