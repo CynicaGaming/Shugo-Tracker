@@ -163,9 +163,6 @@ class SettingsView:
         a, cfg = self.app, self.cfg
 
         card = self._section("Window")
-        r, _ = self._row(card, "Layout")
-        self._choice(r, [("full", "Full"), ("compact", "Compact")], cfg.get("layout", "full"),
-                     lambda v: a.set_layout(v == "compact") or self._save())
         r, _ = self._row(card, "Borderless window")
         Switch(r, bool(cfg.get("borderless", True)), lambda on: (a.set_borderless(on), self._save())).pack()
         r, _ = self._row(card, "Opacity")
@@ -181,11 +178,9 @@ class SettingsView:
             r, _ = self._row(card, "Show nearby players", "Reads AION 2's network traffic on this PC through Npcap")
             Switch(r, bool(cfg.get("nearby_enabled")), self._nearby).pack()
             r, _ = self._row(card, "Auto-clear Nearby")
-            Switch(r, bool(cfg.get("nearby_autoclear")), self._autoclear).pack()
-            r, _ = self._row(card, "Auto-clear interval")
             secs = [c[0] for c in AUTOCLEAR_CHOICES]
             names = [c[1] for c in AUTOCLEAR_CHOICES]
-            cur = secs.index(cfg.get("nearby_autoclear_s", 60)) if cfg.get("nearby_autoclear_s", 60) in secs else 0
+            cur = secs.index(cfg.get("nearby_autoclear_s", 0)) if cfg.get("nearby_autoclear_s", 0) in secs else 0
             Slider(r, cur, 0, len(secs) - 1, lambda v, final: self._set_every(secs[int(v)], final), step=1,
                    fmt=lambda v: names[int(v)]).pack()
 
@@ -225,10 +220,6 @@ class SettingsView:
         self.app.apply_opacity()
         if final:
             self._save()
-
-    def _autoclear(self, on: bool):
-        self._set("nearby_autoclear", on)
-        self.app.autoclear_reset()
 
     def _set_every(self, secs: int, final: bool = True):
         self.cfg["nearby_autoclear_s"] = secs

@@ -467,9 +467,20 @@ class SearchWindow:
         self.regions: set[str] = {r for r in cfg.get("regions", []) if r in SUB_REGIONS}
         self.factions: set[str] = {f for f in cfg.get("factions", []) if f in ("1", "2")}
         self.classes: set[str] = {c for c in cfg.get("classes", []) if c in CLASSES}
-        self.sort_key = cfg.get("sort", "default") if cfg.get("sort") in SORTS and cfg.get("sort") != "latest" \
-            else "default"
-        self.sort_rev = bool(cfg.get("sort_rev")) and self.sort_key not in ("default", "latest")
+        # each tab keeps its own sort: {"search": ["cp", false], "nearby": ["default", false], ...}
+        sorts = cfg.get("sorts") if isinstance(cfg.get("sorts"), dict) else {}
+        if not sorts and cfg.get("sort") in SORTS:            # v1.33 and earlier: one sort for every tab
+            sorts = {"search": [cfg.get("sort"), bool(cfg.get("sort_rev"))]}
+        self.sorts: dict[str, list] = {}
+        for tab in ("search", "favorites", "nearby", "recent"):
+            key, rev = (sorts.get(tab) or ["default", False])[:2] if isinstance(sorts.get(tab), list) else \
+                ("default", False)
+            key = key if key in SORTS and key != "latest" else "default"
+            self.sorts[tab] = [key, bool(rev) and key != "default"]
+        cfg["sorts"] = self.sorts
+        cfg.pop("sort", None)
+        cfg.pop("sort_rev", None)
+        self.sort_key, self.sort_rev = self.sorts["search"]
         self.level_min: int | None = _level_or_none(cfg.get("level_min"))
         self.level_max: int | None = _level_or_none(cfg.get("level_max"))
         self._query_filters: dict = {}         # what the current search asked NCSOFT to filter
@@ -538,7 +549,7 @@ class SearchWindow:
         self.f_big = tkfont.Font(family=base, size=18, weight="bold")
         self.f_star = tkfont.Font(family="Segoe UI Symbol", size=11)
 
-        self.compact = cfg.get("layout") == "compact"
+        self.compact = False
         self.row_h, self.portrait_px = CARD_H, PORTRAIT
         self.images = ImageLoader(os.path.join(cache_dir, "images") if cache_dir else None)
         self._prefetch_job = None
@@ -546,7 +557,7 @@ class SearchWindow:
         self._paint_me()
         me = cfg.get("nearby_me")
         if not self.my_char and not screenshot and isinstance(me, (list, tuple)) and len(me) == 2 and me[0]:
-            self.root.after(1500, lambda: self._me_seen(str(me[0]), int(me[1] or 0)))   # portrait for the button        self.set_layout(self.compact)
+            self.root.after(1500, lambda: self._me_seen(str(me[0]), int(me[1] or 0)))   # portrait for the button
         self.root.after(30, self._tick)
         self.search_entry.focus_set()
         if initial_query:
@@ -942,6 +953,7 @@ class SearchWindow:
         if mode == self.mode:
             return
         self.mode = mode
+        self.sort_key, self.sort_rev = self.sorts.get(mode, ["default", False])   # this tab's own sort
         self.nearby_view = "recent" if mode == "recent" else "nearby"
         self._ensure_filters()
         if mode == "favorites":
@@ -1204,13 +1216,13 @@ class SearchWindow:
     def _autoclear_tick(self, now: float):
         """Settings → Auto-clear Nearby: everyone on Nearby goes to Recent every N seconds; those still around
         come back on the next update the game sends about them."""
-        if not (self.cfg.get("nearby_autoclear") and self._nearby_on()):
+        if not (self.cfg.get("nearby_autoclear_s") and self._nearby_on()):
             self._autoclear_at = now
             return
         last = getattr(self, "_autoclear_at", None)
         if last is None:
             self._autoclear_at = now
-        elif now - last >= float(self.cfg.get("nearby_autoclear_s", 60)):
+        elif now - last >= float(self.cfg.get("nearby_autoclear_s") or 0):
             self._autoclear_at = now
             self.nearby.clear_nearby()
             self._refresh_nearby(force=True)
@@ -1361,7 +1373,7 @@ class SearchWindow:
             self.sort_rev = True
         else:
             self.sort_key, self.sort_rev = "default", False
-        self.cfg["sort"], self.cfg["sort_rev"] = self.sort_key, self.sort_rev
+        self.sorts[self.mode] = [self.sort_key, self.sort_rev]
         self._paint_sort()
         self.canvas.yview_moveto(0)
         self._mark()
@@ -1798,7 +1810,7 @@ class SearchWindow:
         if self.nearby.state != CAPTURING:
             return ""
         if self.nearby_view == "recent":
-            return f"{len(view):,} recently nearby" if view else ""
+            return ""                                # (the tab already says how many)
         left = self.nearby.recording()
         if left:
             self._rec_done_at = None
@@ -1808,7 +1820,7 @@ class SearchWindow:
                 self._rec_done_at = time.time()
             if time.time() - (self._rec_done_at or 0) < 10:
                 return f"Saved {os.path.basename(self.nearby.record_path)} in the diagnostics folder"
-        return f"{len(view):,} nearby" if view else ""
+        return ""                                    # (the tab already says how many)
 
     def _nearby_empty_text(self) -> tuple[str, str]:
         if not self._nearby_on():
@@ -2010,23 +2022,6 @@ class SearchWindow:
         b.bind("<Enter>", lambda e: (self._set_icon(b, name, hover), b.config(bg=SURFACE_2)))
         b.bind("<Leave>", lambda e: (b.config(bg=BG), repaint() if repaint else self._set_icon(b, name, FG_DIM)))
         return b
-
-    def set_layout(self, compact: bool):
-        """Full (roomy rows) or Compact (more rows on screen over the game). Applies at once."""
-        self.compact = compact
-        self.cfg["layout"] = "compact" if compact else "full"
-        self.row_h, self.portrait_px = (30, 20) if compact else (CARD_H, PORTRAIT)
-        self.f_bold.configure(size=9 if compact else 10)
-        self.f_input.configure(size=10 if compact else 11)
-        self.search_entry.pack_configure(ipady=4 if compact else 7)
-        if self.box.winfo_manager():
-            self.box.pack_configure(pady=(0, 6 if compact else 10))
-        self.hdr.configure(height=22 if compact else 28)
-        self.status.config(pady=3 if compact else 6)
-        self._top_pad = (6, 0) if compact else (10, 0)
-        if self.top.winfo_manager():
-            self.top.pack_configure(pady=self._top_pad)
-        self._mark()
 
     def _apply_frame(self):
         """Borderless (our own title bar, edges and grip) or the normal Windows frame."""
@@ -2430,9 +2425,6 @@ class SearchWindow:
             (t + 6400, lambda: self.root.geometry(f"900x{self.root.winfo_height()}")),
             (t + 7000, lambda: self._grab(f"{base}-wide.png")),
             (t + 7100, lambda: self.root.geometry(f"600x{self.root.winfo_height()}")),
-            (t + 7200, lambda: self.set_layout(True)),
-            (t + 7800, lambda: self._grab(f"{base}-compact.png")),
-            (t + 7900, lambda: self.set_layout(False)),
             (t + 8000, lambda: self.set_borderless(False)),
             (t + 8800, lambda: self._grab(f"{base}-framed.png")),
             (t + 8900, lambda: self.set_borderless(True)),

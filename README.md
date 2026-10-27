@@ -60,7 +60,7 @@ which step it's on.
 
 | | |
 |---|---|
-| Window | layout (Full or Compact rows); borderless window (off = the normal Windows frame); opacity (100% by default); always on top; close to tray |
+| Window | borderless window (off = the normal Windows frame); opacity (100% by default); always on top; close to tray |
 | Updates | check for updates automatically; check now |
 | Data | cache size and Clear; open the app folder |
 
@@ -73,7 +73,7 @@ Everything is saved immediately.
 | type a name, press Enter | search (it also searches by itself after you pause typing) |
 | Region / Faction toggles; Class and Level under **More** | click to filter, click again to remove; **All** (or nothing selected) = every region; **Clear** resets all filters |
 | Lv [min] – [max] | level range; fill in either or both |
-| column headers (Name, Legion, Class, Lv, Server, GS, CP, and on Recent: Last seen) | click to sort by that column, again to flip it, a third time to go back to the list's own order (Nearby / Recent keep enemies and allies grouped) |
+| column headers (Name, Legion, Class, Lv, Server, GS, CP, and on Recent: Last seen) | click to sort by that column, again to flip it, a third time to go back to the list's own order. Each tab (Search, Favorites, Nearby, Recent) keeps its own sort (Nearby / Recent keep enemies and allies grouped) |
 | click a card | open the character's profile |
 | ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
 | right-click a card | profile / favorite / copy name / refresh |
@@ -167,8 +167,7 @@ Working locally:
 |---|---|---|
 | `regions` / `factions` | `[]` / `[]` | last filters used (empty = all) |
 | `always_on_top` | `true` | pin the window above other windows |
-| `layout` | `"full"` | `"full"` or `"compact"` rows |
-| `nearby_autoclear` / `nearby_autoclear_s` | `false` / `60` | Nearby: clear the list to Recent every N seconds |
+| `nearby_autoclear_s` | `0` | Nearby: clear the list to Recent every N seconds (0 = never) |
 | `borderless` | `true` | our own title bar; `false` uses the normal Windows frame |
 | `auto_update` | `true` | check for new releases at start-up and every 6 hours |
 | `update_repo` | `"CynicaGaming/Shugo-Tracker"` | GitHub repo the updater follows |
@@ -194,7 +193,7 @@ game traffic may be against AION 2's terms of service — use it at your own ris
 | red / green edge on a card | enemy / ally |
 | Faction / Class / Level | the usual filters apply here too (Faction = Elyos or Asmodian) |
 | a card still shimmering | the game showed the player; NCSOFT hasn't identified them yet |
-| Auto-clear Nearby (⚙ Settings) | do that Clear by itself; slide *Auto-clear interval*: 1m, 5m, 15m, 30m or 60m — anyone still around comes back on the next update the game sends about them |
+| Auto-clear Nearby (⚙ Settings) | do that Clear by itself: slide it from Never to 1m, 5m, 15m, 30m or 60m — anyone still around comes back on the next update the game sends about them |
 | Clear (right-click the list) | Nearby: move everyone to Recent (they come back as the game shows them again, or at once if they fight you); Recent: empty it |
 | ↺ Recent tab | who was around you in the last hour: players who left view, and everyone from your previous area when you teleport or change zone; ⚔ = they fought you |
 

@@ -118,3 +118,12 @@ class EmptyFavoritesTests(unittest.TestCase):
             f = Favorites(os.path.join(d, "favorites.json"))
             self.assertEqual(len(f), 0)
             self.assertTrue(f)
+
+
+class AutoClearMigrationTests(unittest.TestCase):
+    def test_switch_folds_into_the_interval(self):
+        from shugotracker.settings import migrate
+        self.assertEqual(migrate({"nearby_autoclear": False, "nearby_autoclear_s": 300})["nearby_autoclear_s"], 0)
+        self.assertEqual(migrate({"nearby_autoclear": True, "nearby_autoclear_s": 300})["nearby_autoclear_s"], 300)
+        self.assertEqual(migrate({})["nearby_autoclear_s"], 0)
+        self.assertNotIn("layout", migrate({"layout": "compact"}))
