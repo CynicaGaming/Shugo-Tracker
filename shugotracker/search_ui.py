@@ -160,6 +160,12 @@ class StyledMenu:
         self.items: list[dict | None] = []          # None = separator
         self.win: tk.Toplevel | None = None
         self._click_bind = None
+        self.closed_at = 0.0                        # when it last closed (see just_closed)
+
+    def just_closed(self) -> bool:
+        """True right after a click outside closed it: the button that opened it uses this to toggle it shut
+        instead of opening it again on that same click."""
+        return self.win is None and time.monotonic() - self.closed_at < 0.3
 
     # tk.Menu-like API
     def add_command(self, label: str, command, state: str = "normal", selected: bool = False):
@@ -248,6 +254,7 @@ class StyledMenu:
             except tk.TclError:
                 pass
             self.win = None
+            self.closed_at = time.monotonic()
 
 
 class ThinScrollbar(tk.Canvas):
@@ -794,6 +801,9 @@ class SearchWindow:
 
     def _me_menu(self):
         m, c = self.me_menu, self.my_char
+        if m.win is not None or m.just_closed():    # a click on the button while it's open closes it
+            m.unpost()
+            return
         m.delete(0, "end")
         if c:
             m.add_command(label="My profile", command=lambda: self.open_profile(c),
