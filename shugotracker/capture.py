@@ -41,10 +41,23 @@ def find_game_connections(process_names: set[str] = GAME_PROCESS_NAMES) -> set[t
     return conns
 
 
+COMMON_PORTS = {80, 443}
+
+
 def bpf_for(conns: set[tuple[str, int, str, int]]) -> str:
-    parts = [f"(src host {rip} and src port {rport} and dst port {lport})"
-             for (_lip, lport, rip, rport) in sorted(conns)]
-    return "tcp and (" + " or ".join(parts) + ")"
+    """
+    What the sniffer listens to: everything from the game's server ports (any host), so a connection the game
+    opens later (entering Shugo or the arena, a channel change: a new server on the same port) is heard from
+    its very first packet, without waiting for the next poll and restarting. Ordinary web ports (80/443) are
+    only taken from the exact hosts the game is talking to.
+    """
+    parts = set()
+    for (_lip, lport, rip, rport) in conns:
+        if rport in COMMON_PORTS:
+            parts.add(f"(src host {rip} and src port {rport} and dst port {lport})")
+        else:
+            parts.add(f"src port {rport}")
+    return "tcp and (" + " or ".join(sorted(parts)) + ")"
 
 
 def tcp_payload(ip, tcp) -> bytes:
@@ -84,6 +97,7 @@ class GameCapture:
         self._sniffer = None
         self._conns: set = set()
         self._stop = threading.Event()
+        self._lock = threading.Lock()          # two sniffers overlap briefly while the filter changes
         self._thread = threading.Thread(target=self._run, name="capture", daemon=True)
 
     def start(self) -> None:
@@ -101,15 +115,23 @@ class GameCapture:
             self.status = f"scapy missing: {e}"
             self.log(self.status)
             return
+        flt = None
         while not self._stop.is_set():
             conns = find_game_connections(self.process_names)
-            if conns != self._conns:
-                self._conns = conns
-                self._stop_sniffer()
-                if conns:
-                    self._start_sniffer(conns)
+            self._conns = conns
+            want = bpf_for(conns) if conns else None
+            if want != flt:                    # only a new server port (or the game closing) restarts the sniffer
+                flt = want
+                if want:
+                    old = self._sniffer
+                    self._start_sniffer(conns)  # the new one listens before the old one stops: no gap
+                    if self._sniffer is None:   # the new one wouldn't start: keep listening with the old one
+                        self._sniffer = old
+                    else:
+                        self._stop_one(old)
                     self.status = f"capturing {len(conns)} game connection(s)"
                 else:
+                    self._stop_sniffer()
                     self.status = "waiting for AION2.exe"
                 self.log(self.status)
             self._stop.wait(self.poll_s)
@@ -148,6 +170,10 @@ class GameCapture:
     def _stop_sniffer(self) -> None:
         s = self._sniffer
         self._sniffer = None
+        self._stop_one(s)
+
+    @staticmethod
+    def _stop_one(s) -> None:
         if s is not None:
             try:
                 s.stop()
@@ -167,12 +193,13 @@ class GameCapture:
         if not data:
             return
         key: FlowKey = (ip.src, int(tcp.sport), ip.dst, int(tcp.dport))
-        st = self.streams.get(key)
-        if st is None:
-            st = self.streams[key] = TcpStream()
-        out, gap = st.push(int(tcp.seq), data, time.time())
-        if out:
-            self.on_bytes(key, out, gap)
+        with self._lock:
+            st = self.streams.get(key)
+            if st is None:
+                st = self.streams[key] = TcpStream()
+            out, gap = st.push(int(tcp.seq), data, time.time())
+            if out:
+                self.on_bytes(key, out, gap)
 
 
 def replay_pcap(path: str, on_bytes: Callable[[FlowKey, bytes, bool], None],

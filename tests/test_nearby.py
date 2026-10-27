@@ -366,3 +366,19 @@ class ComingBackTests(unittest.TestCase):
         feed(map_load(12))                                         # a new area: 300 is someone else here
         feed(b"\x1d\x37" + encode_varint(300) + b"\x00" * 12)
         self.assertEqual(self.names(svc), [])
+
+
+class CaptureFilterTests(unittest.TestCase):
+    def test_new_servers_on_the_game_port_are_heard_at_once(self):
+        try:
+            from shugotracker.capture import bpf_for
+        except ImportError as e:  # psutil missing here
+            self.skipTest(str(e))
+        flt = bpf_for({("10.0.0.2", 61217, "193.202.112.5", 13328), ("10.0.0.2", 64951, "64.25.35.157", 443)})
+        self.assertIn("src port 13328", flt)                       # any host: Shugo / arena servers included
+        self.assertNotIn("src host 193.202.112.5", flt)
+        self.assertIn("src host 64.25.35.157 and src port 443 and dst port 64951", flt)   # web ports stay exact
+        # a second world server on the same port doesn't change the filter (so no sniffer restart)
+        self.assertEqual(flt, bpf_for({("10.0.0.2", 61217, "193.202.112.5", 13328),
+                                       ("10.0.0.2", 50961, "193.202.112.39", 13328),
+                                       ("10.0.0.2", 64951, "64.25.35.157", 443)}))
