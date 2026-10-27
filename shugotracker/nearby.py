@@ -457,6 +457,16 @@ class NearbyService:
             ph.status = "unresolved"
         return ph
 
+    def set_me(self, name: str, server: int) -> None:
+        """You picked your character (Search → right-click → Set as my character): sides follow it at once."""
+        with self._lock:
+            self.tracker.me.name = name
+            if server:
+                self.tracker.me.server = server
+            self.tracker.players.pop(name, None)
+            self.tracker.version += 1
+            self._v += 1
+
     def me(self) -> tuple[str | None, int | None]:
         with self._lock:
             return self.tracker.me.name, self.tracker.me.server

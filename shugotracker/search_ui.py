@@ -15,7 +15,7 @@ from typing import Callable
 
 import requests
 
-from .aion2api import (CLASSES, REGION_LABELS, SUB_REGIONS, USER_AGENT, Api, Character, rank,
+from .aion2api import (CLASSES, REGION_LABELS, SUB_REGIONS, USER_AGENT, Api, Character, character_from_dict, rank,
                        search_filters)
 from .favorites import Favorites
 from .columns import DEFAULT_COLUMNS, LABELS as COLUMN_LABELS, MENU_LABELS, clean_columns, layout_columns
@@ -481,6 +481,9 @@ class SearchWindow:
         self._drag: dict | None = None             # favorites being dragged by the grip: {"key", "to"}
         self._col_drag: dict | None = None         # a column header being dragged to a new place
         self.columns = clean_columns(cfg.get("columns", DEFAULT_COLUMNS))
+        mine = cfg.get("my_character")
+        self.my_char: Character | None = character_from_dict(mine) if isinstance(mine, dict) and mine.get("name") \
+            else None
         self._dirty = True
         self._debounce = None
         self._update_look = None
@@ -531,7 +534,10 @@ class SearchWindow:
         self.images = ImageLoader(os.path.join(cache_dir, "images") if cache_dir else None)
         self._prefetch_job = None
         self._build(version)
-        self.set_layout(self.compact)
+        self._paint_me()
+        me = cfg.get("nearby_me")
+        if not self.my_char and not screenshot and isinstance(me, (list, tuple)) and len(me) == 2 and me[0]:
+            self.root.after(1500, lambda: self._me_seen(str(me[0]), int(me[1] or 0)))   # portrait for the button        self.set_layout(self.compact)
         self.root.after(30, self._tick)
         self.search_entry.focus_set()
         if initial_query:
@@ -580,8 +586,15 @@ class SearchWindow:
         self.btn_close.pack(side="right")
         self.btn_min = self._title_button(head, "minimize", self.collapse)
         self.btn_min.pack(side="right")
-        self.gear = self._title_button(head, "cog", self.open_settings, hover=ACCENT)
-        self.gear.pack(side="right")
+        self.gear = self._title_button(head, "cog", self.open_settings, hover=ACCENT)   # (kept for its icon)
+        # you: your character's portrait and name; click for your profile, Settings, …
+        self.me_btn = tk.Label(head, bg=BG, fg=FG, font=self.f_small, cursor="hand2", compound="left", padx=6,
+                               pady=3)
+        self.me_btn.pack(side="right", padx=(2, 2))
+        self.me_btn.bind("<Button-1>", lambda e: self._me_menu())
+        self.me_btn.bind("<Enter>", lambda e: self.me_btn.config(bg=SURFACE_2))
+        self.me_btn.bind("<Leave>", lambda e: self.me_btn.config(bg=BG))
+        self.me_menu = StyledMenu(self.root, self.f_small)
         self.pin = self._title_button(head, "pin", self._toggle_pin, hover=ACCENT, repaint=lambda: self._paint_pin())
         self.pin.pack(side="right")
         self._paint_pin()
@@ -734,7 +747,8 @@ class SearchWindow:
         self.menu.add_command(label="Add to favorites", command=lambda: self._menu(self.toggle_favorite))
         self.menu.add_command(label="Copy name", command=lambda: self._menu(self._copy_name))
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
-        self._menu_base = 4                                  # Nearby / Recent add a Clear item below these
+        self.menu.add_command(label="Set as my character", command=lambda: self._menu(self.set_my_character))
+        self._menu_base = 5                                  # Nearby / Recent add a Clear item below these
         self.col_menu = StyledMenu(self.root, self.f_small)
         self.list_menu = StyledMenu(self.root, self.f_small)
         self.list_menu.add_command(label="Clear", command=self._clear_list)
@@ -764,6 +778,58 @@ class SearchWindow:
                            else self.tabs)
         for tab in (self.tab_search, self.tab_fav, self.tab_near, self.tab_recent):
             tab.config(padx=7 if compact else 11)
+        self._paint_me()
+
+    # ───── you ─────
+    def _paint_me(self):
+        c = self.my_char
+        img = self.images.get(c.portrait, 20, crop_top=True) if c and c.portrait else None
+        if img is None:
+            img = self._icon("person", FG_DIM)
+        name = "" if self._compact else (elide(self.f_small, c.name, 110) if c else "")
+        self.me_btn.config(image=img or "", text=(f"  {name}" if name else ("" if img else "You")))
+
+    def _me_menu(self):
+        m, c = self.me_menu, self.my_char
+        m.delete(0, "end")
+        if c:
+            where = c.server_name or ""
+            m.add_command(label=f"{c.name}" + (f"  ·  {where}" if where else ""), command=lambda: None,
+                          state="disabled")
+            m.add_command(label="My profile", command=lambda: self.open_profile(c),
+                          state="normal" if c.char_id else "disabled")
+            m.add_separator()
+        m.add_command(label="Settings", command=self.open_settings)
+        b = self.me_btn
+        m.post(b.winfo_rootx() + b.winfo_width(), b.winfo_rooty() + b.winfo_height() + 2, right=True)
+
+    def set_my_character(self, c: Character, from_game: bool = False):
+        """Who you play: shown top right, and Nearby's sides follow it (until the game says otherwise)."""
+        keep = ("char_id", "name", "race", "pc_id", "level", "server_id", "server_name", "region", "portrait")
+        self.my_char = character_from_dict({k: getattr(c, k) for k in keep})
+        self.cfg["my_character"] = {k: getattr(self.my_char, k) for k in keep}
+        if not from_game:
+            self.cfg["nearby_me"] = [c.name, c.server_id]
+            if self.nearby is not None:
+                self.nearby.set_me(c.name, c.server_id)
+                self._refresh_nearby(force=True)
+        self.save_cfg()
+        self._paint_me()
+
+    def _me_seen(self, name: str, server: int):
+        """Nearby recognised your character: look it up (portrait, profile) unless it's the one we have."""
+        c = self.my_char
+        if c and c.name == name and (not server or c.server_id == server):
+            return
+        import threading
+
+        def find():
+            try:
+                found = self.api.find_player(name, server) if server else None
+            except Exception:  # noqa: BLE001
+                found = None
+            self.inbox.put(("me_char", found))
+        threading.Thread(target=find, name="me-lookup", daemon=True).start()
 
     def show_back(self, text: str, cmd):
         """Swap the tabs for a Back button (profile, Settings)."""
@@ -1062,6 +1128,11 @@ class SearchWindow:
                 changed = True
             elif kind == "detail":
                 changed = True
+            elif kind == "me_seen":                  # the game told Nearby who you are
+                self._me_seen(msg[1], msg[2])
+            elif kind == "me_char":
+                if msg[1] is not None:
+                    self.set_my_character(msg[1], from_game=True)
             elif kind == "toggle":
                 self.toggle_visible()
             elif kind == "show":
@@ -1080,6 +1151,7 @@ class SearchWindow:
                 changed = True
         if self.images.drain():
             changed = True
+            self._paint_me()
             if self.profile_view:
                 self.profile_view.refresh_images()
         if changed:
@@ -1651,7 +1723,7 @@ class SearchWindow:
             fav = c.key in self.favorites
             self.menu.entryconfigure(1, label="Remove from favorites" if fav else "Add to favorites")
             known = "normal" if c.char_id else "disabled"     # a nearby player NCSOFT hasn't identified
-            for idx in (0, 1, 3):
+            for idx in (0, 1, 3, 4):
                 self.menu.entryconfigure(idx, state=known)
             if clear:
                 self.menu.add_separator()
@@ -1951,7 +2023,7 @@ class SearchWindow:
         on = self.overlay
         self.root.overrideredirect(on)
         if on:
-            self.btn_min.pack(side="right", before=self.gear)
+            self.btn_min.pack(side="right", before=self.me_btn)
             self.btn_close.pack(side="right", before=self.btn_min)
             self.grip.place(relx=1.0, rely=1.0, anchor="se")
             for z in self._zones + self._edges:
@@ -2260,6 +2332,10 @@ class SearchWindow:
             (7000, lambda: self._grab(f"{base}.png")),
             (7200, lambda: self._view and self.toggle_favorite(self._view[0])),
             (7250, lambda: len(self._view) > 2 and self.toggle_favorite(self._view[2])),   # 2 to show the grips
+            (7270, lambda: len(self._view) > 1 and self.set_my_character(self._view[1])),
+            (7290, lambda: self._me_menu()),
+            (7340, lambda: self._grab(f"{base}-me-menu.png")),
+            (7360, lambda: self.me_menu.unpost()),
             (7300, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
             (7400, lambda: self._view and self.open_profile(self._view[0])),
             (7480, lambda: self._grab(f"{base}-profile-loading.png")),

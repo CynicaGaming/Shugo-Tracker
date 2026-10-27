@@ -474,6 +474,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         cfg["nearby_me"] = [name, server]
         if not screenshot:
             save_config(config_path, cfg)
+        win.inbox.put(("me_seen", name, server))     # the title bar's "you" button follows
     nearby.on_me = remember_me
     if demo:
         from .demo import feed_teleport

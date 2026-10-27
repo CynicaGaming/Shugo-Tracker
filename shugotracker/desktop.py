@@ -267,6 +267,10 @@ def ui_icon(name: str, size: int, color: tuple, accent: tuple | None = None):
         d.ellipse(box, outline=tuple(accent or (60, 62, 70)) + (255,), width=w)
         if pct:
             d.arc(box, start=-90, end=-90 + 360 * pct / 100, fill=col, width=w)
+    elif name == "person":                         # nobody chosen yet: a plain head and shoulders
+        r = S * 0.17
+        d.ellipse((c - r, S * 0.16, c + r, S * 0.16 + 2 * r), fill=col)
+        d.pieslice((S * 0.18, S * 0.56, S * 0.82, S * 1.2), start=180, end=360, fill=col)
     elif name == "search":
         r = S * 0.27
         cx, cy = S * 0.43, S * 0.43

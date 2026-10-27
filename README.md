@@ -48,7 +48,7 @@ windowed** mode):
 | drag the title bar | move it |
 | any edge or corner (or ◢) | resize it |
 | — | minimize to the taskbar |
-| ⚙ | settings |
+| your portrait and name (top right) | your profile and ⚙ Settings. Nearby fills it in when the game names you; or right-click any card → *Set as my character* (Nearby's sides follow it) |
 | ✕ | quit (with *Close to tray* on in ⚙: hide; a tray icon appears until you bring it back) |
 
 Starting it again while it's running (even hidden) brings the running copy forward. When an update is
