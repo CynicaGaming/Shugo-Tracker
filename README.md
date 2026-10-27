@@ -168,6 +168,7 @@ Working locally:
 | `regions` / `factions` | `[]` / `[]` | last filters used (empty = all) |
 | `always_on_top` | `true` | pin the window above other windows |
 | `layout` | `"full"` | `"full"` or `"compact"` rows |
+| `nearby_autoclear` / `nearby_autoclear_s` | `false` / `60` | Nearby: clear the list to Recent every N seconds |
 | `borderless` | `true` | our own title bar; `false` uses the normal Windows frame |
 | `auto_update` | `true` | check for new releases at start-up and every 6 hours |
 | `update_repo` | `"CynicaGaming/Shugo-Tracker"` | GitHub repo the updater follows |
@@ -193,6 +194,7 @@ game traffic may be against AION 2's terms of service — use it at your own ris
 | red / green edge on a card | enemy / ally |
 | Faction / Class / Level | the usual filters apply here too (Faction = Elyos or Asmodian) |
 | a card still shimmering | the game showed the player; NCSOFT hasn't identified them yet |
+| Auto-clear Nearby (⚙ Settings) | do that Clear by itself every 15 s, 30 s, 60 s, 5 min, 15 min, 30 min or 1 hour — anyone still around comes back on the next update the game sends about them |
 | Clear (right-click the list) | Nearby: move everyone to Recent (they come back as the game shows them again, or at once if they fight you); Recent: empty it |
 | ↺ Recent tab | who was around you in the last hour: players who left view, and everyone from your previous area when you teleport or change zone; ⚔ = they fought you |
 

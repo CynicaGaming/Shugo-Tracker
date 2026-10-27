@@ -8,7 +8,11 @@ SETTING_DEFAULTS = {
     "auto_update": True,
     "layout": "full",               # full | compact
     "borderless": True,             # our own title bar; off = the normal Windows frame
+    "nearby_autoclear": False,      # move everyone on Nearby to Recent every so often (those still around return)
+    "nearby_autoclear_s": 60,
 }
+AUTOCLEAR_CHOICES = [(15, "15 s"), (30, "30 s"), (60, "60 s"), (300, "5 min"), (900, "15 min"), (1800, "30 min"),
+                     (3600, "1 hour")]
 
 OPACITY_MIN = 0.3   # never so faint that you lose the window
 
@@ -28,6 +32,8 @@ def migrate(cfg: dict) -> dict:
     for k, v in SETTING_DEFAULTS.items():
         cfg.setdefault(k, v)
     cfg["window_opacity"] = clamp_opacity(cfg["window_opacity"])
+    if cfg.get("nearby_autoclear_s") not in dict(AUTOCLEAR_CHOICES):
+        cfg["nearby_autoclear_s"] = 60
     if cfg.get("layout") not in ("full", "compact"):
         cfg["layout"] = "full"
     return cfg

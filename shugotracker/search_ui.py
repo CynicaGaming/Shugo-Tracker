@@ -1115,6 +1115,24 @@ class SearchWindow:
         return sort_chars(chars, self.sort_key, self._nearby_side if grouped else None, self._latest_times(),
                           reverse=self.sort_rev)
 
+    def autoclear_reset(self):
+        """Settings changed: count the next auto-clear from now."""
+        self._autoclear_at = time.monotonic()
+
+    def _autoclear_tick(self, now: float):
+        """Settings → Auto-clear Nearby: everyone on Nearby goes to Recent every N seconds; those still around
+        come back on the next update the game sends about them."""
+        if not (self.cfg.get("nearby_autoclear") and self._nearby_on()):
+            self._autoclear_at = now
+            return
+        last = getattr(self, "_autoclear_at", None)
+        if last is None:
+            self._autoclear_at = now
+        elif now - last >= float(self.cfg.get("nearby_autoclear_s", 60)):
+            self._autoclear_at = now
+            self.nearby.clear_nearby()
+            self._refresh_nearby(force=True)
+
     def _clear_list(self):
         if self.nearby is None or not self._nearby_on():
             return
@@ -1279,6 +1297,7 @@ class SearchWindow:
             now = time.monotonic()
             if self.nearby is not None and now - getattr(self, "_nearby_poll", 0) > 0.3:
                 self._nearby_poll = now
+                self._autoclear_tick(now)
                 self._refresh_nearby()
                 if self.mode in ("nearby", "recent") and self.nearby_view == "recent" and \
                         now - getattr(self, "_ago_tick", 0) > 15:

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Callable
 from . import desktop
 from .search_ui import (ACCENT, ACCENT_FG, BG, BORDER, FG, FG_DIM, FG_FAINT, GOLD_SOFT, GOLD_TEXT, GREEN, PAD, RED,
                         SURFACE, SURFACE_2, ThinScrollbar)
-from .settings import OPACITY_MIN, clamp_opacity
+from .settings import AUTOCLEAR_CHOICES, OPACITY_MIN, clamp_opacity
 
 if TYPE_CHECKING:
     from .search_ui import SearchWindow
@@ -180,6 +180,12 @@ class SettingsView:
             card = self._section("Nearby players  ·  beta")
             r, _ = self._row(card, "Show nearby players", "Reads AION 2's network traffic on this PC through Npcap")
             Switch(r, bool(cfg.get("nearby_enabled")), self._nearby).pack()
+            r, _ = self._row(card, "Auto-clear Nearby", "Moves everyone to Recent; anyone still around comes back")
+            Switch(r, bool(cfg.get("nearby_autoclear")), self._autoclear).pack()
+            r, _ = self._row(card, "Clear every")
+            self._every = self._button(r, "", self._every_menu)
+            self._every.pack()
+            self._paint_every()
 
         card = self._section("Updates")
         r, _ = self._row(card, "Check for updates automatically")
@@ -217,6 +223,32 @@ class SettingsView:
         self.app.apply_opacity()
         if final:
             self._save()
+
+    def _autoclear(self, on: bool):
+        self._set("nearby_autoclear", on)
+        self.app.autoclear_reset()
+        self._paint_every()
+
+    def _paint_every(self):
+        on = bool(self.cfg.get("nearby_autoclear"))
+        label = dict(AUTOCLEAR_CHOICES).get(self.cfg.get("nearby_autoclear_s", 60), "60 s")
+        self._every.config(text=f"{label}  ▾", fg=FG if on else FG_FAINT, cursor="hand2" if on else "")
+
+    def _every_menu(self):
+        if not self.cfg.get("nearby_autoclear"):
+            return
+        from .search_ui import StyledMenu
+        m = self._menu = StyledMenu(self.app.root, self.app.f_small)
+        cur = self.cfg.get("nearby_autoclear_s", 60)
+        for secs, label in AUTOCLEAR_CHOICES:
+            m.add_command(label=label, selected=secs == cur, command=lambda s_=secs: self._set_every(s_))
+        b = self._every
+        m.post(b.winfo_rootx() + b.winfo_width(), b.winfo_rooty() + b.winfo_height() + 2, right=True)
+
+    def _set_every(self, secs: int):
+        self._set("nearby_autoclear_s", secs)
+        self.app.autoclear_reset()
+        self._paint_every()
 
     def _nearby(self, on: bool):
         self.app.set_nearby_enabled(on)
