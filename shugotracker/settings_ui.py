@@ -180,7 +180,7 @@ class SettingsView:
             card = self._section("Nearby players  ·  beta")
             r, _ = self._row(card, "Show nearby players", "Reads AION 2's network traffic on this PC through Npcap")
             Switch(r, bool(cfg.get("nearby_enabled")), self._nearby).pack()
-            r, _ = self._row(card, "Auto-clear Nearby", "Moves everyone to Recent; anyone still around comes back")
+            r, _ = self._row(card, "Auto-clear Nearby")
             Switch(r, bool(cfg.get("nearby_autoclear")), self._autoclear).pack()
             r, _ = self._row(card, "Clear every")
             self._every = self._button(r, "", self._every_menu)
