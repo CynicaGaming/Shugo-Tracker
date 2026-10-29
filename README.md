@@ -79,6 +79,7 @@ Everything is saved immediately.
 | right-click a card | profile / favorite / copy name / refresh |
 | right-click the column headers | tick which columns to show (Reset columns brings back the default set) |
 | drag a column header | move that column (Name stays first) |
+| hover a piece of gear (profile → Gear) | its stats, soul imprint, mana stones and theostone; Arcana cards show their linked skills and set bonuses |
 | drag ⋮⋮ on a favorite | reorder Favorites (switches back to your own order if a column sort is on) |
 | window edges and corners | drag to resize; columns widen with the window, and Server, then Legion, then Class step aside when it's narrow |
 | 📌 | keep the window above other windows |
