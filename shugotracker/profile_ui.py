@@ -648,12 +648,15 @@ class ProfileView:
         from .desktop import monitor_rect
         left, top, right, bottom = monitor_rect(anchor, anchor.winfo_rootx(), anchor.winfo_rooty())
         w, h = tip.winfo_reqwidth(), tip.winfo_reqheight()
-        # beside the row when there's room (like the game), else under / over it
-        x = anchor.winfo_rootx() + anchor.winfo_width() + 8
-        if x + w > right - 8:
-            x = anchor.winfo_rootx() - w - 8
-        if x < left + 8:
-            x = max(left + 8, min(anchor.winfo_rootx(), right - w - 8))
+        # just outside the tracker window, on whichever side has room (like the game's, beside its inventory);
+        # over the window only when neither side does
+        root = self.app.root
+        rx, rw = root.winfo_rootx(), root.winfo_width()
+        x = rx + rw + 6
+        if x + w > right - 4:
+            x = rx - w - 6
+        if x < left + 4:
+            x = max(left + 4, min(anchor.winfo_rootx() + anchor.winfo_width() + 8, right - w - 4))
         y = max(top + 8, min(anchor.winfo_rooty() - 20, bottom - h - 8))
         tip.geometry(f"+{int(x)}+{int(y)}")
         self._tip = tip

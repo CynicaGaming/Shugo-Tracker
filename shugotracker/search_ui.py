@@ -2357,9 +2357,9 @@ class SearchWindow:
             steps.append((t + 900, lambda tb=tab: self._grab(f"{base}-profile-{tb.lower()}.png")))
             if tab == "Gear":                    # a piece of gear and an Arcana card, hovered
                 steps.append((t + 1000, lambda: self.profile_view and self.profile_view.demo_hover_item("MainHand")))
-                steps.append((t + 1100, lambda: self._grab(f"{base}-profile-gear-tip.png")))
+                steps.append((t + 1100, lambda: self._grab_wide(f"{base}-profile-gear-tip.png")))
                 steps.append((t + 1150, lambda: self.profile_view and self.profile_view.demo_hover_item("Arcana")))
-                steps.append((t + 1250, lambda: self._grab(f"{base}-profile-arcana-tip.png")))
+                steps.append((t + 1250, lambda: self._grab_wide(f"{base}-profile-arcana-tip.png")))
                 steps.append((t + 1300, lambda: self.profile_view and self.profile_view._hide_tip()))
             t += 1400
         pv = lambda: self.profile_view  # noqa: E731
@@ -2469,6 +2469,16 @@ class SearchWindow:
             x, y = widget.winfo_rootx() - pad, widget.winfo_rooty() - pad
             ImageGrab.grab(bbox=(max(0, x), max(0, y), x + widget.winfo_width() + 2 * pad,
                                  y + widget.winfo_height() + 2 * pad)).save(path)
+        except Exception as e:  # noqa: BLE001
+            print(f"screenshot failed: {e}")
+
+    def _grab_wide(self, path: str, extra: int = 330):
+        """Screenshots only: the window plus what sits just right of it (item tooltips)."""
+        try:
+            from PIL import ImageGrab
+            self.root.update()
+            x, y = self.root.winfo_rootx(), self.root.winfo_rooty()
+            ImageGrab.grab(bbox=(x, y, x + self.root.winfo_width() + extra, y + self.root.winfo_height())).save(path)
         except Exception as e:  # noqa: BLE001
             print(f"screenshot failed: {e}")
 
