@@ -427,6 +427,8 @@ class ProfileView:
             plus.grid(row=r, column=3, sticky="ew", padx=(0, 8), pady=3)
             if it.slot_pos and it.item_id:
                 self._item_hover([slot_lb, cell, icon, *icon.winfo_children(), name, grade, plus], it)
+                self._row_anchor = getattr(self, "_row_anchor", {})
+                self._row_anchor[it.slot] = cell
                 self._want_detail(it)               # fetched in the background: ready by the time you hover
 
     # ───── item details (mana stones, theostone, stats, Arcana linked skills / set) ─────
@@ -622,7 +624,7 @@ class ProfileView:
             return
         for slot, it in p.gear.items():
             if slot.startswith(slot_prefix) and it.slot_pos:
-                anchor = next((w for w in self.body.winfo_children()), self.body)
+                anchor = getattr(self, "_row_anchor", {}).get(slot) or self.body
                 self._hover_item = (it, anchor)
                 self._show_item_tip(it, anchor)
                 return
@@ -683,8 +685,10 @@ class ProfileView:
         # keep it on screen: flip above the cell near the bottom edge
         from .desktop import monitor_rect
         left, top, right, bottom = monitor_rect(anchor, anchor.winfo_rootx(), anchor.winfo_rooty())
-        if y + tip.winfo_reqheight() > bottom - 8:
-            y = anchor.winfo_rooty() - tip.winfo_reqheight() - 4
+        h = tip.winfo_reqheight()
+        if y + h > bottom - 8:
+            y = anchor.winfo_rooty() - h - 4
+        y = max(top + 8, min(y, bottom - h - 8))               # a tall tooltip still fits on the monitor
         x = max(left + 8, min(x, right - tip.winfo_reqwidth() - 8))
         tip.geometry(f"+{x}+{y}")
         self._tip = tip
