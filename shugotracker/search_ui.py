@@ -1150,6 +1150,10 @@ class SearchWindow:
                 changed = True
             elif kind == "detail":
                 changed = True
+            elif kind == "item_detail":              # a gear piece's details (profile tooltips)
+                _, view, slot, det = msg
+                if view is self.profile_view and view is not None:
+                    view.item_detail_ready(slot, det)
             elif kind == "me_seen":                  # the game told Nearby who you are
                 self._me_seen(msg[1], msg[2])
             elif kind == "me_char":
@@ -2351,6 +2355,12 @@ class SearchWindow:
         for tab in ProfileView.TABS:
             steps.append((t, lambda tb=tab: self.profile_view and self.profile_view.show_tab(tb)))
             steps.append((t + 900, lambda tb=tab: self._grab(f"{base}-profile-{tb.lower()}.png")))
+            if tab == "Gear":                    # a piece of gear and an Arcana card, hovered
+                steps.append((t + 1000, lambda: self.profile_view and self.profile_view.demo_hover_item("MainHand")))
+                steps.append((t + 1100, lambda: self._grab(f"{base}-profile-gear-tip.png")))
+                steps.append((t + 1150, lambda: self.profile_view and self.profile_view.demo_hover_item("Arcana")))
+                steps.append((t + 1250, lambda: self._grab(f"{base}-profile-arcana-tip.png")))
+                steps.append((t + 1300, lambda: self.profile_view and self.profile_view._hide_tip()))
             t += 1400
         pv = lambda: self.profile_view  # noqa: E731
         steps.append((t - 200, lambda: self._ui_check(f"{base}-check.txt")))

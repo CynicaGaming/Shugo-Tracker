@@ -158,6 +158,7 @@ class ProfileView:
         self.render(keep_scroll=True)
 
     def reload(self):
+        self._details = {}
         self.app.api.forget(self.char)
         self.loading, self.profile, self.error = True, None, None
         self._drop_frames()
@@ -404,23 +405,113 @@ class ProfileView:
             tk.Label(t, text=text, bg=BG, fg=FG_DIM, font=f.f_tiny, anchor=anchor).grid(
                 row=0, column=i, sticky="ew", padx=(8 if i == 0 else 0, 8), pady=(0, 4))
         tk.Frame(t, bg=LINE, height=1).grid(row=1, column=0, columnspan=4, sticky="ew", pady=(0, 2))
+        self._details: dict[str, object] = getattr(self, "_details", {})
         for r, (label, it) in enumerate(rows, start=2):
-            tk.Label(t, text=label, bg=BG, fg=FG_DIM, font=f.f_small, anchor="w").grid(
-                row=r, column=0, sticky="ew", padx=(8, 8), pady=3)
+            slot_lb = tk.Label(t, text=label, bg=BG, fg=FG_DIM, font=f.f_small, anchor="w")
+            slot_lb.grid(row=r, column=0, sticky="ew", padx=(8, 8), pady=3)
             cell = tk.Frame(t, bg=BG)
             cell.grid(row=r, column=1, sticky="ew", padx=(0, 8), pady=3)
             if it is None:                          # nothing worn here: just the empty slot
                 self._icon(cell, None, 20).pack(side="left")
                 continue
             col = GRADE_COLORS.get(it.grade, FG)
-            self._icon(cell, it.icon, 20, border=col).pack(side="left")
-            self._fit_label(cell, it.name, f.f_body, bg=BG, fg=col).pack(side="left", fill="x", expand=True,
-                                                                          padx=(8, 0))
-            tk.Label(t, text=it.grade or "", bg=BG, fg=col, font=f.f_small, anchor="w").grid(
-                row=r, column=2, sticky="ew", padx=(0, 8), pady=3)
+            icon = self._icon(cell, it.icon, 20, border=col)
+            icon.pack(side="left")
+            name = self._fit_label(cell, it.name, f.f_body, tip=False, bg=BG, fg=col)
+            name.pack(side="left", fill="x", expand=True, padx=(8, 0))
+            grade = tk.Label(t, text=it.grade or "", bg=BG, fg=col, font=f.f_small, anchor="w")
+            grade.grid(row=r, column=2, sticky="ew", padx=(0, 8), pady=3)
             ench = (f"+{it.enchant}" if it.enchant else "") + (f" ✦{it.exceed}" if it.exceed else "")
-            tk.Label(t, text=ench, bg=BG, fg=ACCENT if (it.enchant or 0) >= 10 else FG, font=f.f_bold,
-                     anchor="e").grid(row=r, column=3, sticky="ew", padx=(0, 8), pady=3)
+            plus = tk.Label(t, text=ench, bg=BG, fg=ACCENT if (it.enchant or 0) >= 10 else FG, font=f.f_bold,
+                            anchor="e")
+            plus.grid(row=r, column=3, sticky="ew", padx=(0, 8), pady=3)
+            if it.slot_pos and it.item_id:
+                self._item_hover([slot_lb, cell, icon, *icon.winfo_children(), name, grade, plus], it)
+                self._want_detail(it)               # fetched in the background: ready by the time you hover
+
+    # ───── item details (mana stones, theostone, stats, Arcana linked skills / set) ─────
+    @staticmethod
+    def _dkey(it: Item) -> tuple:
+        return (it.slot, it.item_id, it.enchant)
+
+    def _want_detail(self, it: Item):
+        key = self._dkey(it)
+        if key in self._details:
+            return
+        self._details[key] = None                            # asked for
+
+        def done(det, key=key):
+            self.app.inbox.put(("item_detail", self, key, det))
+        self.app.api.fetch_item_detail(self.char, it, done)
+
+    def item_detail_ready(self, key: tuple, det):
+        """(main thread) an item's details arrived: keep them, and refresh its tooltip if it's showing."""
+        if det is not None:
+            self._details[key] = det
+        elif self._details.get(key) is None:
+            self._details[key] = False                       # failed: the tooltip says so
+        hover = getattr(self, "_hover_item", None)
+        if hover is not None and self._dkey(hover[0]) == key and hover[1].winfo_exists():
+            self._show_item_tip(*hover)
+
+    def _item_hover(self, widgets, it: Item):
+        anchor = widgets[1]
+
+        def enter(_e):
+            self._hover_item = (it, anchor)
+            self._show_item_tip(it, anchor)
+
+        def leave(_e):
+            x, y = anchor.winfo_pointerxy()
+            row = [w for w in widgets if w.winfo_exists()]
+            if any(w.winfo_rootx() <= x < w.winfo_rootx() + w.winfo_width() and
+                   w.winfo_rooty() <= y < w.winfo_rooty() + w.winfo_height() for w in row):
+                return                                       # moving between the row's own parts
+            self._hover_item = None
+            self._hide_tip()
+        for w in widgets:
+            w.bind("<Enter>", enter, add="+")
+            w.bind("<Leave>", leave, add="+")
+
+    def _show_item_tip(self, it: Item, anchor):
+        det = self._details.get(self._dkey(it))
+        ench = (f" +{it.enchant}" if it.enchant else "") + (f" ✦{it.exceed}" if it.exceed else "")
+        title = it.name + ench
+        if det is None:
+            self._show_tip(anchor, title, [("dim", "Loading details…")])
+            return
+        if det is False:
+            self._show_tip(anchor, title, [("dim", "Couldn't load this item's details")])
+            return
+        lines: list = []
+        bits = [f"Item level {det.item_level}" if det.item_level else "", det.category,
+                f"{it.grade}" if it.grade else ""]
+        lines.append(("dim", "  ·  ".join(b for b in bits if b)))
+        if det.main_stats:
+            lines.append(("h", "Stats"))
+            lines += [f"{n}  {v}" + (f"  (+{x})" if x else "") for n, v, x in det.main_stats]
+        if det.sub_stats:
+            lines.append(("h", "Soul imprint"))
+            lines += [f"{n}  {v}" for n, v in det.sub_stats]
+        if det.mana_slots or det.mana_stones:
+            lines.append(("h", f"Mana stones  {len(det.mana_stones)}/{det.mana_slots or len(det.mana_stones)}"))
+            lines += [f"{n}  {v}" for n, v, _g in det.mana_stones] or [("dim", "None slotted")]
+        if det.theo_slots or det.theostones:
+            lines.append(("h", "Theostone"))
+            lines += det.theostones or [("dim", "None slotted")]
+        if det.linked_skills:
+            lines.append(("h", "Linked skills"))
+            lines += [f"{n}  Lv {lv}" for n, lv in det.linked_skills]
+        if det.set_name:
+            lines.append(("h", f"{det.set_name}  ·  {det.set_equipped}/{det.set_size or det.set_equipped} equipped"))
+            for need, effects in det.set_bonuses:
+                on = det.set_equipped >= need
+                for e in effects:
+                    lines.append(("ok" if on else "dim", f"{need} pieces: {e}"))
+        foot = []
+        if det.max_enchant:
+            foot.append(f"Max +{det.max_enchant}" + (f" · exceed ✦{det.max_exceed}" if det.max_exceed else ""))
+        self._show_tip(anchor, title, lines, foot)
 
     def _tab_skills(self, p: Profile):
         if p.equipment_error:
@@ -524,6 +615,18 @@ class ProfileView:
             return [f"{label} {sign}0%" for label, sign in bonuses], foot
         return list(s.effects), []
 
+    def demo_hover_item(self, slot_prefix: str):
+        """Screenshots only: show the tooltip of the first gear row whose slot starts with slot_prefix."""
+        p = self.profile
+        if not p:
+            return
+        for slot, it in p.gear.items():
+            if slot.startswith(slot_prefix) and it.slot_pos:
+                anchor = next((w for w in self.body.winfo_children()), self.body)
+                self._hover_item = (it, anchor)
+                self._show_item_tip(it, anchor)
+                return
+
     def demo_hover_first_stat(self):
         """Used by the screenshot run: show the first stat's tooltip as if hovered."""
         if getattr(self, "_first_tip", None):
@@ -565,7 +668,13 @@ class ProfileView:
         box.pack(padx=1, pady=1)
         tk.Label(box, text=title, bg=SURFACE_2, fg=FG, font=self.app.f_bold, anchor="w").pack(fill="x")
         for ln in lines:
-            tk.Label(box, text=ln, bg=SURFACE_2, fg=FG_DIM, font=self.app.f_small, anchor="w").pack(fill="x")
+            kind, text = ln if isinstance(ln, tuple) else ("", ln)
+            if kind == "h":                              # a section heading inside the tooltip
+                tk.Label(box, text=text, bg=SURFACE_2, fg=ACCENT, font=self.app.f_sbold, anchor="w").pack(
+                    fill="x", pady=(6, 0))
+            else:
+                tk.Label(box, text=text, bg=SURFACE_2, font=self.app.f_small, anchor="w", justify="left",
+                         wraplength=320, fg={"dim": FG_FAINT, "ok": FG}.get(kind, FG_DIM)).pack(fill="x")
         for ln in foot or []:
             tk.Label(box, text=ln, bg=SURFACE_2, fg=FG_FAINT, font=self.app.f_tiny, anchor="w").pack(fill="x", pady=(3, 0))
         tip.update_idletasks()

@@ -4,18 +4,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 EQUIPMENT_URL = "https://aion2.plaync.com/api/character/equipment"
+ITEM_URL = "https://aion2.plaync.com/api/character/equipment/item"      # one worn item in full (see ItemDetail)
 
 # Display groups for the gear tab, in the order the game's character window uses.
 GEAR_MAIN = ["MainHand", "SubHand", "Helmet", "Shoulder", "Torso", "Pants", "Gloves", "Boots", "Cape", "Belt"]
 GEAR_ACCESSORIES = ["Necklace", "Earring1", "Earring2", "Ring1", "Ring2", "Bracelet1", "Bracelet2",
                     "Amulet", "Rune1", "Rune2"]
-GEAR_ARCANA = ["Arcana1", "Arcana2", "Arcana3", "Arcana4", "Arcana5"]
+GEAR_ARCANA = [f"Arcana{i}" for i in range(1, 11)]                 # slots 41-50
 SLOT_LABELS = {
     "MainHand": "Main hand", "SubHand": "Off hand", "Earring1": "Earring", "Earring2": "Earring",
     "Ring1": "Ring", "Ring2": "Ring", "Bracelet1": "Bracelet", "Bracelet2": "Bracelet",
     "Rune1": "Rune", "Rune2": "Rune", "Cape": "Cloak", "Torso": "Chest", "Pants": "Legs",
-    "SwordMain": "Weapon", "Arcana1": "Arcana", "Arcana2": "Arcana", "Arcana3": "Arcana",
-    "Arcana4": "Arcana", "Arcana5": "Arcana",
+    "SwordMain": "Weapon", **{f"Arcana{i}": "Arcana" for i in range(1, 11)},
 }
 
 
@@ -38,6 +38,7 @@ class Item:
     icon: str | None = None
     item_id: int = 0
     level: int | None = None   # pets
+    slot_pos: int = 0          # the slot number the item-detail call wants
 
     @property
     def slot_label(self) -> str:
@@ -164,7 +165,7 @@ def _item(d: dict | None, slot: str | None = None) -> Item | None:
     return Item(slot=slot or d.get("slotPosName") or "", name=d.get("name") or "?", grade=d.get("grade") or "Common",
                 enchant=int(d.get("enchantLevel") or 0), exceed=int(d.get("exceedLevel") or 0),
                 icon=d.get("icon"), item_id=int(d.get("id") or 0),
-                level=int(d["level"]) if d.get("level") is not None else None)
+                level=int(d["level"]) if d.get("level") is not None else None, slot_pos=int(d.get("slotPos") or 0))
 
 
 def parse_profile(info: dict, equipment: dict | None) -> Profile:
@@ -219,3 +220,62 @@ def parse_profile(info: dict, equipment: dict | None) -> Profile:
                                   acquired=bool(s.get("acquired")), icon=s.get("icon"),
                                   need_level=int(s.get("needLevel") or 0)))
     return p
+
+
+@dataclass
+class ItemDetail:
+    """One worn item in full, from ITEM_URL: stats, mana stones, theostone, Arcana linked skills and set."""
+    item_level: int | None = None
+    category: str = ""
+    equip_level: int | None = None
+    max_enchant: int | None = None
+    max_exceed: int | None = None
+    main_stats: list[tuple[str, str, str]] = field(default_factory=list)    # (name, value, extra from enchanting)
+    sub_stats: list[tuple[str, str]] = field(default_factory=list)          # soul imprint: (name, value)
+    mana_slots: int = 0
+    mana_stones: list[tuple[str, str, str]] = field(default_factory=list)   # (name, value, grade)
+    theo_slots: int = 0
+    theostones: list[str] = field(default_factory=list)
+    linked_skills: list[tuple[str, int]] = field(default_factory=list)      # Arcana: (skill, level)
+    set_name: str = ""
+    set_equipped: int = 0
+    set_size: int = 0
+    set_bonuses: list[tuple[int, list[str]]] = field(default_factory=list)  # (pieces needed, effects)
+
+
+def _stone_text(d) -> str:
+    """A theostone entry, whatever shape it comes in: its description, else name + value."""
+    if isinstance(d, str):
+        return d
+    if not isinstance(d, dict):
+        return ""
+    desc = d.get("desc") or d.get("description") or ""
+    if isinstance(desc, list):
+        desc = " ".join(str(x) for x in desc)
+    name = d.get("name") or ""
+    value = d.get("value") or ""
+    return str(desc or f"{name} {value}".strip())
+
+
+def parse_item_detail(d: dict) -> ItemDetail:
+    d = d.get("data", d) if isinstance(d, dict) else {}
+    num = lambda v: int(v) if isinstance(v, (int, float)) or (isinstance(v, str) and v.isdigit()) else None  # noqa: E731
+    det = ItemDetail(item_level=num(d.get("level")), category=d.get("categoryName") or "",
+                     equip_level=num(d.get("equipLevel")), max_enchant=num(d.get("maxEnchantLevel")),
+                     max_exceed=num(d.get("maxExceedEnchantLevel")),
+                     mana_slots=num(d.get("magicStoneSlotCount")) or 0, theo_slots=num(d.get("godStoneSlotCount")) or 0)
+    for st in d.get("mainStats") or []:
+        extra = str(st.get("extra") or "")
+        det.main_stats.append((st.get("name") or "", str(st.get("value") or ""), "" if extra in ("", "0") else extra))
+    det.sub_stats = [(st.get("name") or "", str(st.get("value") or "")) for st in d.get("subStats") or []]
+    det.mana_stones = [(m.get("name") or "", str(m.get("value") or ""), m.get("grade") or "")
+                       for m in sorted(d.get("magicStoneStat") or [], key=lambda m: m.get("slotPos") or 0)]
+    theo = d.get("godStoneStat") or []
+    det.theostones = [t for t in (_stone_text(x) for x in (theo if isinstance(theo, list) else [theo])) if t]
+    det.linked_skills = [(sk.get("name") or "", int(sk.get("level") or 0)) for sk in d.get("subSkills") or []]
+    st = d.get("set") or d.get("SetItem") or {}
+    if st.get("name"):
+        det.set_name, det.set_equipped = st["name"], int(st.get("equippedCount") or 0)
+        det.set_size = len(st.get("items") or [])
+        det.set_bonuses = [(int(b.get("degree") or 0), list(b.get("descriptions") or [])) for b in st.get("bonuses") or []]
+    return det

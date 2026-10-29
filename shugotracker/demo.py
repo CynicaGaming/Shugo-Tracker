@@ -44,11 +44,34 @@ class DemoSession:
         if url == a.INFO_URL:
             time.sleep(random.uniform(0.15, 0.9) * self.slow)
             return _Resp(self._info(p["characterId"]))
-        from .profile import EQUIPMENT_URL
+        from .profile import EQUIPMENT_URL, ITEM_URL
+        if url == ITEM_URL:
+            time.sleep(random.uniform(0.1, 0.4) * self.slow)
+            return _Resp(self._item(p))
         if url == EQUIPMENT_URL:
             time.sleep(random.uniform(0.2, 0.8) * self.slow)
             return _Resp(self._equipment(p["characterId"]))
         raise ValueError(url)
+
+    def _item(self, p):
+        r = self._rnd(p.get("characterId"), p.get("slotPos"))
+        slot = int(p.get("slotPos") or 0)
+        if slot >= 41:                            # an Arcana card: linked skills and a set
+            return {"level": 80, "categoryName": "Arcana", "mainStats": [{"name": "Time [Siel]", "value": "20", "extra": "3"}],
+                    "subSkills": [{"name": n, "level": r.randint(1, 3)} for n in ("Judgment", "Insulting Roar", "Pummel")],
+                    "set": {"name": "Primal Vigor", "equippedCount": 4, "items": [{}] * 5,
+                            "bonuses": [{"degree": 2, "descriptions": ["+60 PvE Attack when HP is 70% or more"]},
+                                        {"degree": 4, "descriptions": ["+150 PvE Attack when HP is 70% or more"]}]}}
+        stones = [{"name": r.choice(["HP", "MP", "Attack", "Accuracy"]), "value": f"+{r.choice([15, 30, 60])}",
+                   "grade": r.choice(["Common", "Rare"]), "slotPos": i} for i in range(r.randint(1, 4))]
+        return {"level": r.randint(60, 90), "categoryName": "Longsword", "equipLevel": 45, "maxEnchantLevel": 15,
+                "maxExceedEnchantLevel": 5, "magicStoneSlotCount": 4, "godStoneSlotCount": 1,
+                "mainStats": [{"name": "Attack", "value": str(r.randint(300, 450)), "extra": str(r.randint(50, 150))},
+                              {"name": "Accuracy", "value": "150", "extra": "0"}],
+                "subStats": [{"name": "Might", "value": "30"}, {"name": "Combat Speed", "value": "11.9%"}],
+                "magicStoneStat": stones,
+                "godStoneStat": [{"name": "Freezing Strike", "desc": "Chance to freeze the target on hit"}]
+                if r.random() < 0.5 else []}
 
     def _search(self, kw, region, page, size):
         r = self._rnd(kw.lower(), region)
@@ -91,8 +114,15 @@ class DemoSession:
         r = self._rnd(char_id, "eq")
         from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN
         grades = ["Unique", "Unique", "Legend", "Epic", "Special"]
-        gear = [{"slotPosName": s, "name": (f"Enraged Kromede's Ancient Ceremonial {s}" if s in ("Necklace", "Earring1") else f"Demo {s}"), "grade": r.choice(grades), "enchantLevel": r.randint(0, 15),
-                 "exceedLevel": r.choice([0, 0, 1])} for s in GEAR_MAIN + GEAR_ACCESSORIES + GEAR_ARCANA]
+        pos = {"MainHand": 1, "SubHand": 2, "Helmet": 3, "Shoulder": 4, "Torso": 5, "Pants": 6, "Gloves": 7, "Boots": 8,
+               "Necklace": 10, "Earring1": 11, "Earring2": 12, "Ring1": 13, "Ring2": 14, "Bracelet1": 15, "Bracelet2": 16,
+               "Belt": 17, "Cape": 19, "Amulet": 22, "Rune1": 23, "Rune2": 24,
+               **{f"Arcana{i}": 40 + i for i in range(1, 11)}}
+        slots = GEAR_MAIN + GEAR_ACCESSORIES + GEAR_ARCANA[:7]           # 7 of the 10 Arcana slots filled
+        gear = [{"slotPosName": s, "slotPos": pos.get(s, 0), "id": 100000 + pos.get(s, 0),
+                 "name": (f"Enraged Kromede's Ancient Ceremonial {s}" if s in ("Necklace", "Earring1") else f"Demo {s}"),
+                 "grade": r.choice(grades), "enchantLevel": r.randint(0, 15),
+                 "exceedLevel": r.choice([0, 0, 1])} for s in slots]
         skills = [{"name": f"{cat} skill {i + 1}", "category": cat, "skillLevel": r.randint(0, 20),
                    "equip": int(r.random() < .5), "acquired": int(r.random() < .85), "needLevel": i}
                   for cat in ("Active", "Passive", "Dp") for i in range(6)]

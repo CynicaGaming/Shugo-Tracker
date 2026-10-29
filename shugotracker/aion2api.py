@@ -252,6 +252,8 @@ class Api:
         self._inflight: dict[str, list] = {}
         self._pflock = threading.Lock()
         self._search_cache: dict[tuple, tuple[float, dict]] = {}
+        self._item_details: dict[tuple, object] = {}              # (character, slot, item, enchant) -> ItemDetail
+        self._item_waiting: dict[tuple, list] = {}
         # the raw info response behind each card's numbers: opening that profile soon after reuses it
         self._recent_info: collections.OrderedDict[str, tuple[float, dict]] = collections.OrderedDict()
         # details: newest request first, stale generations dropped
@@ -485,6 +487,46 @@ class Api:
         threading.Thread(target=self._fetch_profile_run, args=(c, cached is not None), name="profile",
                          daemon=True).start()
 
+    def fetch_item_detail(self, c: Character, item, on_done: Callable[[object | None], None]) -> None:
+        """One worn item in full (mana stones, theostone, stats, Arcana linked skills / set), in the background.
+        on_done(ItemDetail | None) runs on a worker thread; answers are kept for the session."""
+        from .profile import ITEM_URL, parse_item_detail
+        key = (c.key, item.slot_pos, item.item_id, item.enchant)
+        with self._pflock:
+            hit = self._item_details.get(key)
+            if hit is not None:
+                waiting = None
+            else:
+                waiting = self._item_waiting.setdefault(key, [])
+                waiting.append(on_done)
+                if len(waiting) > 1:
+                    return                        # already being fetched: this caller gets the same answer
+        if hit is not None:
+            on_done(hit)
+            return
+
+        def run():
+            det = None
+            try:
+                data = self._get_json(ITEM_URL, {"id": item.item_id, "enchantLevel": item.enchant, "characterId": c.char_id,
+                                                 "serverId": c.server_id, "slotPos": item.slot_pos, "lang": "en",
+                                                 "region": c.region})
+                det = parse_item_detail(data)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"api: item detail for {c.name} slot {item.slot_pos} failed: {e}")
+            with self._pflock:
+                if det is not None:
+                    self._item_details[key] = det
+                    while len(self._item_details) > 2000:
+                        self._item_details.pop(next(iter(self._item_details)))
+                callbacks = self._item_waiting.pop(key, [])
+            for cb in callbacks:
+                try:
+                    cb(det)
+                except Exception as e:  # noqa: BLE001
+                    self.log(f"api: item detail callback failed: {e}")
+        self._profile_pool.submit(run)
+
     def prefetch_profile(self, c: Character) -> None:
         """Warm the cache (e.g. while the pointer rests on a card) so opening the profile is instant."""
         if not c.char_id:
@@ -556,6 +598,9 @@ class Api:
 
     def forget(self, c: Character) -> None:
         self._profiles.pop(c.key, None)
+        with self._pflock:                        # Refresh: item details are asked again too
+            for k in [k for k in self._item_details if k[0] == c.key]:
+                del self._item_details[k]
         self.store.drop_profile(c.key)
         self.store.drop_details(c.key)
         with self._cache_lock:
