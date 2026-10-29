@@ -231,12 +231,16 @@ class ItemDetail:
     max_enchant: int | None = None
     max_exceed: int | None = None
     main_stats: list[tuple[str, str, str]] = field(default_factory=list)    # (name, value, extra from enchanting)
+    main_min: dict[str, str] = field(default_factory=dict)                  # stat name -> low end (Attack 354–442)
+    exceed_stats: list[tuple[str, str]] = field(default_factory=list)       # from exceeding: shown in orange
+    soul_bind: str = ""                                                     # Soul Binding Rate, e.g. "98.8"
+    costumes: list[str] = field(default_factory=list)                       # appearance options
     sub_stats: list[tuple[str, str]] = field(default_factory=list)          # soul imprint: (name, value)
     mana_slots: int = 0
-    mana_stones: list[tuple[str, str, str]] = field(default_factory=list)   # (name, value, grade)
+    mana_stones: list[tuple[str, str, str, str]] = field(default_factory=list)   # (name, value, grade, icon)
     theo_slots: int = 0
     theostones: list[str] = field(default_factory=list)
-    linked_skills: list[tuple[str, int]] = field(default_factory=list)      # Arcana: (skill, level)
+    linked_skills: list[tuple[str, int, str]] = field(default_factory=list)  # (skill, level, icon)
     set_name: str = ""
     set_equipped: int = 0
     set_size: int = 0
@@ -266,13 +270,22 @@ def parse_item_detail(d: dict) -> ItemDetail:
                      mana_slots=num(d.get("magicStoneSlotCount")) or 0, theo_slots=num(d.get("godStoneSlotCount")) or 0)
     for st in d.get("mainStats") or []:
         extra = str(st.get("extra") or "")
-        det.main_stats.append((st.get("name") or "", str(st.get("value") or ""), "" if extra in ("", "0") else extra))
+        name, value = st.get("name") or "", str(st.get("value") or "")
+        if st.get("exceed"):
+            det.exceed_stats.append((name, value))
+            continue
+        det.main_stats.append((name, value, "" if extra in ("", "0") else extra))
+        if st.get("minValue") not in (None, "", value):
+            det.main_min[name] = str(st["minValue"])
+    det.soul_bind = str(d.get("soulBindRate") or "")
+    det.costumes = [str(x) for x in d.get("costumes") or [] if x]
     det.sub_stats = [(st.get("name") or "", str(st.get("value") or "")) for st in d.get("subStats") or []]
-    det.mana_stones = [(m.get("name") or "", str(m.get("value") or ""), m.get("grade") or "")
+    det.mana_stones = [(m.get("name") or "", str(m.get("value") or ""), m.get("grade") or "", m.get("icon") or "")
                        for m in sorted(d.get("magicStoneStat") or [], key=lambda m: m.get("slotPos") or 0)]
     theo = d.get("godStoneStat") or []
     det.theostones = [t for t in (_stone_text(x) for x in (theo if isinstance(theo, list) else [theo])) if t]
-    det.linked_skills = [(sk.get("name") or "", int(sk.get("level") or 0)) for sk in d.get("subSkills") or []]
+    det.linked_skills = [(sk.get("name") or "", int(sk.get("level") or 0), sk.get("icon") or "")
+                         for sk in d.get("subSkills") or []]
     st = d.get("set") or d.get("SetItem") or {}
     if st.get("name"):
         det.set_name, det.set_equipped = st["name"], int(st.get("equippedCount") or 0)

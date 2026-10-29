@@ -475,45 +475,188 @@ class ProfileView:
             w.bind("<Enter>", enter, add="+")
             w.bind("<Leave>", leave, add="+")
 
+    # the game's own item tooltip, as closely as we can: a header tinted by grade with the icon on the right,
+    # stats as name / value rows, soul imprint, mana stones two to a row, theostone, appearance, required level
+    TIP_W = 300
+    HEAD_BG = {"Common": "#34373e", "Rare": "#1e3d27", "Legend": "#1b3350", "Unique": "#4a3a16", "Epic": "#4a2814",
+               "Special": "#163f3c", "Mythic": "#4a1a2c"}
+    TIP_BG = "#17191e"
+    EXCEED = "#ff9a3c"        # stats from exceeding (orange, like the game)
+    SOUL = "#5aa9ff"          # soul binding rate (blue)
+    FUSE = "#b98cff"          # linked / fused skills (purple)
+    GOOD = "#6fd38a"          # better mana stones (green)
+    SKIN = "#4fd1c5"
+
     def _show_item_tip(self, it: Item, anchor):
         det = self._details.get(self._dkey(it))
-        ench = (f" +{it.enchant}" if it.enchant else "") + (f" ✦{it.exceed}" if it.exceed else "")
-        title = it.name + ench
-        if det is None:
-            self._show_tip(anchor, title, [("dim", "Loading details…")])
+        self._hide_tip()
+        f = self.app
+        tip = tk.Toplevel(self.frame)
+        tip.overrideredirect(True)
+        tip.attributes("-topmost", True)
+        tip.configure(bg=BORDER)
+        outer = tk.Frame(tip, bg=self.TIP_BG, width=self.TIP_W)
+        outer.pack(padx=1, pady=1)
+        col = GRADE_COLORS.get(it.grade, FG)
+        hb = self.HEAD_BG.get(it.grade, "#2a2d34")
+
+        # header
+        head = tk.Frame(outer, bg=hb, padx=12, pady=10)
+        head.pack(fill="x")
+        icon_box = tk.Frame(head, bg=col, padx=1, pady=1)
+        icon_box.pack(side="right", anchor="n", padx=(10, 0))
+        icon = tk.Label(icon_box, bg=SURFACE_2, image=self._blank(44), bd=0)
+        icon.pack()
+        self._set_image(icon, it.icon, 44)
+        left = tk.Frame(head, bg=hb)
+        left.pack(side="left", fill="x", expand=True)
+        ench = f"+{it.enchant} " if it.enchant else ""
+        tk.Label(left, text=ench + it.name, bg=hb, fg=col, font=f.f_bold, anchor="w", justify="left",
+                 wraplength=self.TIP_W - 90).pack(fill="x")
+        kind = f"{it.grade} {det.category}".strip() if det else it.grade
+        tk.Label(left, text=kind, bg=hb, fg=FG, font=f.f_small, anchor="w").pack(fill="x")
+        if det and det.item_level:
+            tk.Label(left, text="Item Level", bg=hb, fg=FG_DIM, font=f.f_tiny, anchor="w").pack(fill="x", pady=(4, 0))
+            lvl = str(det.item_level) + (f"   ✦{it.exceed}" if it.exceed else "")
+            tk.Label(left, text=lvl, bg=hb, fg=FG, font=f.f_title, anchor="w").pack(fill="x")
+
+        body = tk.Frame(outer, bg=self.TIP_BG, padx=12, pady=6)
+        body.pack(fill="x")
+        if not det:
+            if det is False:
+                tk.Label(body, text="Couldn't load this item's details", bg=self.TIP_BG, fg=FG_FAINT,
+                         font=f.f_small).pack(pady=10)
+            else:
+                self._tip_spinner(body)
+            self._place_tip(tip, anchor)
             return
-        if det is False:
-            self._show_tip(anchor, title, [("dim", "Couldn't load this item's details")])
-            return
-        lines: list = []
-        bits = [f"Item level {det.item_level}" if det.item_level else "", det.category,
-                f"{it.grade}" if it.grade else ""]
-        lines.append(("dim", "  ·  ".join(b for b in bits if b)))
-        if det.main_stats:
-            lines.append(("h", "Stats"))
-            lines += [f"{n}  {v}" + (f"  (+{x})" if x else "") for n, v, x in det.main_stats]
-        if det.sub_stats:
-            lines.append(("h", "Soul imprint"))
-            lines += [f"{n}  {v}" for n, v in det.sub_stats]
+
+        def line():
+            tk.Frame(body, bg=BORDER, height=1).pack(fill="x", pady=5)
+
+        def row(name, value, fg=FG, vfg=None, font=None):
+            r = tk.Frame(body, bg=self.TIP_BG)
+            r.pack(fill="x")
+            tk.Label(r, text=name, bg=self.TIP_BG, fg=fg, font=font or f.f_small, anchor="w").pack(side="left")
+            tk.Label(r, text=value, bg=self.TIP_BG, fg=vfg or fg, font=font or f.f_small, anchor="e").pack(side="right")
+
+        for name, value, extra in det.main_stats:
+            low = det.main_min.get(name)
+            row(name, (f"{low}–" if low else "") + value + (f"(+{extra})" if extra else ""))
+        for name, value in det.exceed_stats:
+            row(name, value, fg=self.EXCEED)
+        if det.soul_bind or det.sub_stats:
+            line()
+        if det.soul_bind:
+            row("Soul Binding Rate", f"{det.soul_bind}%", fg=self.SOUL)
+            bar = tk.Canvas(body, height=3, bg=self.TIP_BG, highlightthickness=0, width=self.TIP_W - 26)
+            bar.pack(fill="x", pady=(2, 4))
+            try:
+                pct = max(0.0, min(100.0, float(det.soul_bind))) / 100
+            except ValueError:
+                pct = 0
+            w = self.TIP_W - 26
+            bar.create_rectangle(0, 0, w, 3, fill=SURFACE_2, outline="")
+            bar.create_rectangle(0, 0, w * pct, 3, fill=self.SOUL, outline="")
+        for name, value in det.sub_stats:
+            row(name, value)
+        for name, lv, _icon in det.linked_skills if not det.set_name else []:
+            tk.Label(body, text=f"◈  {name}  Lv {lv}", bg=self.TIP_BG, fg=self.FUSE, font=f.f_small,
+                     anchor="w").pack(fill="x", pady=(4, 0))
         if det.mana_slots or det.mana_stones:
-            lines.append(("h", f"Mana stones  {len(det.mana_stones)}/{det.mana_slots or len(det.mana_stones)}"))
-            lines += [f"{n}  {v}" for n, v, _g in det.mana_stones] or [("dim", "None slotted")]
+            line()
+            grid = tk.Frame(body, bg=self.TIP_BG)
+            grid.pack(fill="x")
+            grid.columnconfigure(0, weight=1, uniform="ms")
+            grid.columnconfigure(1, weight=1, uniform="ms")
+            stones = list(det.mana_stones) + [None] * max(0, det.mana_slots - len(det.mana_stones))
+            for i, st in enumerate(stones):
+                cell = tk.Frame(grid, bg=self.TIP_BG)
+                cell.grid(row=i // 2, column=i % 2, sticky="w", pady=2)
+                ic = tk.Label(cell, bg=self.TIP_BG, image=self._blank(16), bd=0)
+                ic.pack(side="left")
+                if st is None:
+                    tk.Label(cell, text="Empty", bg=self.TIP_BG, fg=FG_FAINT, font=f.f_small).pack(side="left", padx=6)
+                    continue
+                name, value, grade, url = st
+                self._set_image(ic, url, 16)
+                better = grade not in ("", "Common")
+                tk.Label(cell, text=f"{name}{value}", bg=self.TIP_BG, fg=self.GOOD if better else FG,
+                         font=f.f_small).pack(side="left", padx=6)
         if det.theo_slots or det.theostones:
-            lines.append(("h", "Theostone"))
-            lines += det.theostones or [("dim", "None slotted")]
-        if det.linked_skills:
-            lines.append(("h", "Linked skills"))
-            lines += [f"{n}  Lv {lv}" for n, lv in det.linked_skills]
-        if det.set_name:
-            lines.append(("h", f"{det.set_name}  ·  {det.set_equipped}/{det.set_size or det.set_equipped} equipped"))
+            line()
+            for t in det.theostones or ["Theostone Engravable"]:
+                tk.Label(body, text=f"◇  {t}", bg=self.TIP_BG, fg=FG if det.theostones else FG_FAINT,
+                         font=f.f_small, anchor="w", justify="left", wraplength=self.TIP_W - 30).pack(fill="x")
+        if det.set_name:                             # Arcana: linked skills, then the set
+            if det.linked_skills:
+                line()
+                tk.Label(body, text="LINKED SKILLS", bg=self.TIP_BG, fg=FG_DIM, font=f.f_tiny, anchor="w").pack(fill="x")
+                for name, lv, url in det.linked_skills:
+                    r = tk.Frame(body, bg=self.TIP_BG)
+                    r.pack(fill="x", pady=1)
+                    ic = tk.Label(r, bg=self.TIP_BG, image=self._blank(18), bd=0)
+                    ic.pack(side="left")
+                    self._set_image(ic, url, 18)
+                    tk.Label(r, text=name, bg=self.TIP_BG, fg=FG, font=f.f_small).pack(side="left", padx=6)
+                    tk.Label(r, text=f"Lv. {lv}", bg=self.TIP_BG, fg=FG_DIM, font=f.f_small).pack(side="right")
+            line()
+            tk.Label(body, text=f"{det.set_name.upper()} · {det.set_equipped} EQUIPPED", bg=self.TIP_BG,
+                     fg=FG, font=f.f_sbold, anchor="w").pack(fill="x")
             for need, effects in det.set_bonuses:
                 on = det.set_equipped >= need
+                tk.Label(body, text=f"{need} pieces", bg=self.TIP_BG, fg=FG if on else FG_FAINT, font=f.f_sbold,
+                         anchor="w").pack(fill="x", pady=(4, 0))
                 for e in effects:
-                    lines.append(("ok" if on else "dim", f"{need} pieces: {e}"))
-        foot = []
+                    tk.Label(body, text=e, bg=self.TIP_BG, fg=FG_DIM if on else FG_FAINT, font=f.f_small,
+                             anchor="w", justify="left", wraplength=self.TIP_W - 30).pack(fill="x")
+        if det.costumes:
+            line()
+            row("Skin Info", "", fg=self.SKIN)
+            for c in det.costumes[:3]:
+                tk.Label(body, text=c, bg=self.TIP_BG, fg=ACCENT, font=f.f_small, anchor="w").pack(fill="x")
+        foot = tk.Frame(outer, bg=self.TIP_BG, padx=12)
+        foot.pack(fill="x", pady=(2, 8))
+        tk.Frame(foot, bg=BORDER, height=1).pack(fill="x", pady=(0, 6))
+        if det.equip_level:
+            tk.Label(foot, text=f"Required Level {det.equip_level}", bg=self.TIP_BG, fg=FG_DIM,
+                     font=f.f_tiny).pack(side="left")
         if det.max_enchant:
-            foot.append(f"Max +{det.max_enchant}" + (f" · exceed ✦{det.max_exceed}" if det.max_exceed else ""))
-        self._show_tip(anchor, title, lines, foot)
+            tk.Label(foot, text=f"Max +{det.max_enchant}" + (f" · ✦{det.max_exceed}" if det.max_exceed else ""),
+                     bg=self.TIP_BG, fg=FG_FAINT, font=f.f_tiny).pack(side="right")
+        self._place_tip(tip, anchor)
+
+    def _tip_spinner(self, parent):
+        """A small spinning ring while the item's details load."""
+        cv = tk.Canvas(parent, width=self.TIP_W - 26, height=56, bg=self.TIP_BG, highlightthickness=0)
+        cv.pack()
+        cx, r = (self.TIP_W - 26) / 2, 11
+        cv.create_oval(cx - r, 28 - r, cx + r, 28 + r, outline=SURFACE_2, width=3)
+        arc = cv.create_arc(cx - r, 28 - r, cx + r, 28 + r, start=90, extent=100, style="arc", outline=ACCENT,
+                            width=3)
+
+        def spin():
+            try:
+                cv.itemconfigure(arc, start=-(time.monotonic() * 360) % 360)
+                cv.after(30, spin)
+            except tk.TclError:
+                pass                                 # the tooltip closed
+        spin()
+
+    def _place_tip(self, tip, anchor):
+        tip.update_idletasks()
+        from .desktop import monitor_rect
+        left, top, right, bottom = monitor_rect(anchor, anchor.winfo_rootx(), anchor.winfo_rooty())
+        w, h = tip.winfo_reqwidth(), tip.winfo_reqheight()
+        # beside the row when there's room (like the game), else under / over it
+        x = anchor.winfo_rootx() + anchor.winfo_width() + 8
+        if x + w > right - 8:
+            x = anchor.winfo_rootx() - w - 8
+        if x < left + 8:
+            x = max(left + 8, min(anchor.winfo_rootx(), right - w - 8))
+        y = max(top + 8, min(anchor.winfo_rooty() - 20, bottom - h - 8))
+        tip.geometry(f"+{int(x)}+{int(y)}")
+        self._tip = tip
 
     def _tab_skills(self, p: Profile):
         if p.equipment_error:

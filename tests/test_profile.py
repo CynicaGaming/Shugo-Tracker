@@ -318,17 +318,20 @@ class ItemDetailTests(unittest.TestCase):
         sword = parse_item_detail({
             "level": 86, "categoryName": "Longsword", "maxEnchantLevel": 15, "maxExceedEnchantLevel": 5,
             "magicStoneSlotCount": 4, "godStoneSlotCount": 1,
-            "mainStats": [{"name": "Attack", "value": "442", "extra": "146"}, {"name": "Block", "value": "200", "extra": "0"}],
+            "mainStats": [{"name": "Attack", "minValue": "354", "value": "442", "extra": "146"},
+                          {"name": "Block", "value": "200", "extra": "0"},
+                          {"name": "Attack", "value": "24", "exceed": True}], "soulBindRate": "98.8",
             "subStats": [{"name": "Might", "value": "30"}],
             "magicStoneStat": [{"name": "MP", "value": "+15", "grade": "Common", "slotPos": 2},
                                {"name": "HP", "value": "+60", "grade": "Rare", "slotPos": 0}]})
         self.assertEqual(sword.main_stats, [("Attack", "442", "146"), ("Block", "200", "")])
         self.assertEqual([m[0] for m in sword.mana_stones], ["HP", "MP"])          # in slot order
+        self.assertEqual((sword.main_min, sword.exceed_stats, sword.soul_bind), ({"Attack": "354"}, [("Attack", "24")], "98.8"))
         self.assertEqual((sword.mana_slots, sword.theo_slots, sword.theostones), (4, 1, []))
         card = parse_item_detail({"subSkills": [{"name": "Judgment", "level": 2}],
                                   "set": {"name": "Primal Vigor", "equippedCount": 4, "items": [{}] * 5,
                                           "bonuses": [{"degree": 2, "descriptions": ["+60 PvE Attack"]}]},
                                   "godStoneStat": [{"name": "Frost", "desc": "Chance to freeze"}]})
-        self.assertEqual(card.linked_skills, [("Judgment", 2)])
+        self.assertEqual(card.linked_skills, [("Judgment", 2, "")])
         self.assertEqual((card.set_name, card.set_equipped, card.set_size), ("Primal Vigor", 4, 5))
         self.assertEqual(card.theostones, ["Chance to freeze"])
