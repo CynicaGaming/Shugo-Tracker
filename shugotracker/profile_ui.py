@@ -561,8 +561,7 @@ class ProfileView:
         for name, value in det.sub_stats:
             row(name, value)
         for name, lv, _icon in det.linked_skills if not det.set_name else []:
-            tk.Label(body, text=f"◈  {name}  Lv {lv}", bg=self.TIP_BG, fg=self.FUSE, font=f.f_small,
-                     anchor="w").pack(fill="x", pady=(4, 0))
+            row(name, f"Lvl. +{lv}")                 # a skill the item adds: a row like the stats above
         if det.mana_slots or det.mana_stones:
             line()
             grid = tk.Frame(body, bg=self.TIP_BG)
@@ -599,7 +598,7 @@ class ProfileView:
                     ic.pack(side="left")
                     self._set_image(ic, url, 18)
                     tk.Label(r, text=name, bg=self.TIP_BG, fg=FG, font=f.f_small).pack(side="left", padx=6)
-                    tk.Label(r, text=f"Lv. {lv}", bg=self.TIP_BG, fg=FG_DIM, font=f.f_small).pack(side="right")
+                    tk.Label(r, text=f"Lvl. +{lv}", bg=self.TIP_BG, fg=FG, font=f.f_small).pack(side="right")
             line()
             tk.Label(body, text=f"{det.set_name.upper()} · {det.set_equipped} EQUIPPED", bg=self.TIP_BG,
                      fg=FG, font=f.f_sbold, anchor="w").pack(fill="x")
