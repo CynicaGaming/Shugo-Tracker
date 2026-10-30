@@ -2346,7 +2346,8 @@ class SearchWindow:
             (7000, lambda: self._grab(f"{base}.png")),
             (7200, lambda: self._view and self.toggle_favorite(self._view[0])),
             (7250, lambda: len(self._view) > 2 and self.toggle_favorite(self._view[2])),   # 2 to show the grips
-            (7270, lambda: len(self._view) > 1 and self.set_my_character(self._view[1])),
+            (7270, lambda: len(self._view) > 1 and self.set_my_character(       # --showcase: the real one is you
+                self._view[0] if getattr(self.api.session, "real", None) else self._view[1])),
             (7290, lambda: self._me_menu()),
             (7340, lambda: self._grab(f"{base}-me-menu.png")),
             (7360, lambda: self.me_menu.unpost()),
