@@ -47,7 +47,7 @@ jobs:
 
       - name: UI screenshots (README showcase, one live character)
         continue-on-error: true
-        run: python -m shugotracker.app --showcase Cynica@Kaisinel=Claude --query Claude --screenshot ui-show.png
+        run: python -m shugotracker.app --showcase Cynica@Kaisinel=Cynica --query Cynica --screenshot ui-show.png
 
       - name: UI screenshots (live data)
         continue-on-error: true
