@@ -1939,6 +1939,9 @@ class SearchWindow:
     # ═════ profile ═════
     def open_profile(self, c: Character):
         self.close_profile()
+        if self.settings_view is not None:       # (opened from Settings: the profile replaces it)
+            self.settings_view.destroy()
+            self.settings_view = None
         self.top.pack_forget()
         self.status_row.pack_forget()
         self.list_wrap.pack_forget()
