@@ -646,7 +646,7 @@ class SearchWindow:
         self.search_entry.bind("<Return>", lambda e: self._start_search(now=True))
         self.search_entry.bind("<Escape>", lambda e: self.search_var.set(""))
         self.search_var.trace_add("write", lambda *a: self._on_type())
-        self.placeholder = tk.Label(self.box, text="Search by character name", bg=SURFACE, fg=FG_FAINT,
+        self.placeholder = tk.Label(self.box, text="Search characters", bg=SURFACE, fg=FG_FAINT,
                                     font=self.f_input)
         self.placeholder.place(x=34, rely=0.5, anchor="w")
         self.placeholder.bind("<Button-1>", lambda e: self.search_entry.focus_set())
@@ -1484,19 +1484,20 @@ class SearchWindow:
                 return
         elif self.mode == "favorites":
             if len(self.favorites):
-                msg, sub = "No favorites match these filters", "Clear the filters to see them all."
+                msg, sub = "No results", ""
             else:
-                msg, sub = "No favorites yet", "Characters you star appear here."
+                msg, sub = "No favorites yet", ""
         elif not self.keyword:
-            msg, sub = "Find any AION 2 character", "Search every Global region at once."
+            return
         elif any(st["error"] for st in self.region_state.values()):
-            msg, sub = "Search failed", "Check your connection and try again."
+            msg, sub = "Can't connect", "Check your connection and try again."
         elif self.results or self._query_filters:
-            msg, sub = "No matches with these filters", "Clear the filters to see all results."
+            msg, sub = "No results", ""
         else:
-            msg, sub = f"No characters match “{self.keyword}”", "Try a different spelling."
-        cv.create_text(width / 2, 70, text=msg, fill=FG, font=self.f_name, tags="card")
-        cv.create_text(width / 2, 96, text=sub, fill=FG_DIM, font=self.f_small, tags="card")
+            msg, sub = f"No results for “{self.keyword}”", ""
+        cv.create_text(width / 2, 70, text=msg, fill=FG_DIM, font=self.f_body, tags="card")
+        if sub:
+            cv.create_text(width / 2, 92, text=sub, fill=FG_FAINT, font=self.f_small, tags="card")
 
     def _draw_skeleton(self, cv, y, width, a, b):
         sp = self._cols(width)["spans"]
@@ -1834,7 +1835,7 @@ class SearchWindow:
             if getattr(self, "_rec_done_at", 0) is None:
                 self._rec_done_at = time.time()
             if time.time() - (self._rec_done_at or 0) < 10:
-                return f"Saved {os.path.basename(self.nearby.record_path)} in the diagnostics folder"
+                return "Recording saved"
         return ""                                    # (the tab already says how many)
 
     def _nearby_empty_text(self) -> tuple[str, str]:
@@ -1842,20 +1843,20 @@ class SearchWindow:
             return "", ""
         if self.nearby_view == "recent":
             if self._recent_rows:
-                return "No players match these filters", "Clear the filters to see them all."
-            return "No one yet", "Players you leave behind show up here."
+                return "No results", ""
+            return "No recent players", ""
         from .nearby import CAPTURING, ERROR, STARTING, WAITING
         st = self.nearby.state
         if st == WAITING:
-            return "Waiting for AION 2", "Players show up here once you're in the game."
+            return "Waiting for AION 2", ""
         if st == STARTING:
             return "Starting…", ""
         if st == ERROR:
-            return "Couldn't read game traffic", self.nearby.detail
+            return "Nearby stopped", self.nearby.detail
         if st == CAPTURING and self._nearby_rows:
-            return "No players match these filters", "Clear the filters to see everyone nearby."
+            return "No results", ""
         if st == CAPTURING:
-            return "No players nearby yet", "Players appear as the game shows them to you."
+            return "No players nearby", ""
         return "", ""
 
     def _paint_nearby_panel(self):
@@ -1896,20 +1897,17 @@ class SearchWindow:
             tk.Label(head, text="Nearby", bg=SURFACE, fg=FG, font=self.f_name).pack(side="left")
             tk.Label(head, text="BETA", bg=ACCENT, fg=ACCENT_FG, font=self.f_tiny, padx=5).pack(
                 side="left", padx=(8, 0), pady=(2, 0))
-            text("Disclaimer: reading game traffic may violate AION 2's Terms of Service. Use at your own risk; "
-                 "Shugo Tracker is not responsible for any action taken against your account, including bans.",
+            text("Reading game traffic may break AION 2's Terms of Service. Use at your own risk.",
                  self.f_small, FG_FAINT, (10, 0))
-            self._panel_button(buttons, "Turn on Nearby", lambda: self.set_nearby_enabled(True), accent=True)
+            self._panel_button(buttons, "Turn On", lambda: self.set_nearby_enabled(True), accent=True)
         else:
             if key == NO_ADMIN:
-                text("Run as administrator", self.f_name, FG)
-                text("Nearby reads AION 2's traffic through Windows, which needs Shugo Tracker to run as "
-                     "administrator.", self.f_body, FG_DIM, (8, 0))
-                self._panel_button(buttons, "Restart as administrator",
+                text("Administrator required", self.f_name, FG)
+                self._panel_button(buttons, "Restart as Admin",
                                    lambda: self.request_admin(), accent=True)
             else:
                 text("Nearby couldn't start", self.f_name, FG)
-                text(f"The capture part of Shugo Tracker couldn't load: {self.nearby.detail}",
+                text(self.nearby.detail,
                      self.f_body, FG_DIM, (8, 0))
                 self._panel_button(buttons, "Try again", self.nearby.retry)
         buttons.pack(fill="x", pady=(14, 0))
@@ -2243,9 +2241,9 @@ class SearchWindow:
             pct = int((u.progress or 0) * 100)
             return f"progress:{pct}", ACCENT, f"Downloading v{u.latest}" + (f"  {pct}%" if u.progress else "…")
         if st == "ready":
-            return "refresh", GREEN, f"v{u.latest} is ready: click to restart"
+            return "refresh", GREEN, f"Restart to update to v{u.latest}"
         if st == "error" and self._update_clicked:
-            return "update", RED, "Update failed: click to try again"
+            return "update", RED, "Update failed · Retry"
         return None
 
     def _paint_gear(self):

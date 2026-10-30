@@ -163,7 +163,7 @@ class SettingsView:
         a, cfg = self.app, self.cfg
 
         card = self._section("Window")
-        r, _ = self._row(card, "Borderless window")
+        r, _ = self._row(card, "Borderless")
         Switch(r, bool(cfg.get("borderless", True)), lambda on: (a.set_borderless(on), self._save())).pack()
         r, _ = self._row(card, "Opacity")
         Slider(r, clamp_opacity(cfg.get("window_opacity", 1.0)), OPACITY_MIN, 1.0, self._opacity).pack()
@@ -174,24 +174,25 @@ class SettingsView:
             card = self._section("Nearby  ·  BETA")
             r, _ = self._row(card, "Show Nearby")
             Switch(r, bool(cfg.get("nearby_enabled")), self._nearby).pack()
-            r, _ = self._row(card, "Auto-clear Nearby")
+            r, _ = self._row(card, "Auto-clear")
             secs = [c[0] for c in AUTOCLEAR_CHOICES]
             names = [c[1] for c in AUTOCLEAR_CHOICES]
             cur = secs.index(cfg.get("nearby_autoclear_s", 0)) if cfg.get("nearby_autoclear_s", 0) in secs else 0
             Slider(r, cur, 0, len(secs) - 1, lambda v, final: self._set_every(secs[int(v)], final), step=1,
                    fmt=lambda v: names[int(v)]).pack()
-            r, _ = self._row(card, "Players kept on Recent")
+
+            card = self._section("Recent")
+            r, _ = self._row(card, "Recent Players")
             keep = [c[0] for c in RECENT_CHOICES]
             keep_names = [c[1] for c in RECENT_CHOICES]
             cur = keep.index(cfg.get("recent_max", 250)) if cfg.get("recent_max", 250) in keep else 2
+            self._recent_btn = self._button(r, "Clear", self._clear_recent)
+            self._recent_btn.pack(side="right", padx=(12, 0))
             Slider(r, cur, 0, len(keep) - 1, lambda v, final: self._set_recent_max(keep[int(v)], final), step=1,
-                   fmt=lambda v: keep_names[int(v)]).pack()
-            r, self._recent_sub = self._row(card, "Recent list", " ")
-            self._button(r, "Clear", self._clear_recent).pack(side="right")
-            self._show_recent_count()
+                   fmt=lambda v: keep_names[int(v)]).pack(side="right")
 
         card = self._section("Updates")
-        r, _ = self._row(card, "Check for updates automatically")
+        r, _ = self._row(card, "Automatic updates")
         Switch(r, bool(cfg["auto_update"]), lambda on: self._set("auto_update", on)).pack()
         if a.updater is not None:
             r, _ = self._row(card, f"Version {a.updater.current}")
@@ -213,8 +214,6 @@ class SettingsView:
                         cursor="hand2")
         link.pack(anchor="w")
         link.bind("<Button-1>", lambda e: webbrowser.open(REPO_URL))
-        tk.Label(about, text="Character data from NCSOFT's public AION 2 site",
-                 bg=BG, fg=FG_FAINT, font=self.app.f_tiny).pack(anchor="w", pady=(2, 0))
 
     # ───── actions ─────
     def _set(self, key, value):
@@ -238,19 +237,15 @@ class SettingsView:
         if self.app.nearby is not None:
             self.app.nearby.set_recent_max(n)
             self.app._refresh_nearby(force=True)
-            self._show_recent_count()
         if final:
             self._save()
-
-    def _show_recent_count(self):
-        n = len(self.app.nearby.recent()) if self.app.nearby is not None else 0
-        self._recent_sub.config(text=f"{n:,} player{'s' if n != 1 else ''}")
 
     def _clear_recent(self):
         if self.app.nearby is not None:
             self.app.nearby.clear_recent()
             self.app._refresh_nearby(force=True)
-        self._recent_sub.config(text="Cleared")
+        self._recent_btn.config(text="Cleared")
+        self.app.root.after(1500, lambda: self._recent_btn.winfo_exists() and self._recent_btn.config(text="Clear"))
 
     def _nearby(self, on: bool):
         self.app.set_nearby_enabled(on)

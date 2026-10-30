@@ -385,7 +385,7 @@ class ProfileView:
     # ───── tabs ─────
     def _tab_gear(self, p: Profile):
         if p.equipment_error:
-            tk.Label(self.body, text="Couldn't load gear.", bg=BG, fg=RED,
+            tk.Label(self.body, text="Couldn't load gear", bg=BG, fg=RED,
                      font=self.app.f_small).pack(anchor="w", pady=8)
             return
         rows = [(slot_name(s), p.gear.get(s)) for s in GEAR_MAIN + GEAR_ACCESSORIES]
@@ -538,7 +538,7 @@ class ProfileView:
         body.pack(fill="x")
         if not det:
             if det is False:
-                tk.Label(body, text="Couldn't load this item's details", bg=self.TIP_BG, fg=FG_FAINT,
+                tk.Label(body, text="Couldn't load details", bg=self.TIP_BG, fg=FG_FAINT,
                          font=f.f_small).pack(pady=10)
             else:
                 self._tip_spinner(body)
@@ -682,7 +682,7 @@ class ProfileView:
 
     def _tab_skills(self, p: Profile):
         if p.equipment_error:
-            tk.Label(self.body, text="Couldn't load skills.", bg=BG, fg=RED,
+            tk.Label(self.body, text="Couldn't load skills", bg=BG, fg=RED,
                      font=self.app.f_small).pack(anchor="w", pady=8)
             return
         for cat, title in SKILL_CATEGORIES:
@@ -711,7 +711,7 @@ class ProfileView:
 
     def _tab_daevanion(self, p: Profile):
         if not p.boards:
-            tk.Label(self.body, text="No Daevanion boards opened yet.", bg=BG, fg=FG_DIM,
+            tk.Label(self.body, text="No boards opened", bg=BG, fg=FG_DIM,
                      font=self.app.f_small).pack(anchor="w", pady=8)
             return
         total_open = sum(b.opened for b in p.boards)
@@ -869,7 +869,7 @@ class ProfileView:
 
     def _tab_cosmetics(self, p: Profile):
         if p.equipment_error:
-            tk.Label(self.body, text="Couldn't load cosmetics.", bg=BG, fg=RED,
+            tk.Label(self.body, text="Couldn't load cosmetics", bg=BG, fg=RED,
                      font=self.app.f_small).pack(anchor="w", pady=8)
             return
         self._section(self.body, "Wings & pet")
@@ -886,7 +886,7 @@ class ProfileView:
         extra = f"{p.titles_owned}/{p.titles_total} collected" if p.titles_owned is not None else ""
         self._section(self.body, "Equipped titles", extra)
         if not p.titles:
-            tk.Label(self.body, text="No titles equipped.", bg=BG, fg=FG_DIM, font=self.app.f_small).pack(anchor="w")
+            tk.Label(self.body, text="No titles", bg=BG, fg=FG_DIM, font=self.app.f_small).pack(anchor="w")
         order = {"attack": 0, "offense": 0, "defense": 1}          # always Offense, Defense, Other
         for t in sorted(p.titles, key=lambda t: order.get((t.category or "").lower(), 2)):
             card = tk.Frame(self.body, bg=SURFACE, padx=12, pady=8)
