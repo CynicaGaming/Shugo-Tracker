@@ -78,7 +78,6 @@ framed("ui-show-filters.png", "filters.png")
 framed("ui-show-nearby.png", "nearby.png")
 framed("ui-show-nearby-recent.png", "recent.png")
 framed("ui-show-favorites-drag.png", "favorites.png", crop=(0, 0, 600, 320))
-framed("ui-show-profile-stats-hover.png", "stats.png", crop=(0, 0, 600, 470))
 framed("ui-show-columns-menu.png", "columns.png", crop=(0, 0, 600, 470))
 # gear: the profile's gear list with an item tooltip over its right side
 tip = Image.open(S + "ui-show-profile-gear-tip-only.png").convert("RGB")
