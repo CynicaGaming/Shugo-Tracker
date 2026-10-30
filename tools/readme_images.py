@@ -61,8 +61,8 @@ d.text((294, 246), "A fast, free overlay for Windows", font=ImageFont.truetype(R
 c.convert("RGB").save(OUT + "banner.png", optimize=True)
 
 # hero: the list + a profile with an item tooltip beside it
-win = Image.open(S + "ui-demo.png").convert("RGB")
-prof = Image.open(S + "ui-demo-profile-gear-tip.png").convert("RGB")
+win = Image.open(S + "ui-show.png").convert("RGB")
+prof = Image.open(S + "ui-show-profile-gear-tip.png").convert("RGB")
 pwin, tip = prof.crop((0, 0, 600, 720)), prof.crop((606, 240, 839, 603))
 W, H = 1440, 900
 c = bg(W, H).convert("RGBA")
@@ -71,15 +71,15 @@ drop(c, pwin, (560, 90))
 drop(c, tip.resize((int(tip.size[0] * 1.25), int(tip.size[1] * 1.25))), (1100, 230), r=10)
 c.convert("RGB").save(OUT + "hero.png", optimize=True)
 
-framed("ui-demo.png", "search.png")
-framed("ui-demo-filters.png", "filters.png")
-framed("ui-demo-nearby.png", "nearby.png")
-framed("ui-demo-nearby-recent.png", "recent.png")
-framed("ui-demo-favorites-drag.png", "favorites.png", crop=(0, 0, 600, 320))
-framed("ui-demo-profile-stats-hover.png", "stats.png", crop=(0, 0, 600, 470))
-framed("ui-demo-columns-menu.png", "columns.png", crop=(0, 0, 600, 470))
+framed("ui-show.png", "search.png")
+framed("ui-show-filters.png", "filters.png")
+framed("ui-show-nearby.png", "nearby.png")
+framed("ui-show-nearby-recent.png", "recent.png")
+framed("ui-show-favorites-drag.png", "favorites.png", crop=(0, 0, 600, 320))
+framed("ui-show-profile-stats-hover.png", "stats.png", crop=(0, 0, 600, 470))
+framed("ui-show-columns-menu.png", "columns.png", crop=(0, 0, 600, 470))
 # tooltip + arcana side by side
-arc = Image.open(S + "ui-demo-profile-arcana-tip.png").convert("RGB")
+arc = Image.open(S + "ui-show-profile-arcana-tip.png").convert("RGB")
 print("arcana", arc.size)
 
 # download button (self-hosted, so it never depends on a badge service)

@@ -326,7 +326,7 @@ def _wire_demo(app: App) -> None:
     threading.Thread(target=feed, daemon=True).start()
 
 
-def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | None = None,
+def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | None = None, showcase: str | None = None,
                 screenshot: str | None = None, after_update: bool = False, selftest: str | None = None) -> int:
     from .aion2api import Api
     from .search_ui import SearchWindow
@@ -366,8 +366,8 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
             pass
     session = None
     if demo:
-        from .demo import DemoSession
-        session = DemoSession()
+        from .demo import DemoSession, ShowcaseSession
+        session = ShowcaseSession(*showcase.split("=", 1)) if showcase else DemoSession()
     cache_dir = None if (demo or screenshot) else CACHE
     api = Api(db_path=os.path.join(cache_dir, "shugo.db") if cache_dir else None, session=session, log=log,
               migrate_from=(None, None) if demo else (os.path.join(DATA, "character_cache.json"),
@@ -692,6 +692,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--search-cli", metavar="NAME", help="search from the command line and print results")
     ap.add_argument("--query", metavar="NAME", help="start the search window with this search")
     ap.add_argument("--bench", metavar="NAME", help="time cold vs cached search/profile loading and exit")
+    ap.add_argument("--showcase", metavar="REAL=ALIAS",
+                    help="demo data, plus one real character shown under another name (README screenshots)")
     ap.add_argument("--screenshot", metavar="PNG", help="save screenshots of the search window, then exit")
     ap.add_argument("--replay", metavar="PCAP", help="decode a Wireshark capture instead of live traffic")
     ap.add_argument("--port", type=int, action="append", help="with --replay: game server port(s), e.g. 13328")
@@ -733,7 +735,7 @@ def main(argv: list[str] | None = None) -> int:
             print("The experimental --nearby mode isn't part of the packaged app; run it from source.")
             return 2
     if not nearby:
-        code = _run_search(cfg, args.config, demo=args.demo, query=args.query or (
+        code = _run_search(cfg, args.config, demo=args.demo or bool(args.showcase), showcase=args.showcase, query=args.query or (
                            "Luna" if args.selftest_favorites else None), screenshot=args.screenshot,
                            after_update=args.after_update, selftest=args.selftest_favorites)
         if FROZEN:

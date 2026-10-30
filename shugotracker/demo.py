@@ -197,3 +197,57 @@ def find_nearby(session):
         return [Character(char_id=f"demo-{name}", name=name, race=sv.race_of(srv), pc_id=class_pc_ids([cls])[0],
                           level=45, server_id=srv, server_name=sv.name_of(srv), region=region)]
     return find
+
+
+# ───── showcase: demo data around one real character, shown under another name (README screenshots) ─────
+class ShowcaseSession(DemoSession):
+    """--showcase Real=Alias: searching Alias finds the real character (live from NCSOFT, renamed to Alias)
+    among made-up ones; their profile, gear and item details are live too. Everyone else is demo data."""
+
+    def __init__(self, real: str, alias: str, live=None, slow: float = 1.0):
+        super().__init__(slow)
+        import requests
+        self.real, self.alias = real, alias
+        self.live = live or requests.Session()
+        self._ids: set[str] = set()
+
+    def _rename(self, v):
+        if isinstance(v, str):
+            return v.replace(self.real, self.alias)
+        if isinstance(v, list):
+            return [self._rename(x) for x in v]
+        if isinstance(v, dict):
+            return {k: self._rename(x) for k, x in v.items()}
+        return v
+
+    def _live(self, url, params, timeout):
+        r = self.live.get(url, params=params, timeout=timeout or 10)
+        r.raise_for_status()
+        return _Resp(self._rename(r.json()))
+
+    def get(self, url, params=None, timeout=None):
+        p = dict(params or {})
+        from urllib.parse import unquote
+        cid = unquote(str(p.get("characterId", "")))
+        if url != a.SEARCH_URL and cid and cid in self._ids:
+            return self._live(url, params, timeout)
+        if url == a.SEARCH_URL and p.get("keyword", "").casefold() == self.alias.casefold():
+            data = super().get(url, params, timeout).json()
+            ends = ["tte", "ius", "ine", "on", "ia", "rin"]
+            for n, it in enumerate(data["list"]):         # the alias belongs to the real character alone
+                plain = it["name"].replace("<strong>", "").replace("</strong>", "")
+                if plain.casefold() == self.alias.casefold():
+                    it["name"] += ends[(n + len(p.get("region", ""))) % len(ends)]
+            if int(p.get("page", 1)) == 1:
+                try:
+                    found = self._live(url, {**p, "keyword": self.real}, timeout).json().get("list") or []
+                except Exception:  # noqa: BLE001 - offline: plain demo data
+                    found = []
+                for it in found:
+                    plain = it["name"].replace("<strong>", "").replace("</strong>", "")
+                    if plain == self.alias:
+                        self._ids.add(unquote(it["characterId"]))
+                        data["list"].insert(0, it)
+                        data["pagination"]["total"] += 1
+            return _Resp(data)
+        return super().get(url, params, timeout)

@@ -45,6 +45,10 @@ jobs:
           Get-Content ui-demo-log.txt | Select-Object -Last 15 | ForEach-Object { Write-Output "::notice title=demo::$_" }
           exit $code
 
+      - name: UI screenshots (README showcase, one live character)
+        continue-on-error: true
+        run: python -m shugotracker.app --showcase Cynica=Claude --query Claude --screenshot ui-show.png
+
       - name: UI screenshots (live data)
         continue-on-error: true
         run: python -m shugotracker.app --query Luna --screenshot ui-live.png

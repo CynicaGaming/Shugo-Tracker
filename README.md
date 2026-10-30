@@ -167,7 +167,5 @@ recording is what fixes it.
 ---
 
 <p align="center">
-  <sub>Developers and the curious: settings, data sources, Nearby internals and building from source are in
-  <a href="docs/TECHNICAL.md">docs/TECHNICAL.md</a>.</sub><br>
   <sub>Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. AION is a trademark of NCSOFT Corporation.</sub>
 </p>
