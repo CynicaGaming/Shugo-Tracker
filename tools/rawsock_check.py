@@ -7,10 +7,12 @@ import time
 sys.path.insert(0, ".")
 import requests  # noqa: E402
 
-from shugotracker.capture import _Listener, parse_ipv4_tcp  # noqa: E402
+from shugotracker.capture import _Listener, ensure_firewall_rule, parse_ipv4_tcp  # noqa: E402
 from shugotracker.nearby import is_admin  # noqa: E402
 
 print("admin:", is_admin())
+if "--firewall" in sys.argv:
+    print("firewall rule:", ensure_firewall_rule(print), "| again (no change):", ensure_firewall_rule(print))
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.connect(("8.8.8.8", 80))
 ip = s.getsockname()[0]

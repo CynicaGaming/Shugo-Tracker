@@ -92,6 +92,38 @@ def parse_ipv4_tcp(pkt: bytes) -> tuple[str, int, str, int, int, bytes] | None:
             bytes(pkt[data_at:total]) if data_at < total else b"")
 
 
+FIREWALL_RULE = "Shugo Tracker (Nearby)"
+
+
+def _netsh(*args: str) -> tuple[int, str]:
+    import subprocess
+    try:
+        r = subprocess.run(["netsh", "advfirewall", "firewall", *args], capture_output=True, text=True,
+                           timeout=15, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return r.returncode, (r.stdout or "") + (r.stderr or "")
+    except (OSError, subprocess.SubprocessError) as e:
+        return -1, str(e)
+
+
+def ensure_firewall_rule(log: Callable[[str], None] = print) -> bool:
+    """Windows Firewall silently drops a raw socket's copy of incoming packets unless the program is allowed in.
+    Add one inbound 'allow' rule for this exe (once; again only if the exe moved). Needs administrator."""
+    import os
+    import sys
+    if os.name != "nt":
+        return False
+    exe = os.path.normcase(os.path.abspath(sys.executable))
+    code, out = _netsh("show", "rule", f"name={FIREWALL_RULE}", "verbose")
+    if code == 0 and exe in os.path.normcase(out):
+        return True
+    if code == 0:                                      # a rule for an older location of the app
+        _netsh("delete", "rule", f"name={FIREWALL_RULE}")
+    code, out = _netsh("add", "rule", f"name={FIREWALL_RULE}", "dir=in", "action=allow", f"program={exe}",
+                       "enable=yes", "profile=any")
+    log("firewall: allowed Shugo Tracker in" if code == 0 else f"firewall: couldn't add the rule: {out.strip()}")
+    return code == 0
+
+
 class _Listener:
     """One raw socket on one local IPv4 address, reading on its own thread."""
 
@@ -174,6 +206,7 @@ class GameCapture:
     # ───── internals ─────
     def _run(self) -> None:
         last = None
+        ensure_firewall_rule(self.log)
         while not self._stop.is_set():
             conns = find_game_connections(self.process_names)
             self._conns = conns

@@ -47,11 +47,9 @@ jobs:
         run: |
           python tools/rawsock_check.py *> raw1.txt
           Get-Content raw1.txt | ForEach-Object { Write-Output "::notice title=rawsock-before::$_" }
-          $py = (Get-Command python).Source
-          netsh advfirewall firewall add rule name="ci python" dir=in action=allow program="$py" enable=yes | Out-Null
-          python tools/rawsock_check.py *> ui-rawsock-check.txt
+          python tools/rawsock_check.py --firewall *> ui-rawsock-check.txt
           $code = $LASTEXITCODE
-          Get-Content ui-rawsock-check.txt | ForEach-Object { Write-Output "::notice title=rawsock-allowed::$_" }
+          Get-Content ui-rawsock-check.txt | ForEach-Object { Write-Output "::notice title=rawsock-app-rule::$_" }
           exit $code
 
       - name: UI screenshots (demo data)
