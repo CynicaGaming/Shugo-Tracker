@@ -19,7 +19,12 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -r requirements.txt
       - name: Unit tests
-        run: python -m unittest discover -s tests -t . -v
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -t . *> tests.txt
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { Get-Content tests.txt | Select-Object -Last 40 | ForEach-Object { Write-Output "::error title=tests::$_" } }
+          exit $code
 
       - name: Live API check (real search + details through the app's own client)
         shell: pwsh
