@@ -607,7 +607,7 @@ class ProfileView:
                 tk.Label(body, text=f"{need} pieces", bg=self.TIP_BG, fg=FG if on else FG_FAINT, font=f.f_sbold,
                          anchor="w").pack(fill="x", pady=(4, 0))
                 for e in effects:
-                    tk.Label(body, text=e, bg=self.TIP_BG, fg=FG_DIM if on else FG_FAINT, font=f.f_small,
+                    tk.Label(body, text=e, bg=self.TIP_BG, fg=FG if on else FG_FAINT, font=f.f_small,
                              anchor="w", justify="left", wraplength=self.TIP_W - 30).pack(fill="x")
         if det.costumes:
             line()
