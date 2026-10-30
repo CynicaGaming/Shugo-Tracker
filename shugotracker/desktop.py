@@ -4,6 +4,7 @@ from __future__ import annotations
 import ctypes
 import os
 import socket
+import sys
 import threading
 from typing import Callable
 
@@ -478,3 +479,22 @@ def monitor_rect(widget, x: int, y: int) -> tuple[int, int, int, int]:
         except Exception:  # noqa: BLE001
             pass
     return 0, 0, widget.winfo_screenwidth(), widget.winfo_screenheight()
+
+
+def relaunch_as_admin(args: list[str]) -> bool:
+    """Start another copy of Shugo Tracker as administrator (Windows asks first). True if it started; False if
+    the prompt was declined or this isn't Windows."""
+    if os.name != "nt":
+        return False
+    import subprocess
+    try:
+        exe = sys.executable
+        if not getattr(sys, "frozen", False):           # from source: python -m shugotracker.app …
+            pyw = os.path.join(os.path.dirname(exe), "pythonw.exe")
+            exe = pyw if os.path.exists(pyw) else exe
+            args = ["-m", "shugotracker.app", *args]
+        cwd = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
+        r = ctypes.windll.shell32.ShellExecuteW(None, "runas", exe, subprocess.list2cmdline(args), cwd, 1)
+        return int(r) > 32
+    except Exception:  # noqa: BLE001
+        return False

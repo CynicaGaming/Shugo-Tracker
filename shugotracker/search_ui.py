@@ -487,6 +487,7 @@ class SearchWindow:
         self.nearby = None                     # NearbyService, set by the app
         self.set_nearby_enabled: Callable[[bool], None] = lambda on: None   # set by the app
         self.demo_teleport: Callable[[], None] = lambda: None              # --demo only
+        self.request_admin: Callable[[], None] = lambda: None              # set by the app
         self._nearby_rows: list = []
         self._recent_rows: list = []                # (side, character, left_at, fought_you)
         self.nearby_view = "nearby"                 # nearby | recent
@@ -1848,13 +1849,13 @@ class SearchWindow:
         return "", ""
 
     def _paint_nearby_panel(self):
-        """The opt-in card (Nearby off) or the Npcap card, placed over the list."""
-        from .nearby import NO_LIBS, NO_NPCAP
+        """The opt-in card (Nearby off) or the administrator card, placed over the list."""
+        from .nearby import NO_ADMIN, NO_LIBS
         if self.mode not in ("nearby", "recent") or self.nearby is None:
             key = None
         elif not self.cfg.get("nearby_enabled"):
             key = "optin"
-        elif self.nearby.state in (NO_NPCAP, NO_LIBS):
+        elif self.nearby.state in (NO_ADMIN, NO_LIBS):
             key = self.nearby.state
         else:
             key = None
@@ -1863,7 +1864,7 @@ class SearchWindow:
         self._nearby_panel_key = key
         for w in self.nearby_panel.winfo_children():
             w.destroy()
-        if key is None:                            # filters do nothing behind the opt-in / Npcap card
+        if key is None:                            # filters do nothing behind the opt-in / administrator card
             self._ensure_filters()
         elif self.mode in ("nearby", "recent"):
             self.filters.pack_forget()
@@ -1890,15 +1891,17 @@ class SearchWindow:
                  self.f_small, FG_FAINT, (10, 0))
             self._panel_button(buttons, "Turn on Nearby", lambda: self.set_nearby_enabled(True), accent=True)
         else:
-            text("Npcap is needed", self.f_name, FG)
-            text("Nearby reads the game's traffic through Npcap, which isn't installed on this PC. Install it "
-                 "(free, keep the default options), then check again." if key == NO_NPCAP else
-                 f"The packet-capture part of Shugo Tracker couldn't load: {self.nearby.detail}",
-                 self.f_body, FG_DIM, (8, 0))
-            if key == NO_NPCAP:
-                from .nearby import NPCAP_URL
-                self._panel_button(buttons, "Get Npcap ↗", lambda: webbrowser.open(NPCAP_URL), accent=True)
-            self._panel_button(buttons, "Check again", self.nearby.retry)
+            if key == NO_ADMIN:
+                text("Run as administrator", self.f_name, FG)
+                text("Nearby reads AION 2's traffic through Windows, which needs Shugo Tracker to run as "
+                     "administrator.", self.f_body, FG_DIM, (8, 0))
+                self._panel_button(buttons, "Restart as administrator",
+                                   lambda: self.request_admin(), accent=True)
+            else:
+                text("Nearby couldn't start", self.f_name, FG)
+                text(f"The capture part of Shugo Tracker couldn't load: {self.nearby.detail}",
+                     self.f_body, FG_DIM, (8, 0))
+                self._panel_button(buttons, "Try again", self.nearby.retry)
         buttons.pack(fill="x", pady=(14, 0))
         self.nearby_panel.place(x=0, y=0, relwidth=1, relheight=1)
         self.nearby_panel.lift()

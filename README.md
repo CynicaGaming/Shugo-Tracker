@@ -64,7 +64,7 @@ each with their power and gear score, in towns, in the open world, in Shugo and 
 **Recent** keeps everyone you've crossed paths with for the last hour, with when you last saw them
 and a ⚔ for anyone who fought you.
 
-<sub>Opt-in. Reads the game's network traffic on your PC through Npcap; it never sends or changes anything.</sub>
+<sub>Opt-in. Reads the game's network traffic on your PC through Windows itself — nothing extra to install. It never sends or changes anything.</sub>
 
 </td>
 </tr>
@@ -129,7 +129,7 @@ No account, no sign-in, no tracking. Character data comes from NCSOFT's public A
 2. Run it. Windows may show a SmartScreen warning the first time — choose **More info → Run anyway**.
 3. Play the game in **borderless windowed** mode so the tracker can sit on top.
 
-For **Nearby**, install the free [Npcap](https://npcap.com/#download) (default options) and switch Nearby on.
+For **Nearby**, just switch it on. It needs administrator rights, so Shugo Tracker restarts itself as administrator (Windows asks first). If Windows Firewall asks about Shugo Tracker, choose **Allow**.
 
 ## Good to know
 
@@ -154,6 +154,14 @@ and every release is built automatically from it.
 <br>
 In the <code>data</code>, <code>cache</code> and <code>logs</code> folders next to the exe. Updates only replace
 the exe, so nothing is lost; move or copy the whole folder to take everything with you.
+</details>
+
+<details>
+<summary><b>Why does Nearby need administrator?</b></summary>
+<br>
+Windows only lets programs running as administrator read network traffic. Search, profiles and favorites never
+need it. To skip the restart each time, right-click <code>ShugoTracker.exe</code> → <b>Properties</b> →
+<b>Compatibility</b> → <b>Run this program as an administrator</b>.
 </details>
 
 <details>

@@ -161,12 +161,12 @@ class NearbyServiceTests(unittest.TestCase):
         self.assertEqual(got[0][0], ("1.2.3.4", "7777", "10.0.0.2", "5000"))
         self.assertTrue(os.path.getsize(path) > 20)
 
-    def test_start_without_npcap(self):
-        if nb.npcap_installed():
-            self.skipTest("Npcap is installed here")
+    def test_start_without_administrator(self):
+        if nb.is_admin():
+            self.skipTest("running as administrator here")
         svc = nb.NearbyService(object(), find=lambda n, r: [])
         svc.start()
-        self.assertEqual(svc.state, nb.NO_NPCAP)
+        self.assertEqual(svc.state, nb.NO_ADMIN)
 
 
 class ChooseTests(unittest.TestCase):
@@ -224,18 +224,57 @@ class LiveLayoutTests(unittest.TestCase):
         self.assertEqual(sides, {"Woodoo": "enemy", "Shagra": "ally"})
 
 
-class CapturePaddingTests(unittest.TestCase):
-    def test_ethernet_padding_is_not_payload(self):
+def ip_tcp(payload=b"", src="1.1.1.1", dst="2.2.2.2", sport=13328, dport=5000, seq=7, pad=b"", total=None):
+    import socket
+    import struct
+    tcp = struct.pack("!HHIIBBHHH", sport, dport, seq, 0, 5 << 4, 0x18, 65535, 0, 0) + payload
+    n = 20 + len(tcp) if total is None else total
+    ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, n, 1, 0, 64, 6, 0, socket.inet_aton(src), socket.inet_aton(dst))
+    return ip + tcp + pad
+
+
+class CapturePacketTests(unittest.TestCase):
+    def setUp(self):
         try:
-            from scapy.layers.inet import IP, TCP
-            from scapy.packet import Padding, Raw
-        except ImportError:
-            self.skipTest("no scapy here")
-        from shugotracker.capture import tcp_payload
-        ack = IP(bytes(IP(src="1.1.1.1", dst="2.2.2.2") / TCP(sport=13328, dport=5000, flags="A")) + b"\0" * 6)
-        self.assertEqual(tcp_payload(ack[IP], ack[TCP]), b"")
-        data = IP(bytes(IP(src="1.1.1.1", dst="2.2.2.2") / TCP(sport=13328, dport=5000) / Raw(b"\x0e\x00\x36")))
-        self.assertEqual(tcp_payload(data[IP], data[TCP]), b"\x0e\x00\x36")
+            from shugotracker import capture
+        except ImportError as e:  # psutil missing here
+            self.skipTest(str(e))
+        self.cap = capture
+
+    def test_parse(self):
+        p = self.cap.parse_ipv4_tcp(ip_tcp(b"\x0e\x00\x36"))
+        self.assertEqual(p, ("1.1.1.1", 13328, "2.2.2.2", 5000, 7, b"\x0e\x00\x36"))
+
+    def test_padding_is_not_payload(self):
+        self.assertEqual(self.cap.parse_ipv4_tcp(ip_tcp(pad=b"\0" * 6))[5], b"")
+
+    def test_coalesced_segment_length_zero(self):
+        self.assertEqual(self.cap.parse_ipv4_tcp(ip_tcp(b"abc", total=0))[5], b"abc")
+
+    def test_not_tcp(self):
+        pkt = bytearray(ip_tcp(b"x"))
+        pkt[9] = 17
+        self.assertIsNone(self.cap.parse_ipv4_tcp(bytes(pkt)))
+
+    def test_memoryview(self):
+        self.assertEqual(self.cap.parse_ipv4_tcp(memoryview(ip_tcp(b"hi")))[5], b"hi")
+
+    def test_pcap_replay(self):
+        import struct
+        import tempfile
+        eth = b"\0" * 12 + b"\x08\x00"
+        frames = [eth + ip_tcp(b"ab", seq=1), eth + ip_tcp(b"cd", seq=3), eth + ip_tcp(b"zz", sport=443)]
+        data = struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+        for f in frames:
+            data += struct.pack("<IIII", 1, 0, len(f), len(f)) + f
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "x.pcap")
+            with open(path, "wb") as fh:
+                fh.write(data)
+            got = []
+            n = self.cap.replay_pcap(path, lambda k, b, g: got.append(b), {13328})
+        self.assertEqual(n, 2)
+        self.assertEqual(b"".join(got), b"abcd")
 
 
 class RecentTests(unittest.TestCase):
@@ -371,14 +410,14 @@ class ComingBackTests(unittest.TestCase):
 class CaptureFilterTests(unittest.TestCase):
     def test_new_servers_on_the_game_port_are_heard_at_once(self):
         try:
-            from shugotracker.capture import bpf_for
+            from shugotracker.capture import PacketFilter
         except ImportError as e:  # psutil missing here
             self.skipTest(str(e))
-        flt = bpf_for({("10.0.0.2", 61217, "193.202.112.5", 13328), ("10.0.0.2", 64951, "64.25.35.157", 443)})
-        self.assertIn("src port 13328", flt)                       # any host: Shugo / arena servers included
-        self.assertNotIn("src host 193.202.112.5", flt)
-        self.assertIn("src host 64.25.35.157 and src port 443 and dst port 64951", flt)   # web ports stay exact
-        # a second world server on the same port doesn't change the filter (so no sniffer restart)
-        self.assertEqual(flt, bpf_for({("10.0.0.2", 61217, "193.202.112.5", 13328),
-                                       ("10.0.0.2", 50961, "193.202.112.39", 13328),
-                                       ("10.0.0.2", 64951, "64.25.35.157", 443)}))
+        flt = PacketFilter({("10.0.0.2", 61217, "193.202.112.5", 13328), ("10.0.0.2", 64951, "64.25.35.157", 443)})
+        self.assertTrue(flt.wants("193.202.112.9", 13328, 1234))     # any host: Shugo / arena servers included
+        self.assertTrue(flt.wants("64.25.35.157", 443, 64951))       # web ports stay exact
+        self.assertFalse(flt.wants("64.25.35.158", 443, 64951))
+        self.assertFalse(flt.wants("8.8.8.8", 443, 50000))
+        self.assertEqual(flt, PacketFilter({("10.0.0.2", 61217, "193.202.112.5", 13328),
+                                            ("10.0.0.2", 50961, "193.202.112.39", 13328),
+                                            ("10.0.0.2", 64951, "64.25.35.157", 443)}))

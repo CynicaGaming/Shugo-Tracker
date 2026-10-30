@@ -255,7 +255,7 @@ class App:
 
     def start_live(self) -> None:
         from .capture import GameCapture
-        self.capture = GameCapture(self.on_bytes, ifaces=self.cfg.get("interfaces") or None, log=self.log)
+        self.capture = GameCapture(self.on_bytes, log=self.log)
         self.capture.start()
 
     def stop(self) -> None:
@@ -405,7 +405,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         restart["pending"] = True
         return True
 
-    from .nearby import NearbyService
+    from .nearby import NO_ADMIN, NearbyService
     nearby_find = None
     if demo:
         from .demo import find_nearby
@@ -450,6 +450,17 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         extras["tray"] = tray
         win.tray_ok = tray_supported()
         win.tray_icon = (tray.start, tray.stop)
+    def request_admin():
+        """Nearby needs administrator: start an elevated copy (Windows asks) and close this one. Declined, this
+        copy stays, and Nearby says why it can't run."""
+        from .desktop import relaunch_as_admin
+        args = [a for a in sys.argv[1:] if a != "--after-update"] + ["--after-update"]
+        if relaunch_as_admin(args):
+            log("nearby: restarting as administrator")
+            win.close()
+        else:
+            log("nearby: administrator declined")
+
     def set_nearby_enabled(on: bool):
         cfg["nearby_enabled"] = bool(on)
         if on:
@@ -463,6 +474,8 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         if not screenshot:
             save_config(config_path, cfg)
         win._refresh_nearby(force=True)
+        if on and not (demo or screenshot) and nearby.state == NO_ADMIN:
+            win.root.after(300, request_admin)
 
     def remember_region(region: str):
         cfg["nearby_region"] = region
@@ -481,6 +494,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
         win.demo_teleport = lambda: feed_teleport(nearby)
     win.nearby = nearby
     win.set_nearby_enabled = set_nearby_enabled
+    win.request_admin = request_admin
     if cfg.get("nearby_enabled"):
         set_nearby_enabled(True)
 
@@ -688,7 +702,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Shugo Tracker: AION 2 character search with gear score & combat power")
     ap.add_argument("--config", default=os.path.join(DATA, "config.json"))
     ap.add_argument("--nearby", action="store_true",
-                    help="EXPERIMENTAL: in-game overlay of nearby players (needs Npcap + administrator)")
+                    help="EXPERIMENTAL: in-game overlay of nearby players (run as administrator)")
     ap.add_argument("--search-cli", metavar="NAME", help="search from the command line and print results")
     ap.add_argument("--query", metavar="NAME", help="start the search window with this search")
     ap.add_argument("--bench", metavar="NAME", help="time cold vs cached search/profile loading and exit")
@@ -728,12 +742,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.bench:
         return _bench(args.bench)
     nearby = args.nearby or args.replay or args.console
-    if nearby and FROZEN:
-        try:
-            import scapy  # noqa: F401
-        except ImportError:
-            print("The experimental --nearby mode isn't part of the packaged app; run it from source.")
-            return 2
     if not nearby:
         code = _run_search(cfg, args.config, demo=args.demo or bool(args.showcase), showcase=args.showcase, query=args.query or (
                            "Luna" if args.selftest_favorites else None), screenshot=args.screenshot,

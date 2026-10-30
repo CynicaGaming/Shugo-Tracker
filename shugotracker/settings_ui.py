@@ -175,7 +175,7 @@ class SettingsView:
 
         if a.nearby is not None:
             card = self._section("Nearby players  ·  beta")
-            r, _ = self._row(card, "Show nearby players", "Reads AION 2's network traffic on this PC through Npcap")
+            r, _ = self._row(card, "Show nearby players", "Reads AION 2's network traffic on this PC (runs as administrator)")
             Switch(r, bool(cfg.get("nearby_enabled")), self._nearby).pack()
             r, _ = self._row(card, "Auto-clear Nearby")
             secs = [c[0] for c in AUTOCLEAR_CHOICES]

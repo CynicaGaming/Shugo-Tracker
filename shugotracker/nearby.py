@@ -1,5 +1,5 @@
 """
-Nearby players: passive capture of the game's own traffic (Npcap) -> decoder -> tracker -> NCSOFT lookups.
+Nearby players: passive capture of the game's own traffic (Windows raw sockets) -> decoder -> tracker -> NCSOFT lookups.
 
 Opt-in only. Nothing is sent to the game or modified; the only network requests are the normal NCSOFT
 character searches used everywhere else in the app (one per player, name + server, under the same rate limit).
@@ -19,12 +19,11 @@ from .aion2api import Api, Character, class_pc_ids
 from .protocol import EntityActive, Hit, MapLoaded, Opcodes, SelfSeen, StreamDecoder
 from .tracker import ALLY, ENEMY, UNKNOWN, Lookup, Player, Tracker
 
-NPCAP_URL = "https://npcap.com/#download"
 RECORD_MAGIC = b"SHUGOCAP1\n"
 
 # states the UI shows
-OFF, STARTING, NO_NPCAP, NO_LIBS, WAITING, CAPTURING, ERROR = (
-    "off", "starting", "no_npcap", "no_libs", "waiting", "capturing", "error")
+OFF, STARTING, NO_ADMIN, NO_LIBS, WAITING, CAPTURING, ERROR = (
+    "off", "starting", "no_admin", "no_libs", "waiting", "capturing", "error")
 
 WIRE_CLASS = {"Elementalist": "Spiritmaster"}   # the wire table predates the Global class names
 LOOKUP_WORKERS = 4      # parallel NCSOFT searches (the shared rate limit still caps requests per second)
@@ -33,11 +32,15 @@ RECENT_MAX = 150        # players kept on the Recent list
 RECENT_KEEP_S = 3600    # ...for up to an hour after they left
 
 
-def npcap_installed() -> bool:
+def is_admin() -> bool:
+    """Raw-socket capture needs Shugo Tracker to run as administrator (Windows only)."""
     if os.name != "nt":
         return False
-    root = os.environ.get("SystemRoot", r"C:\Windows")
-    return any(os.path.exists(os.path.join(root, d, "Npcap", "wpcap.dll")) for d in ("System32", "SysWOW64"))
+    try:
+        import ctypes
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:  # noqa: BLE001
+        return False
 
 
 class NearbyService:
@@ -106,15 +109,15 @@ class NearbyService:
 
     # ───── lifecycle ─────
     def start(self) -> None:
-        if self.state not in (OFF, ERROR, NO_NPCAP, NO_LIBS):
+        if self.state not in (OFF, ERROR, NO_ADMIN, NO_LIBS):
             return
         self._stop.clear()
-        if not npcap_installed():
-            self._set_state(NO_NPCAP, "Npcap isn't installed")
+        if not is_admin():
+            self._set_state(NO_ADMIN, "needs administrator")
             return
         try:
             from .capture import GameCapture
-        except Exception as e:  # noqa: BLE001  (scapy / psutil missing: running from a bare source checkout)
+        except Exception as e:  # noqa: BLE001  (psutil missing: running from a bare source checkout)
             self._set_state(NO_LIBS, f"capture libraries missing: {e}")
             return
         self._set_state(STARTING, "starting capture")
@@ -151,8 +154,8 @@ class NearbyService:
         feed(self)
 
     def retry(self) -> None:
-        """'Check again' after installing Npcap."""
-        if self.state in (NO_NPCAP, NO_LIBS, ERROR):
+        """'Try again' after a capture error."""
+        if self.state in (NO_ADMIN, NO_LIBS, ERROR):
             self.state = OFF
             self.start()
 

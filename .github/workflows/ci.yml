@@ -37,6 +37,14 @@ jobs:
           Copy-Item bench.txt ui-bench.txt
           Get-Content bench.txt | Select-Object -Last 4 | ForEach-Object { Write-Output "::notice title=bench::$_" }
 
+      - name: Raw-socket capture sees real traffic
+        shell: pwsh
+        run: |
+          python tools/rawsock_check.py *> ui-rawsock-check.txt
+          $code = $LASTEXITCODE
+          Get-Content ui-rawsock-check.txt | ForEach-Object { Write-Output "::notice title=rawsock::$_" }
+          exit $code
+
       - name: UI screenshots (demo data)
         shell: pwsh
         run: |
