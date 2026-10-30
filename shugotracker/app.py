@@ -332,7 +332,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     from .search_ui import SearchWindow
     from .updater import Updater
 
-    from .desktop import SingleInstance, Tray, folder_size, tray_supported
+    from .desktop import SingleInstance, folder_size
     from .settings import migrate
     from .settings_ui import SettingsServices
 
@@ -380,8 +380,8 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     restart = {"pending": False}
 
     def on_close():
-        """Everything shuts down here (✕, tray Quit, or Restart after an update)."""
-        for k in ("hotkey", "tray"):
+        """Everything shuts down here (✕, or Restart after an update)."""
+        for k in ("hotkey",):
             if extras.get(k):
                 extras[k].stop()
         if instance:
@@ -444,12 +444,6 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     win.settings_services = SettingsServices(clear_cache=clear_cache, cache_size=cache_size, data_dir=ROOT)
     if instance:
         instance.on_show = lambda: post(("show",))
-    if not screenshot:
-        # The tray icon only exists while the window is tucked away by ✕ with "Close to tray" on.
-        tray = Tray(on_toggle=lambda: post(("show",)), on_quit=lambda: post(("quit",)))
-        extras["tray"] = tray
-        win.tray_ok = tray_supported()
-        win.tray_icon = (tray.start, tray.stop)
     def request_admin():
         """Nearby needs administrator: start an elevated copy (Windows asks) and close this one. Declined, this
         copy stays, and Nearby says why it can't run."""

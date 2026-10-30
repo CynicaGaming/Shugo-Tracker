@@ -28,8 +28,7 @@ OFF, STARTING, NO_ADMIN, NO_LIBS, WAITING, CAPTURING, ERROR = (
 WIRE_CLASS = {"Elementalist": "Spiritmaster"}   # the wire table predates the Global class names
 LOOKUP_WORKERS = 4      # parallel NCSOFT searches (the shared rate limit still caps requests per second)
 RETRY_FAILED_S = 300    # someone NCSOFT couldn't find is tried again after this long
-RECENT_MAX = 150        # players kept on the Recent list
-RECENT_KEEP_S = 3600    # ...for up to an hour after they left
+RECENT_MAX = 250        # players kept on the Recent list by default (Settings: 50 … 1000 or Unlimited = 0)
 
 
 def is_admin() -> bool:
@@ -78,6 +77,7 @@ class NearbyService:
         self._last_players: dict[str, Player] = {}
         self._recent_players: dict[str, Player] = {}
         self._recent_ids: dict[int, str] = {}         # entity id -> name, for players on Recent
+        self.recent_max = int(cfg.get("recent_max", RECENT_MAX) or 0)
         # players moved to Recent while possibly still around (Clear Nearby, gone quiet): any record about them
         # puts them back on Nearby. Not those who left view or were left behind by a map change.
         self._parked: dict[int, str] = {}
@@ -251,9 +251,20 @@ class NearbyService:
             for eid in p.entity_ids:
                 self._recent_ids[eid] = p.name
             self._last_players.pop(p.name, None)
-        while len(self._recent) > RECENT_MAX:
-            self._recent.popitem(last=False)
+        self._trim_recent()
         self._v += 1
+
+    def _trim_recent(self) -> None:
+        while self.recent_max and len(self._recent) > self.recent_max:
+            name, _ = self._recent.popitem(last=False)
+            self._recent_players.pop(name, None)
+
+    def set_recent_max(self, n: int) -> None:
+        """Settings: how many players Recent keeps (0 = no limit)."""
+        with self._lock:
+            self.recent_max = int(n or 0)
+            self._trim_recent()
+            self._v += 1
 
     def clear_nearby(self) -> None:
         """Everyone on the list -> Recent (the list then fills again as the game shows players)."""
@@ -285,13 +296,9 @@ class NearbyService:
         self._v += 1
 
     def recent(self) -> list[tuple[str, Character, float, bool]]:
-        """[(side, character, left_at, fought_you)] newest first: everyone you've been near this past hour,
-        including those who are back on Nearby right now (left_at is when they last left)."""
+        """[(side, character, left_at, fought_you)] newest first: everyone you've been near (up to the Recent
+        limit), including those who are back on Nearby right now (left_at is when they last left)."""
         with self._lock:
-            now = time.time()
-            for name in [n for n, r in self._recent.items() if now - r[2] > RECENT_KEEP_S]:
-                del self._recent[name]
-                self._recent_players.pop(name, None)
             out = []
             for name, (side, c, left_at, fought) in reversed(self._recent.items()):
                 c = self._chars.get(name, c)            # identified after they left

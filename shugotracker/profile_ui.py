@@ -522,8 +522,13 @@ class ProfileView:
         ench = f"+{it.enchant} " if it.enchant else ""
         tk.Label(left, text=ench + it.name, bg=hb, fg=col, font=f.f_bold, anchor="w", justify="left",
                  wraplength=self.TIP_W - 90).pack(fill="x")
-        kind = f"{it.grade} {det.category}".strip() if det else it.grade
-        tk.Label(left, text=kind, bg=hb, fg=FG, font=f.f_small, anchor="w").pack(fill="x")
+        kind = tk.Frame(left, bg=hb)                   # "Unique Longsword": the grade in its colour, like the game
+        kind.pack(fill="x")
+        if it.grade:
+            tk.Label(kind, text=it.grade, bg=hb, fg=col, font=f.f_small, bd=0, padx=0).pack(side="left")
+        if det and det.category:
+            tk.Label(kind, text=(" " if it.grade else "") + det.category, bg=hb, fg=FG, font=f.f_small, bd=0,
+                     padx=0).pack(side="left")
         if det and det.item_level:
             tk.Label(left, text="Item Level", bg=hb, fg=FG_DIM, font=f.f_tiny, anchor="w").pack(fill="x", pady=(4, 0))
             lvl = str(det.item_level) + (f"   ✦{it.exceed}" if it.exceed else "")

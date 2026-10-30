@@ -1,6 +1,6 @@
 # PyInstaller spec for ShugoTracker.exe  —  build with:  pyinstaller --noconfirm --clean ShugoTracker.spec
 # Nearby players (opt-in) captures through Windows raw sockets; psutil finds the game's connections.
-hidden = ["lz4.block", "PIL.ImageTk", "pystray._win32", "psutil"]
+hidden = ["lz4.block", "PIL.ImageTk", "psutil"]
 
 a = Analysis(
     ["shugo_tracker.py"],

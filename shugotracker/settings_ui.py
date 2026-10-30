@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Callable
 from . import desktop
 from .search_ui import (ACCENT, ACCENT_FG, BG, BORDER, FG, FG_DIM, FG_FAINT, GOLD_SOFT, GOLD_TEXT, GREEN, PAD, RED,
                         SURFACE, SURFACE_2, ThinScrollbar)
-from .settings import AUTOCLEAR_CHOICES, OPACITY_MIN, clamp_opacity
+from .settings import AUTOCLEAR_CHOICES, OPACITY_MIN, RECENT_CHOICES, clamp_opacity
 
 if TYPE_CHECKING:
     from .search_ui import SearchWindow
@@ -169,13 +169,10 @@ class SettingsView:
         Slider(r, clamp_opacity(cfg.get("window_opacity", 1.0)), OPACITY_MIN, 1.0, self._opacity).pack()
         r, _ = self._row(card, "Always on top")
         Switch(r, bool(cfg["always_on_top"]), self._always_on_top).pack()
-        r, _ = self._row(card, "Close to tray", None if a.tray_ok else "Tray icon unavailable")
-        Switch(r, bool(cfg["close_to_tray"]) and a.tray_ok, lambda on: self._set("close_to_tray", on),
-               enabled=a.tray_ok).pack()
 
         if a.nearby is not None:
-            card = self._section("Nearby players  ·  beta")
-            r, _ = self._row(card, "Show nearby players", "Reads AION 2's network traffic on this PC (runs as administrator)")
+            card = self._section("Nearby  ·  BETA")
+            r, _ = self._row(card, "Show Nearby", "Reads AION 2's network traffic on this PC (runs as administrator)")
             Switch(r, bool(cfg.get("nearby_enabled")), self._nearby).pack()
             r, _ = self._row(card, "Auto-clear Nearby")
             secs = [c[0] for c in AUTOCLEAR_CHOICES]
@@ -183,6 +180,15 @@ class SettingsView:
             cur = secs.index(cfg.get("nearby_autoclear_s", 0)) if cfg.get("nearby_autoclear_s", 0) in secs else 0
             Slider(r, cur, 0, len(secs) - 1, lambda v, final: self._set_every(secs[int(v)], final), step=1,
                    fmt=lambda v: names[int(v)]).pack()
+            r, _ = self._row(card, "Players kept on Recent")
+            keep = [c[0] for c in RECENT_CHOICES]
+            keep_names = [c[1] for c in RECENT_CHOICES]
+            cur = keep.index(cfg.get("recent_max", 250)) if cfg.get("recent_max", 250) in keep else 2
+            Slider(r, cur, 0, len(keep) - 1, lambda v, final: self._set_recent_max(keep[int(v)], final), step=1,
+                   fmt=lambda v: keep_names[int(v)]).pack()
+            r, self._recent_sub = self._row(card, "Recent list", " ")
+            self._button(r, "Clear", self._clear_recent).pack(side="right")
+            self._show_recent_count()
 
         card = self._section("Updates")
         r, _ = self._row(card, "Check for updates automatically")
@@ -194,11 +200,11 @@ class SettingsView:
             self._sync_update()
 
         card = self._section("Data")
-        r, self._cache_sub = self._row(card, "Cached profiles, portraits and icons", " ")
+        r, self._cache_sub = self._row(card, "Clear Cache", " ")
         self._button(r, "Clear", self._clear_cache).pack(side="right")
         self._show_cache_size()
         if self.services:
-            r, _ = self._row(card, "App folder")
+            r, _ = self._row(card, "Application Folder")
             self._button(r, "Open", lambda: desktop.open_folder(self.services.data_dir)).pack()
 
         about = tk.Frame(self.body, bg=BG)
@@ -226,6 +232,25 @@ class SettingsView:
         self.app.autoclear_reset()
         if final:
             self._save()
+
+    def _set_recent_max(self, n: int, final: bool = True):
+        self.cfg["recent_max"] = n
+        if self.app.nearby is not None:
+            self.app.nearby.set_recent_max(n)
+            self.app._refresh_nearby(force=True)
+            self._show_recent_count()
+        if final:
+            self._save()
+
+    def _show_recent_count(self):
+        n = len(self.app.nearby.recent()) if self.app.nearby is not None else 0
+        self._recent_sub.config(text=f"{n:,} player{'s' if n != 1 else ''}")
+
+    def _clear_recent(self):
+        if self.app.nearby is not None:
+            self.app.nearby.clear_recent()
+            self.app._refresh_nearby(force=True)
+        self._recent_sub.config(text="Cleared")
 
     def _nearby(self, on: bool):
         self.app.set_nearby_enabled(on)

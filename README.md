@@ -61,7 +61,7 @@ they actually have lit up.
 Turn on **Nearby** and the players around your character appear on their own — enemies and allies,
 each with their power and gear score, in towns, in the open world, in Shugo and in the arena.
 
-**Recent** keeps everyone you've crossed paths with for the last hour, with when you last saw them
+**Recent** keeps everyone you've crossed paths with — as many as you like — with when you last saw them
 and a ⚔ for anyone who fought you.
 
 <sub>Opt-in. Reads the game's network traffic on your PC through Windows itself — nothing extra to install. It never sends or changes anything.</sub>

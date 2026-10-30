@@ -278,6 +278,18 @@ class CapturePacketTests(unittest.TestCase):
 
 
 class RecentTests(unittest.TestCase):
+    def test_recent_limit_from_settings(self):
+        svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"recent_max": 0})
+        feed = lambda *b: svc.on_bytes(("a", 1, "b", 2), b"".join(frame(x) for x in b), False)  # noqa: E731
+        feed(self_record(100, "Mine", 1101), *[other_record(200 + i, f"P{i}") for i in range(300)])
+        svc.clear_nearby()
+        self.assertEqual(len(svc.recent()), 300)                   # unlimited: nobody dropped
+        svc.set_recent_max(50)
+        names = [c.name for _s, c, _t, _f in svc.recent()]
+        self.assertEqual(len(names), 50)
+        svc.clear_recent()
+        self.assertEqual(svc.recent(), [])
+
     def test_new_area_moves_everyone_to_recent(self):
         from tests.test_scout import gone
         svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae"})

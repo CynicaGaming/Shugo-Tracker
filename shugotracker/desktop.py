@@ -1,4 +1,4 @@
-"""Desktop integration for the overlay: global hotkey, tray icon, single instance, window styling (Windows)."""
+"""Desktop integration for the overlay: global hotkey, single instance, window styling (Windows)."""
 from __future__ import annotations
 
 import ctypes
@@ -157,7 +157,7 @@ class SingleInstance:
                 pass
 
 
-# ───── tray icon ─────
+# ───── icons ─────
 # Lightning bolt, in 0..1 coordinates of the icon square.
 BOLT = [(0.585, 0.08), (0.215, 0.565), (0.465, 0.565), (0.405, 0.92), (0.785, 0.425), (0.535, 0.425), (0.655, 0.08)]
 GOLD_TOP, GOLD_BOTTOM, INK = (246, 205, 98), (210, 154, 42), (26, 19, 6)
@@ -294,50 +294,6 @@ def ui_icon(name: str, size: int, color: tuple, accent: tuple | None = None):
 
 def save_ico(path: str) -> None:
     make_icon_image(256).save(path, sizes=[(s, s) for s in (16, 20, 24, 32, 40, 48, 64, 128, 256)])
-
-
-def tray_supported() -> bool:
-    try:
-        import pystray  # noqa: F401
-        return True
-    except Exception:  # noqa: BLE001
-        return False
-
-
-class Tray:
-    """System-tray icon with Show/Hide and Quit (pystray). All callbacks run on pystray's thread."""
-
-    def __init__(self, on_toggle: Callable[[], None], on_quit: Callable[[], None]):
-        self.on_toggle = on_toggle
-        self.on_quit = on_quit
-        self.icon = None
-
-    def start(self) -> bool:
-        if self.icon is not None:
-            return True
-        try:
-            import pystray
-        except Exception:  # noqa: BLE001
-            return False
-        try:
-            menu = pystray.Menu(
-                pystray.MenuItem("Show", lambda icon, item: self.on_toggle(), default=True),
-                pystray.MenuItem("Quit", lambda icon, item: self.on_quit()),
-            )
-            self.icon = pystray.Icon("ShugoTracker", make_icon_image(64), "Shugo Tracker", menu)
-            self.icon.run_detached()
-            return True
-        except Exception:  # noqa: BLE001
-            self.icon = None
-            return False
-
-    def stop(self) -> None:
-        if self.icon is not None:
-            try:
-                self.icon.stop()
-            except Exception:  # noqa: BLE001
-                pass
-            self.icon = None
 
 
 # ───── window styling ─────

@@ -528,12 +528,10 @@ class SearchWindow:
         self.root.bind("<Map>", self._on_map, add="+")
         self.root.bind("<Configure>", self._on_resize, add="+")
         self._compact = None
-        self.tray_ok = False                     # tray icons work here (set by the app)
-        self.tray_icon = (lambda: False, lambda: None)   # (show, remove) the tray icon; set by the app
         from .settings import migrate
         migrate(cfg)
         self.save_cfg: Callable[[], None] = lambda: None   # set by the app
-        self._hidden_state: str | None = None   # "window" while hidden to the tray
+        self._hidden_state: str | None = None   # "window" while hidden (hotkey)
 
         fams = set(tkfont.families())
         base = "Segoe UI Variable Text" if "Segoe UI Variable Text" in fams else "Segoe UI"
@@ -703,6 +701,11 @@ class SearchWindow:
         tk.Frame(self.status_row, bg=LINE, height=1).pack(fill="x")
         self.status = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, anchor="w",
                                padx=PAD, pady=6)
+        self.clear_btn = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, padx=PAD,
+                                  cursor="hand2")                   # Nearby / Recent: clear the list
+        self.clear_btn.bind("<Button-1>", lambda e: self._clear_list())
+        self.clear_btn.bind("<Enter>", lambda e: self.clear_btn.config(fg=GOLD_TEXT))
+        self.clear_btn.bind("<Leave>", lambda e: self.clear_btn.config(fg=FG_DIM))
         self.status.pack(side="left", fill="x", expand=True)
         self.status.bind("<Shift-Button-1>", lambda e: self._nearby_record())   # hidden: Nearby capture
 
@@ -1619,6 +1622,13 @@ class SearchWindow:
         return True
 
     def _update_status(self, view):
+        label = self._clear_label()
+        if label:
+            self.clear_btn.config(text=label)
+            if not self.clear_btn.winfo_manager():
+                self.clear_btn.pack(side="right", before=self.status)
+        elif self.clear_btn.winfo_manager():
+            self.clear_btn.pack_forget()
         if self.mode in ("nearby", "recent"):
             self.status.config(text=self._nearby_status_text(view), fg=FG_DIM)
             return
@@ -1883,7 +1893,7 @@ class SearchWindow:
         if key == "optin":
             head = tk.Frame(box, bg=SURFACE)
             head.pack(fill="x")
-            tk.Label(head, text="Nearby Players", bg=SURFACE, fg=FG, font=self.f_name).pack(side="left")
+            tk.Label(head, text="Nearby", bg=SURFACE, fg=FG, font=self.f_name).pack(side="left")
             tk.Label(head, text="BETA", bg=ACCENT, fg=ACCENT_FG, font=self.f_tiny, padx=5).pack(
                 side="left", padx=(8, 0), pady=(2, 0))
             text("Disclaimer: reading game traffic may violate AION 2's Terms of Service. Use at your own risk; "
@@ -2183,7 +2193,7 @@ class SearchWindow:
         self.root.lift()
         self._mark()
 
-    # hide / show everything (tray, second launch)
+    # hide / show everything (hotkey, second launch)
     def is_visible(self) -> bool:
         return self.root.state() not in ("withdrawn", "iconic")
 
@@ -2201,7 +2211,6 @@ class SearchWindow:
         self.root.withdraw()
 
     def show(self, focus: bool = True):
-        self.tray_icon[1]()                      # back on screen: no tray icon
         self.expand()
         if focus:
             self.root.focus_force()
@@ -2514,11 +2523,8 @@ class SearchWindow:
             pass
 
     def close_button(self):
-        """✕: quit, or tuck away into the tray when "Close to tray" is on."""
-        if self.cfg.get("close_to_tray") and self.tray_ok and self.tray_icon[0]():
-            self.hide()
-        else:
-            self.close()
+        """✕: quit."""
+        self.close()
 
     def close(self):
         if getattr(self, "_closed", False):

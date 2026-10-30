@@ -1,4 +1,4 @@
-"""Overlay helpers: hotkey parsing, single-instance handoff, tray icon."""
+"""Overlay helpers: hotkey parsing, single-instance handoff."""
 import threading
 import unittest
 
