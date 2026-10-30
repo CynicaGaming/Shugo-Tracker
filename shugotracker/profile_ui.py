@@ -486,6 +486,15 @@ class ProfileView:
     FUSE = "#b98cff"          # linked / fused skills (purple)
     GOOD = "#6fd38a"          # better mana stones (green)
     SKIN = "#4fd1c5"
+    SET_NAME = "#3fbf8a"      # the set's name (green, like the game)
+
+    def _badge(self, parent, n: int, on: bool) -> tk.Canvas:
+        """A small diamond with a number in it: pieces equipped / needed."""
+        cv = tk.Canvas(parent, width=16, height=16, bg=self.TIP_BG, highlightthickness=0)
+        col = FG if on else FG_FAINT
+        cv.create_polygon(8, 1, 15, 8, 8, 15, 1, 8, outline=col, fill="", width=1)
+        cv.create_text(8, 8, text=str(n), fill=col, font=self.app.f_tiny)
+        return cv
 
     def _show_item_tip(self, it: Item, anchor):
         det = self._details.get(self._dkey(it))
@@ -600,15 +609,21 @@ class ProfileView:
                     tk.Label(r, text=name, bg=self.TIP_BG, fg=FG, font=f.f_small).pack(side="left", padx=6)
                     tk.Label(r, text=f"Lvl. +{lv}", bg=self.TIP_BG, fg=FG, font=f.f_small).pack(side="right")
             line()
-            tk.Label(body, text=f"{det.set_name.upper()} · {det.set_equipped} EQUIPPED", bg=self.TIP_BG,
-                     fg=FG, font=f.f_sbold, anchor="w").pack(fill="x")
+            tk.Label(body, text="Set Effects", bg=self.TIP_BG, fg=FG, font=f.f_sbold).pack(pady=(0, 2))
+            tk.Frame(body, bg=BORDER, height=1).pack(fill="x", pady=(0, 6))
+            head = tk.Frame(body, bg=self.TIP_BG)
+            head.pack(fill="x")
+            tk.Label(head, text=det.set_name, bg=self.TIP_BG, fg=self.SET_NAME, font=f.f_bold).pack(side="left")
+            self._badge(head, det.set_equipped, True).pack(side="left", padx=(5, 0))
             for need, effects in det.set_bonuses:
                 on = det.set_equipped >= need
-                tk.Label(body, text=f"{need} pieces", bg=self.TIP_BG, fg=FG if on else FG_FAINT, font=f.f_sbold,
-                         anchor="w").pack(fill="x", pady=(4, 0))
-                for e in effects:
-                    tk.Label(body, text=e, bg=self.TIP_BG, fg=FG if on else FG_FAINT, font=f.f_small,
-                             anchor="w", justify="left", wraplength=self.TIP_W - 30).pack(fill="x")
+                for i, e in enumerate(effects):
+                    r = tk.Frame(body, bg=self.TIP_BG)
+                    r.pack(fill="x", pady=(5 if i == 0 else 1, 0))
+                    (self._badge(r, need, on) if i == 0 else tk.Frame(r, bg=self.TIP_BG, width=16)).pack(
+                        side="left", anchor="n", padx=(0, 6))
+                    tk.Label(r, text=e, bg=self.TIP_BG, fg=FG if on else FG_FAINT, font=f.f_small, anchor="w",
+                             justify="left", wraplength=self.TIP_W - 52).pack(side="left", fill="x")
         if det.costumes:
             line()
             row("Skin Info", "", fg=self.SKIN)
@@ -867,14 +882,16 @@ class ProfileView:
         self._section(self.body, "Equipped titles", extra)
         if not p.titles:
             tk.Label(self.body, text="No titles equipped.", bg=BG, fg=FG_DIM, font=self.app.f_small).pack(anchor="w")
-        for t in p.titles:
+        order = {"attack": 0, "offense": 0, "defense": 1}          # always Offense, Defense, Other
+        for t in sorted(p.titles, key=lambda t: order.get((t.category or "").lower(), 2)):
             card = tk.Frame(self.body, bg=SURFACE, padx=12, pady=8)
             card.pack(fill="x", pady=3)
             top = tk.Frame(card, bg=SURFACE)
             top.pack(fill="x")
             tk.Label(top, text=t.name, bg=SURFACE, fg=GRADE_COLORS.get(t.grade, FG), font=self.app.f_bold).pack(
                 side="left")
-            tk.Label(top, text=t.category, bg=SURFACE_2, fg=FG_DIM, font=self.app.f_tiny, padx=6).pack(
+            label = {0: "Offense", 1: "Defense"}.get(order.get((t.category or "").lower(), 2), "Other")
+            tk.Label(top, text=label, bg=SURFACE_2, fg=FG_DIM, font=self.app.f_tiny, padx=6).pack(
                 side="left", padx=8)
             if t.owned_percent is not None:
                 tk.Label(top, text=f"Owned by {t.owned_percent}% of players", bg=SURFACE, fg=FG_FAINT,
