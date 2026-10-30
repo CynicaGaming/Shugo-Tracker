@@ -81,3 +81,19 @@ framed("ui-demo-columns-menu.png", "columns.png", crop=(0, 0, 600, 470))
 # tooltip + arcana side by side
 arc = Image.open(S + "ui-demo-profile-arcana-tip.png").convert("RGB")
 print("arcana", arc.size)
+
+# download button (self-hosted, so it never depends on a badge service)
+f = ImageFont.truetype(BOLD, 30)
+label = "Download for Windows"
+tw = int(f.getlength(label))
+bw, bh, scale = tw + 140, 76, 1
+btn = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+d = ImageDraw.Draw(btn)
+d.rounded_rectangle((0, 0, bw - 1, bh - 1), radius=18, fill=GOLD)
+ink = (26, 19, 6)
+x0, y0, s = 40, 24, 13   # Windows logo: four squares
+for dx in (0, s + 3):
+    for dy in (0, s + 3):
+        d.rectangle((x0 + dx, y0 + dy, x0 + dx + s, y0 + dy + s), fill=ink)
+d.text((x0 + 2 * s + 3 + 22, bh // 2), label, font=f, fill=ink, anchor="lm")
+btn.save(OUT + "download.png", optimize=True)

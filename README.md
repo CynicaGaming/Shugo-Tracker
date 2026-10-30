@@ -3,11 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest/download/ShugoTracker.exe"><img src="https://img.shields.io/badge/Download%20for%20Windows-d9a93a?style=for-the-badge&logo=windows&logoColor=1a1306&labelColor=d9a93a&color=d9a93a" alt="Download for Windows"></a>
-  &nbsp;
-  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest"><img src="https://img.shields.io/github/v/release/CynicaGaming/Shugo-Tracker?style=for-the-badge&label=latest&color=26282f&labelColor=18191e" alt="Latest release"></a>
-  &nbsp;
-  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases"><img src="https://img.shields.io/github/downloads/CynicaGaming/Shugo-Tracker/total?style=for-the-badge&color=26282f&labelColor=18191e" alt="Downloads"></a>
+  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest/download/ShugoTracker.exe"><img src="docs/images/download.png" alt="Download for Windows" height="48"></a>
+  <br><sub><a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest">Latest release notes</a></sub>
 </p>
 
 <p align="center"><b>Look anyone up in a second. See exactly what they're wearing. Know who's around you.</b><br>
