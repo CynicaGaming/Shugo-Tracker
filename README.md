@@ -1,252 +1,176 @@
-# Shugo Tracker
+<p align="center">
+  <img src="docs/images/banner.png" alt="Shugo Tracker" width="100%">
+</p>
 
-A fast, modern **AION 2 (Global) character search**. Type a name and get every matching character across
-all Global regions — class, level, server, faction, **gear score** and **combat power** — and open a full
-profile in the app.
+<p align="center">
+  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest/download/ShugoTracker.exe"><img src="https://img.shields.io/badge/Download%20for%20Windows-d9a93a?style=for-the-badge&logo=windows&logoColor=1a1306&labelColor=d9a93a&color=d9a93a" alt="Download for Windows"></a>
+  &nbsp;
+  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest"><img src="https://img.shields.io/github/v/release/CynicaGaming/Shugo-Tracker?style=for-the-badge&label=latest&color=26282f&labelColor=18191e" alt="Latest release"></a>
+  &nbsp;
+  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases"><img src="https://img.shields.io/github/downloads/CynicaGaming/Shugo-Tracker/total?style=for-the-badge&color=26282f&labelColor=18191e" alt="Downloads"></a>
+</p>
 
-- Searches NA East, NA West, Europe, Latin America and Asia at the same time.
-- Results appear instantly as skeleton cards; gear score and combat power fill in for the cards you can see,
-  and more results load as you scroll — so even a common name with thousands of matches stays smooth.
-- Each character's **<Legion>** is shown next to their name.
-- Click any character for a full profile: gear, skills, Daevanion boards, stats, cosmetics and titles.
-- Star characters to keep them in **★ Favorites**; drag them by the grip (⋮⋮) to put them in your own order.
-- Toggle region and faction filters on and off instantly. Pin the window on top of the game.
-- Updates itself from this repo's releases.
+<p align="center"><b>Look anyone up in a second. See exactly what they're wearing. Know who's around you.</b><br>
+One small, always-on-top window that sits over the game — no browser, no tabbing out.</p>
 
-*Shugo Tracker is an independent fan tool. It reads NCSOFT's public AION 2 character data and is not made by
-or affiliated with NCSOFT or Shugo.GG.*
+<p align="center">
+  <img src="docs/images/hero.png" alt="Search results and a character's gear with an item tooltip" width="92%">
+</p>
 
-## Install & run
+---
 
-1. Download **`ShugoTracker.exe`** from the latest
-   [release](https://github.com/CynicaGaming/Shugo-Tracker/releases/latest) and put it in its own folder.
-2. Run it. SmartScreen may warn the first time because the exe isn't code-signed: *More info → Run anyway*.
-   No administrator rights or extra installs are needed.
+## ✦ Find anyone, instantly
 
-Shugo Tracker is portable: everything it keeps lives in its own folder, next to the exe, so you can move or
-copy the whole folder anywhere (another drive, a USB stick, another PC) and it carries on where it left off.
+<table>
+<tr>
+<td width="52%"><img src="docs/images/search.png" alt="Search results"></td>
+<td>
 
-```
-ShugoTracker.exe
-data\    config.json, favorites.json
-cache\   shugo.db (card numbers, profiles and Nearby name lookups in one small SQLite file), images\
-logs\    shugo-tracker.log, diagnostics\ (Nearby recordings)
-```
+Type a name and every match across **all five Global regions** shows up while you type — with
+**combat power, gear score, class, level, legion and server** right in the list.
 
-Updates replace only the exe, so all of this stays. Versions up to 1.22 kept these files in
-`%APPDATA%\ShugoTracker`; they're moved into the app's folder on first start and the old folder is removed.
-(Only if the app's folder can't be written to, e.g. inside Program Files, does it use `%APPDATA%\ShugoTracker`.)
-`ShugoTracker.exe --demo` shows the window with made-up characters (no network).
+- Filter by region, faction, class and level in one click
+- Sort by any column; each tab remembers its own sort
+- Show, hide and drag columns into the order you like
 
-## The overlay
+</td>
+</tr>
+</table>
 
-Shugo Tracker is a frameless, always-on-top window meant to sit over the game (play in **borderless
-windowed** mode):
+## ✦ Every piece of gear, like in game
 
-| | |
-|---|---|
-| drag the title bar | move it |
-| any edge or corner (or ◢) | resize it |
-| — | minimize to the taskbar |
-| your portrait and name (top right) | your profile and ⚙ Settings. Nearby fills it in when the game names you; or right-click any card → *Set as my character* (Nearby's sides follow it) |
-| ✕ | quit (with *Close to tray* on in ⚙: hide; a tray icon appears until you bring it back) |
+<table>
+<tr>
+<td>
 
-Starting it again while it's running (even hidden) brings the running copy forward. When an update is
-available, a green download icon appears next to 📌: click it to download (the icon becomes a gold progress
-ring), and when it turns into a green restart arrow, click again to restart into the new version. Hover it to see
-which step it's on.
+Open a character to see their **gear, skills, Stigma, Daevanion boards, stats, appearance and titles**.
 
-### Settings (⚙)
+Hover any item for a tooltip laid out like the game's own: stats and enchant bonuses, soul imprint,
+**mana stones, theostones**, and for Arcana cards their **linked skills and set bonuses** — with the bonuses
+they actually have lit up.
 
-| | |
-|---|---|
-| Window | borderless window (off = the normal Windows frame); opacity (100% by default); always on top; close to tray |
-| Updates | check for updates automatically; check now |
-| Data | cache size and Clear; open the app folder |
+</td>
+<td width="52%"><img src="docs/images/stats.png" alt="A character's stats with a tooltip"></td>
+</tr>
+</table>
 
-Everything is saved immediately.
+## ✦ Know who's around you <sup><code>BETA</code></sup>
 
-## Using it
+<table>
+<tr>
+<td width="52%"><img src="docs/images/nearby.png" alt="Nearby players"></td>
+<td>
 
-| | |
-|---|---|
-| type a name, press Enter | search (it also searches by itself after you pause typing) |
-| Region / Faction toggles; Class and Level under **More** | click to filter, click again to remove; **All** (or nothing selected) = every region; **Clear** resets all filters |
-| Lv [min] – [max] | level range; fill in either or both |
-| column headers (Name, Legion, Class, Lv, Server, GS, CP, and on Recent: Last seen) | click to sort by that column, again to flip it, a third time to go back to the list's own order. Each tab (Search, Favorites, Nearby, Recent) keeps its own sort (Nearby / Recent keep enemies and allies grouped) |
-| click a card | open the character's profile |
-| ☆ on a card or in a profile | add or remove a favorite (see the **★ Favorites** tab) |
-| right-click a card | profile / favorite / copy name / refresh |
-| right-click the column headers | tick which columns to show (Reset columns brings back the default set) |
-| drag a column header | move that column (Name stays first) |
-| hover a piece of gear (profile → Gear) | its stats, soul imprint, mana stones and theostone; Arcana cards show their linked skills and set bonuses |
-| drag ⋮⋮ on a favorite | reorder Favorites (switches back to your own order if a column sort is on) |
-| window edges and corners | drag to resize; columns widen with the window, and Server, then Legion, then Class step aside when it's narrow |
-| 📌 | keep the window above other windows |
+Turn on **Nearby** and the players around your character appear on their own — enemies and allies,
+each with their power and gear score, in towns, in the open world, in Shugo and in the arena.
 
-The profile has tabs for **Gear** (equipment, accessories and Arcana with grade and enchant level),
-**Skills** (Active, Passive and Stigma, equipped first), **Daevanion** (board progress), **Stats** (primary and
-deity stats with their effects), **Cosmetics** (wings, wing appearance, pet, outfit) and **Titles**, plus the
-character's legion. Per-item stat rolls aren't part of NCSOFT's public
-data, so items show name, grade and enchant level.
+**Recent** keeps everyone you've crossed paths with for the last hour, with when you last saw them
+and a ⚔ for anyone who fought you.
 
-Search matches anywhere in the name (“luna” also finds “Aluna”); exact matches and higher levels come first.
+<sub>Opt-in. Reads the game's network traffic on your PC through Npcap; it never sends or changes anything.</sub>
 
-## Where the data comes from
+</td>
+</tr>
+</table>
 
-Shugo Tracker reads NCSOFT's public AION 2 endpoints directly:
+## ✦ Built for playing, not fiddling
 
-- **Search:** `api-search.plaync.com/aion2global/search/v2/character` — one request per region, 30 results a page.
-  Class, a single faction and an exact level are filtered by NCSOFT (`pcId`, `race`, `level`); a level range is
-  filtered in the app.
-- **Details:** `aion2.plaync.com/api/character/info` — combat power, item level (gear score), stats, titles,
-  Daevanion boards, legion.
-- **Gear:** `aion2.plaync.com/api/character/equipment` — equipment, cosmetics, wings, pet and skills
-  (only requested when you open a profile).
+<table>
+<tr>
+<td width="33%" valign="top">
 
-Details are only requested for cards on screen, newest scroll position first, by 4 parallel workers sharing a
-hard limit of 6 requests in any one second (halved automatically if the server says to slow down); a
-search's five region requests go out together. Opening a profile reuses the info a card has just loaded, so
-only the gear is fetched. Starting a new search cancels the old one's pending requests.
+**★ Favorites**<br>
+Star friends, rivals and your legion. Drag them into your own order.
 
-Caching (in the data folder, `character_cache.json` and `cache/`):
+</td>
+<td width="33%" valign="top">
 
-- card numbers are kept for 7 days and shown instantly; if older than 30 minutes they refresh quietly;
-- profiles are kept for 7 days and shown instantly; if older than 10 minutes they refresh quietly;
-- portraits (1 day) and game icons (30 days) are stored on disk;
-- the same search within 15 minutes is answered from memory;
-- a profile (gear, skills, …) is only fetched when you open it.
+**📌 Overlay**<br>
+Borderless, always on top, resizable from any edge, any opacity. Works on any monitor.
 
-Delete the `cache` folder and `character_cache.json` at any time to start fresh.
+</td>
+<td width="33%" valign="top">
 
-## Updates
+**⚡ Fast**<br>
+Results stream in as they arrive; people you've met before load instantly.
 
-The **Check for updates** button is in ⚙ Settings (a green download icon appears on the title bar when an
-update is available):
+</td>
+</tr>
+<tr>
+<td valign="top">
 
-| button shows | meaning / what clicking does |
-|---|---|
-| Check for updates | asks GitHub for the latest release |
-| ✓ Up to date | you have the newest version (goes back to *Check for updates* after a few seconds) |
-| Update to v1.x.y | a newer version exists — click to download it (shows progress) |
-| Restart to update | downloaded and checksum-verified — click to switch to the new version |
+**🧳 Portable**<br>
+One exe and its folder. Copy the folder anywhere and everything comes with it.
 
-The app also checks quietly at start-up and every 30 minutes, so the button may already say
-**Update to …** when you open it; nothing is downloaded until you click. If you quit with an update
-downloaded, it's installed on exit. `config.json`, favorites and the cache are kept. Set
-`"auto_update": false` to turn off the automatic checks (the button still works).
+</td>
+<td valign="top">
 
-Builds made with `build_exe.bat` show **✓ Dev build** and are never replaced; running from source,
-the button opens the release page instead.
+**⬇ Updates itself**<br>
+A green arrow appears when there's a new version: click to download, click again to restart.
 
-## Development & publishing
+</td>
+<td valign="top">
 
-The repo holds the source; the exe is only built when you publish.
+**🔒 Private**<br>
+No account, no sign-in, no tracking. Character data comes from NCSOFT's public AION 2 site.
 
-- **Every push / PR** runs the tests on Windows (`.github/workflows/ci.yml`), takes screenshots, and builds a
-  throwaway exe to check that favorites survive a restart. Nothing is published.
-- **To publish a version**, either
-  - GitHub → **Actions → Publish release → Run workflow**, enter a version such as `1.2.0`, or
-  - `git tag v1.2.0 && git push origin v1.2.0`.
+</td>
+</tr>
+</table>
 
-  `.github/workflows/release.yml` runs the tests, stamps the version into `shugotracker/_version.py`, builds
-  `ShugoTracker.exe` with PyInstaller, and publishes a release with the exe, its `.sha256` and
-  `ShugoTracker-windows.zip`. Every installed copy then updates itself. Versions must go up
-  (`MAJOR.MINOR.PATCH`); the updater ignores anything not newer than what's running.
+<p align="center">
+  <img src="docs/images/recent.png" alt="Recent players" width="32%">
+  <img src="docs/images/columns.png" alt="Choosing columns" width="32%">
+  <img src="docs/images/favorites.png" alt="Reordering favorites" width="32%">
+</p>
 
-Working locally:
+---
 
-- `run.bat` — run from source (sets up a venv, runs `python -m shugotracker.app`).
-- `python -m shugotracker.app --search-cli NAME` — search from a terminal.
-- `build_exe.bat` — build `dist\ShugoTracker.exe` on your PC (version shows as `0.0.0-dev`; dev builds never
-  auto-update).
-- `python -m unittest discover -s tests -t .` — tests.
+## Get started
 
-## config.json
+1. **[Download ShugoTracker.exe](https://github.com/CynicaGaming/Shugo-Tracker/releases/latest/download/ShugoTracker.exe)** and put it in a folder of its own.
+2. Run it. Windows may show a SmartScreen warning the first time — choose **More info → Run anyway**.
+3. Play the game in **borderless windowed** mode so the tracker can sit on top.
 
-| key | default | meaning |
-|---|---|---|
-| `regions` / `factions` | `[]` / `[]` | last filters used (empty = all) |
-| `always_on_top` | `true` | pin the window above other windows |
-| `nearby_autoclear_s` | `0` | Nearby: clear the list to Recent every N seconds (0 = never) |
-| `borderless` | `true` | our own title bar; `false` uses the normal Windows frame |
-| `auto_update` | `true` | check for new releases at start-up and every 6 hours |
-| `update_repo` | `"CynicaGaming/Shugo-Tracker"` | GitHub repo the updater follows |
+For **Nearby**, install the free [Npcap](https://npcap.com/#download) (default options) and switch Nearby on.
 
-| `nearby_enabled` | `false` | Nearby players is on (opt-in, see below) |
-| `my_server` | `""` | Nearby: your server until the game reveals it: `"nae-siel"`, `"eu-ludra"` or `1101` |
-| `opcodes` | | Nearby: packet opcodes — see *After a game patch* |
+## Good to know
 
-## Nearby players (opt-in, beta)
+<details>
+<summary><b>Is it safe? Will it get me banned?</b></summary>
+<br>
+Search and profiles only use NCSOFT's public website data, the same as looking someone up in a browser.
+Nearby is different: it reads the game's network traffic on your own PC. It never sends, changes or injects
+anything, but reading game traffic may still be against AION 2's Terms of Service. Use Nearby at your own risk;
+Shugo Tracker isn't responsible for any action taken against your account.
+</details>
 
-The **◉ Nearby** tab lists the players around your character, split into **Enemies** and **Allies**, with the
-same cards (gear score, combat power, profile on click) as search. It is off until you turn it on in the tab
-(or in ⚙ Settings → *Nearby players*), and it can be turned off there at any time.
+<details>
+<summary><b>Why does Windows warn me when I run it?</b></summary>
+<br>
+The exe isn't code-signed yet, so SmartScreen doesn't recognise it. The code is all here in this repository,
+and every release is built automatically from it.
+</details>
 
-It needs **[Npcap](https://npcap.com/#download)** (free; the default install options are fine). Shugo Tracker
-then reads the game's own downstream traffic on this PC: only AION2.exe's connections, found in the Windows
-connection table. It never sends anything to the game or changes anything; the only network requests are the
-normal NCSOFT character searches (one per player on screen, inside the app's 6-per-second limit). Reading
-game traffic may be against AION 2's terms of service — use it at your own risk.
+<details>
+<summary><b>Where are my settings and favorites?</b></summary>
+<br>
+In the <code>data</code>, <code>cache</code> and <code>logs</code> folders next to the exe. Updates only replace
+the exe, so nothing is lost; move or copy the whole folder to take everything with you.
+</details>
 
-| | |
-|---|---|
-| red / green edge on a card | enemy / ally |
-| Faction / Class / Level | the usual filters apply here too (Faction = Elyos or Asmodian) |
-| a card still shimmering | the game showed the player; NCSOFT hasn't identified them yet |
-| Auto-clear Nearby (⚙ Settings) | do that Clear by itself: slide it from Never to 1m, 5m, 15m, 30m or 60m — anyone still around comes back on the next update the game sends about them |
-| Clear (right-click the list) | Nearby: move everyone to Recent (they come back as the game shows them again, or at once if they fight you); Recent: empty it |
-| ↺ Recent tab | who was around you in the last hour: players who left view, and everyone from your previous area when you teleport or change zone; ⚔ = they fought you |
+<details>
+<summary><b>Something's wrong with Nearby.</b></summary>
+<br>
+In the Nearby tab, <b>Shift+click</b> the line at the bottom to record 60 seconds of game traffic into
+<code>logs\diagnostics</code>, then open an issue and attach it. Game patches can change the traffic, and a
+recording is what fixes it.
+</details>
 
-### Who shows up, and where
+---
 
-**Everyone in render range.** Players are added when the game sends their spawn record (they come into view,
-or you load a map), removed when it sends the record that they left view, and the list is reset when you load
-a new map (the game re-sends everyone around you). Respawning or reviving in the same map (an arena death)
-keeps everyone, and anyone on Recent who fights you again comes straight back. A player whose leave record was missed is dropped after
-15 minutes without activity.
-
-**Enemy / ally.** Since the October 2026 client, a player's spawn record carries their faction and exact
-class directly, so invaders and locals are told apart the moment they appear (no lookup needed). Otherwise:
-AION 2 Global server ids encode faction (`race × 1000 + region × 100 + n`; race 1 = Elyos,
-2 = Asmodian), so a player on the other faction's server is an enemy and one on yours an ally. Someone
-fighting you counts as an enemy until their server is known. Your own character and server come from the
-record sent when you log in or load a map; if you turn Nearby on mid-session, load a map once (or set
-`"my_server"`).
-
-Players are listed as soon as the game sends their spawn record, and every one is identified in the
-background (cards on screen first): one NCSOFT search for the exact name and class in your region, which gives
-their real server and faction. Names are only unique per server, so between namesakes the app uses, in order,
-the server named by the game, ignores level-1 characters (mostly reserved names), prefers servers already seen
-around you, then your faction, then the highest level. Your region and character are remembered.
-
-### Troubleshooting
-
-From source, `python -m shugotracker.app --replay-bin FILE` decodes a Nearby recording (made with
-`NearbyService.start_recording`) and prints every record found — the way to check the decoder after a patch.
-
-### After a game patch
-
-Patches sometimes renumber opcodes (the June 2026 patch shifted the `xx 36` family by one). If names stop
-appearing or players never leave the list, the `opcodes` block in `config.json` needs updating.
-
-The wire layout comes from the community DPS-meter projects (A2Tools-DPS-Meter, AIon2-Dps-Meter,
-aion2-dps-meter, Aion2DPSMeter — all GPL-3.0). The despawn and map-load records are the least battle-tested
-part: those meters use them for NPCs and world objects; using them for players is new here.
-
-### Limitations
-
-- Player names only arrive with spawn records. Someone already in range when Nearby starts stays invisible
-  until they re-enter view or you load a map.
-- NCSOFT's search only knows characters it lists; a brand-new character may stay unidentified for a while.
-
-## Credits & licence
-
-The packet layouts were reverse-engineered and published by the open-source AION 2 meters —
-[A2Tools-DPS-Meter](https://github.com/taengu/A2Tools-DPS-Meter),
-[AIon2-Dps-Meter](https://github.com/Kuroukihime/AIon2-Dps-Meter),
-[aion2-dps-meter](https://github.com/cyberbadger6969/aion2-dps-meter),
-[Aion2DPSMeter](https://github.com/domel1998/Aion2DPSMeter) and
-[aion2-combat-meter](https://github.com/mgauna-ar/aion2-combat-meter). The server table comes from A2Tools'
-data. This is an independent Python implementation, released under **GPL-3.0** (see `LICENSE`).
-Character data from NCSOFT's public AION 2 site. Not affiliated with NCSOFT or Shugo.GG.
+<p align="center">
+  <sub>Developers and the curious: settings, data sources, Nearby internals and building from source are in
+  <a href="docs/TECHNICAL.md">docs/TECHNICAL.md</a>.</sub><br>
+  <sub>Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. AION is a trademark of NCSOFT Corporation.</sub>
+</p>
