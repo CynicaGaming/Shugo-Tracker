@@ -129,7 +129,7 @@ No account, no sign-in, no tracking. Character data comes from NCSOFT's public A
 2. Run it. Windows may show a SmartScreen warning the first time — choose **More info → Run anyway**.
 3. Play the game in **borderless windowed** mode so the tracker can sit on top.
 
-For **Nearby**, just switch it on. It needs administrator rights, so Shugo Tracker restarts itself as administrator (Windows asks first). If Windows Firewall asks about Shugo Tracker, choose **Allow**.
+For **Nearby**, just switch it on. It needs administrator rights, so Shugo Tracker restarts itself as administrator (Windows asks first).
 
 ## Good to know
 
@@ -159,8 +159,9 @@ the exe, so nothing is lost; move or copy the whole folder to take everything wi
 <details>
 <summary><b>Why does Nearby need administrator?</b></summary>
 <br>
-Windows only lets programs running as administrator read network traffic. Search, profiles and favorites never
-need it. To skip the restart each time, right-click <code>ShugoTracker.exe</code> → <b>Properties</b> →
+Windows only lets programs running as administrator read network traffic, and Windows Firewall has to let the
+game's traffic through to it, so the first time Nearby starts, Shugo Tracker adds one firewall rule allowing
+itself in ("Shugo Tracker (Nearby)"). Search, profiles and favorites never need administrator. To skip the restart each time, right-click <code>ShugoTracker.exe</code> → <b>Properties</b> →
 <b>Compatibility</b> → <b>Run this program as an administrator</b>.
 </details>
 
