@@ -2482,6 +2482,11 @@ class SearchWindow:
             self.root.update()
             x, y = self.root.winfo_rootx(), self.root.winfo_rooty()
             ImageGrab.grab(bbox=(x, y, x + self.root.winfo_width() + extra, y + self.root.winfo_height())).save(path)
+            tip = getattr(self.profile_view, "_tip", None) if self.profile_view else None
+            if tip is not None and tip.winfo_exists():       # the tooltip alone, for the README
+                tx, ty = tip.winfo_rootx(), tip.winfo_rooty()
+                ImageGrab.grab(bbox=(tx, ty, tx + tip.winfo_width(), ty + tip.winfo_height())).save(
+                    path[:-4] + "-only.png")
         except Exception as e:  # noqa: BLE001
             print(f"screenshot failed: {e}")
 

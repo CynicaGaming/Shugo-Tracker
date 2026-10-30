@@ -63,12 +63,14 @@ c.convert("RGB").save(OUT + "banner.png", optimize=True)
 # hero: the list + a profile with an item tooltip beside it
 win = Image.open(S + "ui-show.png").convert("RGB")
 prof = Image.open(S + "ui-show-profile-gear-tip.png").convert("RGB")
-pwin, tip = prof.crop((0, 0, 600, 720)), prof.crop((606, 240, 839, 603))
+pwin, tip = prof.crop((0, 0, 600, 720)), Image.open(S + "ui-show-profile-gear-tip-only.png").convert("RGB")
 W, H = 1440, 900
 c = bg(W, H).convert("RGBA")
 drop(c, win.resize((540, 648)), (90, 150))
 drop(c, pwin, (560, 90))
-drop(c, tip.resize((int(tip.size[0] * 1.25), int(tip.size[1] * 1.25))), (1100, 230), r=10)
+k = min(1.25, 700 / tip.size[1])
+tip = tip.resize((int(tip.size[0] * k), int(tip.size[1] * k)))
+drop(c, tip, (W - tip.size[0] - 60, (H - tip.size[1]) // 2 + 20), r=10)
 c.convert("RGB").save(OUT + "hero.png", optimize=True)
 
 framed("ui-show.png", "search.png")
@@ -78,9 +80,13 @@ framed("ui-show-nearby-recent.png", "recent.png")
 framed("ui-show-favorites-drag.png", "favorites.png", crop=(0, 0, 600, 320))
 framed("ui-show-profile-stats-hover.png", "stats.png", crop=(0, 0, 600, 470))
 framed("ui-show-columns-menu.png", "columns.png", crop=(0, 0, 600, 470))
-# tooltip + arcana side by side
-arc = Image.open(S + "ui-show-profile-arcana-tip.png").convert("RGB")
-print("arcana", arc.size)
+# gear: the profile's gear list with an item tooltip over its right side
+tip = Image.open(S + "ui-show-profile-gear-tip-only.png").convert("RGB")
+W, H = 720 + 120, max(720, tip.size[1]) + 120
+c = bg(W, H).convert("RGBA")
+drop(c, pwin.crop((0, 0, 600, 720)), (60, (H - 720) // 2))
+drop(c, tip, (W - tip.size[0] - 40, (H - tip.size[1]) // 2), r=10)
+c.convert("RGB").save(OUT + "gear.png", optimize=True)
 
 # download button (self-hosted, so it never depends on a badge service)
 f = ImageFont.truetype(BOLD, 30)

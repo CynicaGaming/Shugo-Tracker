@@ -205,9 +205,11 @@ class ShowcaseSession(DemoSession):
     among made-up ones; their profile, gear and item details are live too. Everyone else is demo data."""
 
     def __init__(self, real: str, alias: str, live=None, slow: float = 1.0):
+        """real may name a server too: Cynica@Kaisinel."""
         super().__init__(slow)
         import requests
-        self.real, self.alias = real, alias
+        self.real, _, self.server = real.partition("@")
+        self.alias = alias
         self.live = live or requests.Session()
         self._ids: set[str] = set()
 
@@ -245,7 +247,8 @@ class ShowcaseSession(DemoSession):
                     found = []
                 for it in found:
                     plain = it["name"].replace("<strong>", "").replace("</strong>", "")
-                    if plain == self.alias:
+                    if plain == self.alias and not self._ids and (
+                            not self.server or str(it.get("serverName", "")).casefold() == self.server.casefold()):
                         self._ids.add(unquote(it["characterId"]))
                         data["list"].insert(0, it)
                         data["pagination"]["total"] += 1

@@ -47,7 +47,7 @@ Hover any item for a tooltip laid out like the game's own: stats and enchant bon
 they actually have lit up.
 
 </td>
-<td width="52%"><img src="docs/images/stats.png" alt="A character's stats with a tooltip"></td>
+<td width="52%"><img src="docs/images/gear.png" alt="A character's gear with an item tooltip"></td>
 </tr>
 </table>
 
