@@ -701,6 +701,17 @@ class SearchWindow:
         tk.Frame(self.status_row, bg=LINE, height=1).pack(fill="x")
         self.status = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, anchor="w",
                                padx=PAD, pady=6)
+        # bottom right: the clock; click ST / LT to switch between server time and this PC's time
+        clock = tk.Frame(self.status_row, bg=BG, cursor="hand2")
+        clock.pack(side="right", padx=(0, PAD))
+        self.clock_badge = tk.Label(clock, text="", bg=GOLD_SOFT, fg=GOLD_TEXT, font=self.f_tiny, padx=4,
+                                    cursor="hand2")
+        self.clock_badge.pack(side="left", padx=(0, 6))
+        self.clock_time = tk.Label(clock, text="", bg=BG, fg=FG_DIM, font=self.f_small, cursor="hand2")
+        self.clock_time.pack(side="left")
+        for w in (clock, self.clock_badge, self.clock_time):
+            w.bind("<Button-1>", lambda e: self._toggle_clock())
+        self._tick_clock()
         self.clear_btn = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, padx=PAD,
                                   cursor="hand2")                   # Nearby / Recent: clear the list
         self.clear_btn.bind("<Button-1>", lambda e: self._clear_list())
@@ -1621,6 +1632,27 @@ class SearchWindow:
                 w = min(w, span[1] - span[0])
                 round_rect(cv, span[1] - w, cy - 5, span[1], cy + 5, 5, fill=tone, outline="", tags="card")
         return True
+
+    def _clock_mode(self) -> str:
+        return "LT" if self.cfg.get("clock") == "LT" else "ST"
+
+    def _paint_clock(self):
+        from .clock import clock_text
+        mode = self._clock_mode()
+        self.clock_badge.config(text=mode)
+        self.clock_time.config(text=clock_text(mode))
+
+    def _tick_clock(self):
+        try:
+            self._paint_clock()
+        except tk.TclError:
+            return
+        self.root.after(1000 - int(time.time() * 1000) % 1000 + 5, self._tick_clock)
+
+    def _toggle_clock(self):
+        self.cfg["clock"] = "LT" if self._clock_mode() == "ST" else "ST"
+        self._paint_clock()
+        self.save_cfg()
 
     def _update_status(self, view):
         label = self._clear_label()

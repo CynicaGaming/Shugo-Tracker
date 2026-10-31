@@ -6,6 +6,7 @@ SETTING_DEFAULTS = {
     "always_on_top": True,
     "auto_update": True,
     "borderless": True,             # our own title bar; off = the normal Windows frame
+    "clock": "ST",                  # footer clock: ST = server time (US Eastern), LT = this PC's time
     "recent_max": 250,              # players kept on Recent; 0 = unlimited
     "nearby_autoclear_s": 0,        # move everyone on Nearby to Recent every N s (those still around return); 0 = never
 }
