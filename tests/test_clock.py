@@ -16,6 +16,8 @@ class ClockTests(unittest.TestCase):
     def test_server_time(self):
         ts = dt.datetime(2026, 10, 31, 8, 2, tzinfo=U).timestamp()      # 04:02 EDT
         self.assertEqual(server_now(ts).strftime("%H:%M"), "04:02")
-        self.assertEqual(clock_text("ST", ts), "04:02")
+        self.assertEqual(clock_text("ST", ts), "10/31/2026 04:02")
         ts = dt.datetime(2026, 12, 1, 17, 30, tzinfo=U).timestamp()     # 12:30 EST
-        self.assertEqual(clock_text("ST", ts), "12:30")
+        self.assertEqual(clock_text("ST", ts), "12/01/2026 12:30")
+        ts = dt.datetime(2026, 11, 1, 2, 30, tzinfo=U).timestamp()      # still Oct 31 in the East
+        self.assertEqual(clock_text("ST", ts), "10/31/2026 22:30")

@@ -33,6 +33,6 @@ def local_now(now: float | None = None) -> dt.datetime:
 
 
 def clock_text(mode: str, now: float | None = None) -> str:
-    """'ST' (server) or 'LT' (local): the time as HH:MM, like the game."""
+    """'ST' (server) or 'LT' (local): date and time like the game shows them, MM/DD/YYYY HH:MM."""
     t = server_now(now) if mode == "ST" else local_now(now)
-    return t.strftime("%H:%M")
+    return t.strftime("%m/%d/%Y %H:%M")
