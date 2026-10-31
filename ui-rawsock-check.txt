@@ -1,0 +1,5 @@
+admin: True
+firewall: allowed Shugo Tracker in
+firewall rule: True | again (no change): True
+any packets: 23, tcp out: 12, tcp in: 11
+listening on 10.1.0.11: 10 packets, 54838 bytes from port 443 (page 259051 bytes)

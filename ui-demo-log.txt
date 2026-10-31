@@ -1,0 +1,3 @@
+08:20:19 Shugo Tracker v0.0.0-dev (demo data)
+08:20:19 app folder: D:\a\Shugo-Tracker\Shugo-Tracker  �  0 favorites
+08:20:48 nearby: region nae (from your name)
