@@ -123,7 +123,7 @@ No account, no sign-in, no tracking. Character data comes from NCSOFT's public A
 
 ---
 
-## Get started
+## Getting Started
 
 1. **[Download ShugoTracker.exe](https://github.com/CynicaGaming/Shugo-Tracker/releases/latest/download/ShugoTracker.exe)** and put it in a folder of its own.
 2. Run it. Windows may show a SmartScreen warning the first time — choose **More info → Run anyway**.
