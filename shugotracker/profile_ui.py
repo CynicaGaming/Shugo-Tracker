@@ -7,7 +7,8 @@ import tkinter as tk
 from typing import TYPE_CHECKING
 
 from .aion2api import Character
-from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile, slot_name
+from .profile import (GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile, fmt_delta,
+                      slot_name, stat_deltas)
 from .search_ui import (ACCENT, ASMO, BG, BORDER, CLASS_COLORS, ELYOS, FG, FG_DIM, FG_FAINT, GRADE_COLORS, HOVER,
                         LINE, PAD, RED, REGION_NAMES, SURFACE, SURFACE_2, fmt_int, round_rect, ThinScrollbar)
 
@@ -33,12 +34,22 @@ class ProfileView:
         self._img_slots: list[tuple[tk.Label, str, int, bool]] = []
         self._blanks: dict[int, tk.PhotoImage] = {}
         self._skel_items: list[tuple[tk.Canvas, int, int]] = []
+        # compare: your character's profile (for holding Alt over an item), and whether Alt is held
+        self._mine: Profile | None = None
+        self._compare = False
+        self._alt_tk = False                     # Alt from Tk's own key events (where the system can't be asked)
+        self._alt_job = None
+        self._tip2 = None
+        for seq, on in (("<KeyPress-Alt_L>", True), ("<KeyPress-Alt_R>", True),
+                        ("<KeyRelease-Alt_L>", False), ("<KeyRelease-Alt_R>", False)):
+            app.root.bind_all(seq, lambda e, on=on: self._alt_key(on))
 
         self.frame = tk.Frame(app.root, bg=BG)
         self._build_header()
         self._build_tabs()
         self._build_body()
         self.render()
+        self._want_mine()
 
     # ───── chrome ─────
     def _build_header(self):
@@ -125,7 +136,10 @@ class ProfileView:
 
     def destroy(self):
         self._hide_tip()
+        self._stop_alt_poll()
         self.app.root.unbind_all("<MouseWheel>")
+        for seq in ("<KeyPress-Alt_L>", "<KeyPress-Alt_R>", "<KeyRelease-Alt_L>", "<KeyRelease-Alt_R>"):
+            self.app.root.unbind_all(seq)
         self.frame.destroy()
 
     # ───── state ─────
@@ -453,7 +467,10 @@ class ProfileView:
         elif self._details.get(key) is None:
             self._details[key] = False                       # failed: the tooltip says so
         hover = getattr(self, "_hover_item", None)
-        if hover is not None and self._dkey(hover[0]) == key and hover[1].winfo_exists():
+        if hover is None or not hover[1].winfo_exists():
+            return
+        mine = self._my_item(hover[0])
+        if self._dkey(hover[0]) == key or (self._compare and mine is not None and ("me",) + self._dkey(mine) == key):
             self._show_item_tip(*hover)
 
     def _item_hover(self, widgets, it: Item):
@@ -461,7 +478,9 @@ class ProfileView:
 
         def enter(_e):
             self._hover_item = (it, anchor)
+            self._compare = self._alt_held()
             self._show_item_tip(it, anchor)
+            self._start_alt_poll()
 
         def leave(_e):
             x, y = anchor.winfo_pointerxy()
@@ -470,6 +489,7 @@ class ProfileView:
                    w.winfo_rooty() <= y < w.winfo_rooty() + w.winfo_height() for w in row):
                 return                                       # moving between the row's own parts
             self._hover_item = None
+            self._stop_alt_poll()
             self._hide_tip()
         for w in widgets:
             w.bind("<Enter>", enter, add="+")
@@ -497,15 +517,59 @@ class ProfileView:
         return cv
 
     def _show_item_tip(self, it: Item, anchor):
-        det = self._details.get(self._dkey(it))
+        """The item's tooltip; holding Alt adds yours from the same slot beside it, with ▲/▼ on the hovered one."""
         self._hide_tip()
-        f = self.app
+        det = self._details.get(self._dkey(it))
+        if not (self._compare and self._can_compare()):
+            self._place_tip(self._item_tip(it, det, hint=self._can_compare()), anchor)
+            return
+        me = self.app.my_char
+        heading = f"Equipped  ·  {me.name}"
+        mine = self._my_item(it)
+        if mine is None:
+            waiting = self._mine is None or self._mine.equipment_pending
+            yours = self._note_tip(heading, None if waiting else "Nothing equipped in this slot")
+            deltas = None
+        else:
+            self._want_my_detail(mine)
+            mdet = self._details.get(("me",) + self._dkey(mine))
+            yours = self._item_tip(mine, mdet, heading=heading)
+            deltas = stat_deltas(mdet, det) if det and mdet else None
+        self._place_pair(self._item_tip(it, det, deltas=deltas), yours, anchor)
+
+    def _new_tip(self) -> tuple[tk.Toplevel, tk.Frame]:
         tip = tk.Toplevel(self.frame)
         tip.overrideredirect(True)
         tip.attributes("-topmost", True)
         tip.configure(bg=BORDER)
         outer = tk.Frame(tip, bg=self.TIP_BG, width=self.TIP_W)
         outer.pack(padx=1, pady=1)
+        return tip, outer
+
+    def _tip_heading(self, outer, text: str):
+        """The strip above your item when comparing ("Equipped · name"), like the game's."""
+        tk.Label(outer, text=text.upper(), bg=self.TIP_BG, fg=FG_DIM, font=self.app.f_tiny, anchor="w",
+                 padx=12, pady=5).pack(fill="x")
+
+    def _note_tip(self, heading: str, text: str | None) -> tk.Toplevel:
+        """Your side when there's no item to show: a message, or a spinner while your profile loads."""
+        tip, outer = self._new_tip()
+        self._tip_heading(outer, heading)
+        body = tk.Frame(outer, bg=self.TIP_BG, padx=12, pady=6)
+        body.pack(fill="x")
+        if text is None:
+            self._tip_spinner(body)
+        else:
+            tk.Label(body, text=text, bg=self.TIP_BG, fg=FG_FAINT, font=self.app.f_small, width=34).pack(pady=10)
+        return tip
+
+    def _item_tip(self, it: Item, det, heading: str | None = None, deltas: dict | None = None,
+                  hint: bool = False) -> tk.Toplevel:
+        f = self.app
+        tip, outer = self._new_tip()
+        if heading:
+            self._tip_heading(outer, heading)
+        deltas = deltas or {}
         col = GRADE_COLORS.get(it.grade, FG)
         hb = self.HEAD_BG.get(it.grade, "#2a2d34")
 
@@ -532,7 +596,13 @@ class ProfileView:
         if det and det.item_level:
             tk.Label(left, text="Item Level", bg=hb, fg=FG_DIM, font=f.f_tiny, anchor="w").pack(fill="x", pady=(4, 0))
             lvl = str(det.item_level) + (f"   ✦{it.exceed}" if it.exceed else "")
-            tk.Label(left, text=lvl, bg=hb, fg=FG, font=f.f_title, anchor="w").pack(fill="x")
+            lv = tk.Frame(left, bg=hb)
+            lv.pack(fill="x")
+            tk.Label(lv, text=lvl, bg=hb, fg=FG, font=f.f_title, anchor="w").pack(side="left")
+            if "Item Level" in deltas:
+                d, _ = deltas["Item Level"]
+                tk.Label(lv, text=fmt_delta(d), bg=hb, fg=self.GOOD if d > 0 else RED, font=f.f_bold).pack(
+                    side="left", padx=(8, 0), anchor="s", pady=(0, 2))
 
         body = tk.Frame(outer, bg=self.TIP_BG, padx=12, pady=6)
         body.pack(fill="x")
@@ -542,23 +612,30 @@ class ProfileView:
                          font=f.f_small).pack(pady=10)
             else:
                 self._tip_spinner(body)
-            self._place_tip(tip, anchor)
-            return
+            return tip
 
         def line():
             tk.Frame(body, bg=BORDER, height=1).pack(fill="x", pady=5)
 
-        def row(name, value, fg=FG, vfg=None, font=None):
+        def row(name, value, fg=FG, vfg=None, font=None, delta=None):
             r = tk.Frame(body, bg=self.TIP_BG)
             r.pack(fill="x")
             tk.Label(r, text=name, bg=self.TIP_BG, fg=fg, font=font or f.f_small, anchor="w").pack(side="left")
+            if delta is not None:                    # compared with yours: packed first so it sits rightmost
+                d, pct = delta
+                tk.Label(r, text=fmt_delta(d, pct), bg=self.TIP_BG, fg=self.GOOD if d > 0 else RED,
+                         font=f.f_small, anchor="e", width=7).pack(side="right")
             tk.Label(r, text=value, bg=self.TIP_BG, fg=vfg or fg, font=font or f.f_small, anchor="e").pack(side="right")
 
+        shown = set()                                # each stat's difference once, on its first row
         for name, value, extra in det.main_stats:
             low = det.main_min.get(name)
-            row(name, (f"{low}–" if low else "") + value + (f"(+{extra})" if extra else ""))
+            row(name, (f"{low}–" if low else "") + value + (f"(+{extra})" if extra else ""),
+                delta=None if name in shown else deltas.get(name))
+            shown.add(name)
         for name, value in det.exceed_stats:
-            row(name, value, fg=self.EXCEED)
+            row(name, value, fg=self.EXCEED, delta=None if name in shown else deltas.get(name))
+            shown.add(name)
         if det.soul_bind or det.sub_stats:
             line()
         if det.soul_bind:
@@ -643,7 +720,10 @@ class ProfileView:
         if det.max_enchant:
             tk.Label(foot, text=f"Max +{det.max_enchant}" + (f" · ✦{det.max_exceed}" if det.max_exceed else ""),
                      bg=self.TIP_BG, fg=FG_FAINT, font=f.f_tiny).pack(side="right")
-        self._place_tip(tip, anchor)
+        if hint:
+            tk.Label(outer, text="Hold Alt to compare with yours", bg=self.TIP_BG, fg=FG_FAINT, font=f.f_tiny,
+                     anchor="w", padx=12).pack(fill="x", pady=(0, 8))
+        return tip
 
     def _tip_spinner(self, parent):
         """A small spinning ring while the item's details load."""
@@ -679,6 +759,97 @@ class ProfileView:
         y = max(top + 8, min(anchor.winfo_rooty() - 20, bottom - h - 8))
         tip.geometry(f"+{int(x)}+{int(y)}")
         self._tip = tip
+
+    def _place_pair(self, tip, yours, anchor):
+        """Hovered tooltip next to the window, yours beside it on the outside (flipped when there's no room)."""
+        tip.update_idletasks()
+        yours.update_idletasks()
+        from .desktop import monitor_rect
+        left, top, right, bottom = monitor_rect(anchor, anchor.winfo_rootx(), anchor.winfo_rooty())
+        w1, w2, gap = tip.winfo_reqwidth(), yours.winfo_reqwidth(), 6
+        total = w1 + gap + w2
+        root = self.app.root
+        rx, rw = root.winfo_rootx(), root.winfo_width()
+        x, on_right = rx + rw + 6, True
+        if x + total > right - 4:
+            x, on_right = rx - total - 6, False
+        if x < left + 4:
+            x, on_right = max(left + 4, min(anchor.winfo_rootx() + anchor.winfo_width() + 8, right - total - 4)), True
+        x_tip, x_yours = (x, x + w1 + gap) if on_right else (x + w2 + gap, x)
+        for t, tx in ((tip, x_tip), (yours, x_yours)):
+            y = max(top + 8, min(anchor.winfo_rooty() - 20, bottom - t.winfo_reqheight() - 8))
+            t.geometry(f"+{int(tx)}+{int(y)}")
+        self._tip, self._tip2 = tip, yours
+
+    # ───── compare: your own gear, for holding Alt over an item ─────
+    def _can_compare(self) -> bool:
+        me = self.app.my_char
+        return me is not None and me.key != self.char.key
+
+    def _want_mine(self):
+        """Load your profile in the background (usually cached) so Alt-compare is instant."""
+        if not self._can_compare():
+            return
+        self.app.api.fetch_profile(self.app.my_char,
+                                   lambda ch, p, e: self.app.inbox.put(("my_profile", self, p, e)))
+
+    def mine_ready(self, prof: Profile | None, err: str | None):
+        """(main thread) your profile arrived (cached copy, partial, then fresh)."""
+        if prof is None and self._mine is not None:
+            return
+        self._mine = prof
+        hover = getattr(self, "_hover_item", None)
+        if self._compare and hover is not None and hover[1].winfo_exists():
+            self._show_item_tip(*hover)
+
+    def _my_item(self, it: Item) -> Item | None:
+        return self._mine.gear.get(it.slot) if self._mine is not None else None
+
+    def _want_my_detail(self, it: Item):
+        key = ("me",) + self._dkey(it)
+        if key in self._details or not it.slot_pos or not it.item_id:
+            return
+        self._details[key] = None
+
+        def done(det, key=key):
+            self.app.inbox.put(("item_detail", self, key, det))
+        self.app.api.fetch_item_detail(self.app.my_char, it, done)
+
+    def _alt_key(self, down: bool):
+        self._alt_tk = down
+        return "break"                               # no menu traversal on Alt
+
+    def _alt_held(self) -> bool:
+        from .desktop import alt_down
+        state = alt_down()
+        return self._alt_tk if state is None else state
+
+    def _start_alt_poll(self):
+        if self._alt_job is not None:                # keep _compare: enter() just set it
+            self.frame.after_cancel(self._alt_job)
+            self._alt_job = None
+
+        def tick():
+            self._alt_job = None
+            hover = getattr(self, "_hover_item", None)
+            if hover is None or not hover[1].winfo_exists():
+                return
+            held = self._alt_held()
+            if held != self._compare:
+                self._compare = held
+                if self._can_compare():
+                    self._show_item_tip(*hover)
+            self._alt_job = self.frame.after(50, tick)
+        self._alt_job = self.frame.after(50, tick)
+
+    def _stop_alt_poll(self):
+        if self._alt_job is not None:
+            try:
+                self.frame.after_cancel(self._alt_job)
+            except tk.TclError:
+                pass
+            self._alt_job = None
+        self._compare = False
 
     def _tab_skills(self, p: Profile):
         if p.equipment_error:
@@ -859,13 +1030,14 @@ class ProfileView:
         self._tip = tip
 
     def _hide_tip(self):
-        tip = getattr(self, "_tip", None)
-        if tip is not None:
-            try:
-                tip.destroy()
-            except tk.TclError:
-                pass
-            self._tip = None
+        for attr in ("_tip", "_tip2"):
+            tip = getattr(self, attr, None)
+            if tip is not None:
+                try:
+                    tip.destroy()
+                except tk.TclError:
+                    pass
+                setattr(self, attr, None)
 
     def _tab_cosmetics(self, p: Profile):
         if p.equipment_error:

@@ -46,6 +46,9 @@ Hover any item for a tooltip laid out like the game's own: stats and enchant bon
 **mana stones, theostones**, and for Arcana cards their **linked skills and set bonuses** — with the bonuses
 they actually have lit up.
 
+Hold **Alt** over any item to compare it with yours: your piece from the same slot opens beside it,
+with ▲/▼ on item level and every stat.
+
 </td>
 <td width="52%"><img src="docs/images/gear.png" alt="A character's gear with an item tooltip"></td>
 </tr>

@@ -454,3 +454,14 @@ def relaunch_as_admin(args: list[str]) -> bool:
         return int(r) > 32
     except Exception:  # noqa: BLE001
         return False
+
+
+def alt_down() -> bool | None:
+    """Whether Alt is held right now, even while another window (the game) has focus.
+    None where we can't ask the system (not Windows): the caller falls back to Tk's key events."""
+    if sys.platform != "win32":
+        return None
+    try:
+        return bool(ctypes.windll.user32.GetAsyncKeyState(0x12) & 0x8000)   # VK_MENU
+    except Exception:  # noqa: BLE001
+        return None

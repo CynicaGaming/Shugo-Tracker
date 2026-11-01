@@ -1,6 +1,7 @@
 """Full character profile: parsed from the info + equipment endpoints (the same data Shugo.GG's profile shows)."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 EQUIPMENT_URL = "https://aion2.plaync.com/api/character/equipment"
@@ -292,3 +293,52 @@ def parse_item_detail(d: dict) -> ItemDetail:
         det.set_size = len(st.get("items") or [])
         det.set_bonuses = [(int(b.get("degree") or 0), list(b.get("descriptions") or [])) for b in st.get("bonuses") or []]
     return det
+
+
+# ───── compare (hold Alt over an item: yours in the same slot, side by side) ─────
+_NUM = re.compile(r"-?\d+(?:\.\d+)?")
+
+
+def stat_number(text) -> float | None:
+    """'1,234' -> 1234, '12.5%' -> 12.5, '+24' -> 24; None when there's no number."""
+    m = _NUM.search(str(text or "").replace(",", ""))
+    return float(m.group()) if m else None
+
+
+def _stat_totals(det: "ItemDetail") -> dict[str, tuple[float, bool]]:
+    """Each stat's full value on an item (base + enchant + exceed), and whether it's a percentage."""
+    out: dict[str, tuple[float, bool]] = {}
+
+    def add(name, text):
+        n = stat_number(text)
+        if not name or n is None:
+            return
+        have, pct = out.get(name, (0.0, False))
+        out[name] = (have + n, pct or "%" in str(text))
+    for name, value, extra in det.main_stats:
+        add(name, value)
+        add(name, extra)
+    for name, value in det.exceed_stats:
+        add(name, value)
+    if det.item_level is not None:
+        out["Item Level"] = (float(det.item_level), False)
+    return out
+
+
+def stat_deltas(mine: "ItemDetail | None", theirs: "ItemDetail") -> dict[str, tuple[float, bool]]:
+    """How the hovered item's stats compare with yours: {stat: (theirs - yours, is_percent)}, non-zero only.
+    A stat your item doesn't have counts as 0 on yours."""
+    yours = _stat_totals(mine) if mine else {}
+    out = {}
+    for name, (v, pct) in _stat_totals(theirs).items():
+        d = round(v - yours.get(name, (0.0, False))[0], 2)
+        if d:
+            out[name] = (d, pct)
+    return out
+
+
+def fmt_delta(d: float, pct: bool = False) -> str:
+    """12 -> '▲12', -3.5 -> '▼3.5', with '%' for percentages."""
+    n = abs(d)
+    txt = f"{n:,.0f}" if n == int(n) else f"{n:,.1f}"
+    return ("▲" if d > 0 else "▼") + txt + ("%" if pct else "")

@@ -1169,6 +1169,10 @@ class SearchWindow:
                 _, view, slot, det = msg
                 if view is self.profile_view and view is not None:
                     view.item_detail_ready(slot, det)
+            elif kind == "my_profile":               # your own profile, for Alt-compare on someone else's
+                _, view, prof, err = msg
+                if view is self.profile_view and view is not None:
+                    view.mine_ready(prof, err)
             elif kind == "me_seen":                  # the game told Nearby who you are
                 self._me_seen(msg[1], msg[2])
             elif kind == "me_char":
