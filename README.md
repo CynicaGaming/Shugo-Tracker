@@ -16,7 +16,7 @@ One small, always-on-top window that sits over the game — no browser, no tabbi
 
 ---
 
-## ✦ Find anyone, instantly
+## Search
 
 <table>
 <tr>
@@ -34,7 +34,7 @@ Type a name and every match across **all five Global regions** shows up while yo
 </tr>
 </table>
 
-## ✦ Every piece of gear, like in game
+## Character Profiles
 
 <table>
 <tr>
@@ -51,7 +51,7 @@ they actually have lit up.
 </tr>
 </table>
 
-## ✦ Know who's around you <sup><code>BETA</code></sup>
+## Nearby <sup><code>BETA</code></sup>
 
 <table>
 <tr>
@@ -70,7 +70,7 @@ and a ⚔ for anyone who fought you.
 </tr>
 </table>
 
-## ✦ Built for playing, not fiddling
+## Features
 
 <table>
 <tr>
