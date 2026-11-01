@@ -129,9 +129,7 @@ No account, no sign-in, no tracking. Character data comes from NCSOFT's public A
 2. Run it. Windows may show a SmartScreen warning the first time — choose **More info → Run anyway**.
 3. Play the game in **borderless windowed** mode so the tracker can sit on top.
 
-For **Nearby**, just switch it on. It needs administrator rights, so Shugo Tracker restarts itself as administrator (Windows asks first).
-
-## Good to know
+## Frequently Asked Questions
 
 <details>
 <summary><b>Is it safe? Will it get me banned?</b></summary>
@@ -163,14 +161,6 @@ Windows only lets programs running as administrator read network traffic, and Wi
 game's traffic through to it, so the first time Nearby starts, Shugo Tracker adds one firewall rule allowing
 itself in ("Shugo Tracker (Nearby)"). Search, profiles and favorites never need administrator. To skip the restart each time, right-click <code>ShugoTracker.exe</code> → <b>Properties</b> →
 <b>Compatibility</b> → <b>Run this program as an administrator</b>.
-</details>
-
-<details>
-<summary><b>Something's wrong with Nearby.</b></summary>
-<br>
-In the Nearby tab, <b>Shift+click</b> the line at the bottom to record 60 seconds of game traffic into
-<code>logs\diagnostics</code>, then open an issue and attach it. Game patches can change the traffic, and a
-recording is what fixes it.
 </details>
 
 ---
