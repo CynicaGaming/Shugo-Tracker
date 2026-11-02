@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import time
-import webbrowser
 from dataclasses import asdict
 import tkinter as tk
 from typing import TYPE_CHECKING
@@ -888,7 +887,10 @@ class ProfileView:
                 cell = tk.Frame(grid, bg=SURFACE, padx=8, pady=5)
                 cell.grid(row=i // 2, column=i % 2, sticky="nsew", padx=(0 if i % 2 == 0 else 4, 0 if i % 2 else 4),
                           pady=2)
-                icon = self._icon(cell, s.icon, 30, border=ACCENT if s.equipped else BORDER)
+                if s.category == "Dp" and s.acquired and s.level >= 1:     # a Stigma in use: yellow box, like the game
+                    cell.configure(highlightthickness=1, highlightbackground=self.SKILL_NUM,
+                                   highlightcolor=self.SKILL_NUM)
+                icon = self._icon(cell, s.icon, 30, border=BORDER)
                 icon.pack(side="left")
                 txt = tk.Frame(cell, bg=SURFACE)
                 txt.pack(side="left", fill="x", expand=True, padx=8)
@@ -896,31 +898,23 @@ class ProfileView:
                                        tip=skilldata.describe(s.skill_id, 1, s.name, p.class_name) is None, bg=SURFACE,
                                        fg=FG if s.acquired else FG_FAINT)
                 name.pack(fill="x")
-                sub = ("Not learned" if not s.acquired else f"Lv {s.level}" if s.level else "Learned") + \
-                      ("  ·  Equipped" if s.equipped else "")
-                sub_lb = tk.Label(txt, text=sub, bg=SURFACE, fg=ACCENT if s.equipped and s.acquired else FG_FAINT,
+                sub = "Not learned" if not s.acquired else f"Level {s.level}" if s.level else "Learned"
+                sub_lb = tk.Label(txt, text=sub, bg=SURFACE, fg=FG_DIM if s.acquired else FG_FAINT,
                                   font=self.app.f_tiny, anchor="w")
                 sub_lb.pack(fill="x")
-                self._skill_tip(s, p.class_name, [cell, txt, name, sub_lb], [icon, *icon.winfo_children()])
+                self._skill_tip(s, p.class_name, [cell, txt, name, sub_lb])
 
-    # the game's skill window, as a tooltip: name + level, kind chips and the icon on top; the text with the
-    # numbers that grow per level in gold; then label / value rows (cooldown, MP)
+    # the game's skill window, as a tooltip: name, level and the icon on top; the text with the numbers that grow
+    # per level in gold; then label / value rows (cooldown, MP)
     SKILL_TIP_W = 320
     SKILL_HEAD_BG = "#20232a"
-    SKILL_CHIPS = {"Active": "#a3342c", "Passive": "#2e6e4c", "Dp": "#7a3a9a"}    # tag colours, like Magic / Buff
 
-    def _skill_tip(self, s, cls: str, widgets, extra):
-        """Hover: the skill's description at this character's level (from MetaBot.GG). Click: its MetaBot page."""
+    def _skill_tip(self, s, cls: str, widgets):
+        """Hover: the skill's description at this character's level (from MetaBot.GG)."""
         info = skilldata.describe(s.skill_id, s.level if s.acquired else 1, s.name, cls)
         if info is None:
             return
         self._hover_tip(widgets, s.name, [], show=lambda cell, s=s, info=info: self._show_skill_tip(s, info, cell))
-        for w in widgets + extra:
-            w.configure(cursor="hand2")
-            w.bind("<Button-1>", lambda e, url=info.url: webbrowser.open(url), add="+")
-
-    def _chip(self, parent, text: str, color: str, bg: str) -> tk.Label:
-        return tk.Label(parent, text=text, bg=color, fg="#ffffff", font=self.app.f_tiny, padx=4, pady=0, bd=0)
 
     def _show_skill_tip(self, s, info, anchor):
         self._hide_tip()
@@ -929,30 +923,22 @@ class ProfileView:
         outer.configure(width=self.SKILL_TIP_W)
         hb = self.SKILL_HEAD_BG
 
-        # header: "Sprint Mantra Lv. 5", chips, icon on the right
+        # header: name, "Level N" in gold, icon on the right (gold frame for a Stigma in use)
         head = tk.Frame(outer, bg=hb, padx=12, pady=10)
         head.pack(fill="x")
-        icon_box = tk.Frame(head, bg=self.SKILL_NUM if s.equipped and s.acquired else BORDER, padx=1, pady=1)
+        stigma_on = s.category == "Dp" and s.acquired and s.level >= 1
+        icon_box = tk.Frame(head, bg=self.SKILL_NUM if stigma_on else BORDER, padx=1, pady=1)
         icon_box.pack(side="right", anchor="n", padx=(10, 0))
         icon = tk.Label(icon_box, bg=SURFACE_2, image=self._blank(44), bd=0)
         icon.pack()
         self._set_image(icon, s.icon, 44)
         left = tk.Frame(head, bg=hb)
         left.pack(side="left", fill="x", expand=True)
-        title = tk.Frame(left, bg=hb)
-        title.pack(fill="x")
-        tk.Label(title, text=s.name, bg=hb, fg=FG if s.acquired else FG_DIM, font=f.f_title, anchor="w").pack(
-            side="left")
-        tk.Label(title, text=f"  Lv. {info.level}", bg=hb, fg=self.SKILL_NUM, font=f.f_title).pack(side="left")
-        chips = tk.Frame(left, bg=hb)
-        chips.pack(fill="x", pady=(5, 0))
-        kind = dict(SKILL_CATEGORIES).get(s.category, s.category)
-        if kind:
-            self._chip(chips, kind, self.SKILL_CHIPS.get(s.category, "#4a4f5a"), hb).pack(side="left", padx=(0, 3))
-        if s.equipped and s.acquired:
-            self._chip(chips, "Equipped", "#7a5a1e", hb).pack(side="left", padx=(0, 3))
-        if not s.acquired:
-            self._chip(chips, "Not learned", "#3a3e47", hb).pack(side="left")
+        tk.Label(left, text=s.name, bg=hb, fg=FG if s.acquired else FG_DIM, font=f.f_title, anchor="w").pack(
+            fill="x")
+        level = f"Level {s.level}" if s.acquired and s.level else "Not learned"
+        tk.Label(left, text=level, bg=hb, fg=self.SKILL_NUM if s.acquired else FG_FAINT, font=f.f_sbold,
+                 anchor="w").pack(fill="x", pady=(3, 0))
 
         # description, numbers that scale with level in gold
         body = tk.Frame(outer, bg=self.TIP_BG, padx=12, pady=10)
@@ -960,9 +946,7 @@ class ProfileView:
         self._rich_text(body, info.text, info.spans, bg=self.TIP_BG, width_px=self.SKILL_TIP_W - 26).pack(fill="x")
 
         # label / value rows
-        rows = [("Cooldown", info.cooldown), ("MP Cost", info.mp)]
-        rows.append(("Skill Level", f"{info.level} / {info.max_level}" if info.max_level > 1 else str(info.level)))
-        rows = [(k, v) for k, v in rows if v]
+        rows = [(k, v) for k, v in (("Cooldown", info.cooldown), ("MP Cost", info.mp)) if v]
         if rows:
             tk.Frame(body, bg=BORDER, height=1).pack(fill="x", pady=(10, 6))
             for k, v in rows:
@@ -971,20 +955,12 @@ class ProfileView:
                 tk.Label(r, text=k, bg=self.TIP_BG, fg=FG, font=f.f_small).pack(side="left")
                 tk.Label(r, text=v, bg=self.TIP_BG, fg=FG, font=f.f_small).pack(side="right")
 
-        # notes and credit
-        notes = []
-        if s.acquired and s.level > info.max_level:
-            notes.append(f"Lv. {s.level} with bonuses; showing Lv. {info.max_level}, the highest listed")
-        elif not s.acquired:
-            notes.append("Not learned yet: showing Lv. 1")
+        # credit
         foot = tk.Frame(outer, bg=self.TIP_BG, padx=12)
         foot.pack(fill="x", pady=(0, 8))
         tk.Frame(foot, bg=BORDER, height=1).pack(fill="x", pady=(0, 6))
-        for n in notes:
-            tk.Label(foot, text=n, bg=self.TIP_BG, fg=FG_DIM, font=f.f_tiny, anchor="w", justify="left",
-                     wraplength=self.SKILL_TIP_W - 26).pack(fill="x")
-        tk.Label(foot, text=f"Skill info from {skilldata.SOURCE}  ·  click to open", bg=self.TIP_BG, fg=FG_FAINT,
-                 font=f.f_tiny, anchor="w").pack(fill="x")
+        tk.Label(foot, text=f"Info provided by {skilldata.SOURCE}", bg=self.TIP_BG, fg=FG_FAINT, font=f.f_tiny,
+                 anchor="w").pack(fill="x")
         self._place_tip(tip, anchor)
 
     def _tab_daevanion(self, p: Profile):
