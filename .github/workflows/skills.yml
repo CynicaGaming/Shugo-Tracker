@@ -1,0 +1,47 @@
+# Refreshes the bundled skill descriptions (shugotracker/data/skills.json.gz) from MetaBot.GG.
+# Run it from the Actions tab after a game patch; it commits only when the skills changed.
+name: Update skill data
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: skill-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Collect skills (about 5 minutes, 1 request a second)
+        run: python tools/fetch_skills.py
+      - name: Check a few known skills
+        run: |
+          python - <<'EOF'
+          import gzip, json
+          d = json.loads(gzip.decompress(open("shugotracker/data/skills.json.gz", "rb").read()))["skills"]
+          for sid, name in (("16010000", "Cold Shock"), ("15150000", "Frost")):
+              assert d[sid]["name"] == name, (sid, d.get(sid, {}).get("name"))
+              assert d[sid]["text"] and d[sid]["url"].startswith("https://metabot.gg/"), sid
+          classes = sorted({s["class"] for s in d.values()})
+          print(f"::notice title=skills::{len(d)} skills, classes: {', '.join(classes)}")
+          EOF
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- shugotracker/data/skills.json.gz && git ls-files --error-unmatch shugotracker/data/skills.json.gz >/dev/null 2>&1; then
+            echo "::notice title=skills::No changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add shugotracker/data/skills.json.gz
+          git commit -m "Update skill descriptions from MetaBot.GG"
+          git push
