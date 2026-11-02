@@ -2538,12 +2538,12 @@ class SearchWindow:
                 self._view[0] if getattr(self.api.session, "real", None) else self._view[1])),
             (7280, lambda: len(self._view) > 3 and self.set_my_character(self._view[3], 1)),   # a second one
             (7290, lambda: self._me_menu()),
-            (7310, lambda: self.me_menu.win is not None and self.me_menu.demo_open_sub()),
-            (7340, lambda: self._grab(f"{base}-me-menu.png")),
-            (7360, lambda: self.me_menu.unpost()),
-            (7300, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
-            (7400, lambda: self._view and self.open_profile(self._view[0])),
-            (7480, lambda: self._grab(f"{base}-profile-loading.png")),
+            (7340, lambda: self.me_menu.win is not None and self.me_menu.demo_open_sub()),
+            (7500, lambda: self._grab(f"{base}-me-menu.png")),    # well before the next step: _grab's update()
+            (7900, lambda: self.me_menu.unpost()),                 # runs any timer that's already due
+            (7950, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
+            (8000, lambda: self._view and self.open_profile(self._view[0])),
+            (8080, lambda: self._grab(f"{base}-profile-loading.png")),
         ]
         t = 11000
         for tab in ProfileView.TABS:
