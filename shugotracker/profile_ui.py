@@ -895,7 +895,8 @@ class ProfileView:
                                        tip=skilldata.describe(s.skill_id, 1, s.name, p.class_name) is None, bg=SURFACE,
                                        fg=FG)
                 name.pack(fill="x")
-                sub_lb = tk.Label(txt, text=f"Level {s.level}" if s.level else "", bg=SURFACE, fg=FG_DIM,
+                shown = s.level or s.category == "Dp"                   # Stigmas show Level 0 too
+                sub_lb = tk.Label(txt, text=f"Level {s.level}" if shown else "", bg=SURFACE, fg=FG_DIM,
                                   font=self.app.f_tiny, anchor="w")
                 sub_lb.pack(fill="x")
                 self._skill_tip(s, p.class_name, [cell, txt, name, sub_lb])
@@ -931,9 +932,9 @@ class ProfileView:
         left = tk.Frame(head, bg=hb)
         left.pack(side="left", fill="x", expand=True)
         tk.Label(left, text=s.name, bg=hb, fg=FG, font=f.f_title, anchor="w").pack(fill="x")
-        if s.level:
-            tk.Label(left, text=f"Level {s.level}", bg=hb, fg=self.SKILL_NUM, font=f.f_sbold, anchor="w").pack(
-                fill="x", pady=(3, 0))
+        if s.level or s.category == "Dp":                        # Stigmas show Level 0 too
+            tk.Label(left, text=f"Level {s.level}", bg=hb, fg=self.SKILL_NUM if s.level else FG_DIM,
+                     font=f.f_sbold, anchor="w").pack(fill="x", pady=(3, 0))
 
         # description, numbers that scale with level in gold
         body = tk.Frame(outer, bg=self.TIP_BG, padx=12, pady=10)
