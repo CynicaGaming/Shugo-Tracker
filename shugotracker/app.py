@@ -410,6 +410,8 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
     if demo:
         from .demo import find_nearby
         nearby_find = find_nearby(session)
+    from .profiles import MyCharacters
+    MyCharacters(cfg)                                # Nearby starts as your active character (Set Profile)
     nearby = NearbyService(api, cfg, log=log, data_dir=LOGS, find=nearby_find)
 
     from .favorites import Favorites
@@ -477,12 +479,7 @@ def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | No
             save_config(config_path, cfg)
     nearby.on_region = remember_region
 
-    def remember_me(name: str, server: int):
-        cfg["nearby_me"] = [name, server]
-        if not screenshot:
-            save_config(config_path, cfg)
-        win.inbox.put(("me_seen", name, server))     # the title bar's "you" button follows
-    nearby.on_me = remember_me
+    # Your character is whoever you set (Set Profile); what the game's traffic says never changes it.
     if demo:
         from .demo import feed_teleport
         win.demo_teleport = lambda: feed_teleport(nearby)

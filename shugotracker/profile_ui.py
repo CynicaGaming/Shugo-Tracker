@@ -738,7 +738,7 @@ class ProfileView:
             tk.Label(foot, text=f"Max +{det.max_enchant}" + (f" · ✦{det.max_exceed}" if det.max_exceed else ""),
                      bg=self.TIP_BG, fg=FG_FAINT, font=f.f_tiny).pack(side="right")
         if hint:
-            tk.Label(outer, text="Hold Alt to compare with yours", bg=self.TIP_BG, fg=FG_FAINT, font=f.f_tiny,
+            tk.Label(outer, text="Hold ALT to compare", bg=self.TIP_BG, fg=FG_FAINT, font=f.f_tiny,
                      anchor="w", padx=12).pack(fill="x", pady=(0, 8))
         return tip
 

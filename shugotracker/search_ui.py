@@ -15,6 +15,7 @@ from typing import Callable
 
 import requests
 
+from .profiles import KEEP as PROFILE_KEEP, MyCharacters
 from .aion2api import (CLASSES, REGION_LABELS, SUB_REGIONS, USER_AGENT, Api, Character, character_from_dict, rank,
                        search_filters)
 from .favorites import Favorites
@@ -161,6 +162,8 @@ class StyledMenu:
         self.win: tk.Toplevel | None = None
         self._click_bind = None
         self.closed_at = 0.0                        # when it last closed (see just_closed)
+        self.owner: StyledMenu | None = None        # set while open as a submenu of another menu
+        self._sub: StyledMenu | None = None         # the submenu open beside this one
 
     def just_closed(self) -> bool:
         """True right after a click outside closed it: the button that opened it uses this to toggle it shut
@@ -170,6 +173,10 @@ class StyledMenu:
     # tk.Menu-like API
     def add_command(self, label: str, command, state: str = "normal", selected: bool = False):
         self.items.append({"label": label, "command": command, "state": state, "selected": selected})
+
+    def add_cascade(self, label: str, menu: "StyledMenu", state: str = "normal"):
+        """A row that opens another StyledMenu beside it on hover."""
+        self.items.append({"label": label, "submenu": menu, "state": state, "selected": False, "command": None})
 
     def add_separator(self):
         self.items.append(None)
@@ -187,8 +194,11 @@ class StyledMenu:
     def tk_popup(self, x: int, y: int):
         self.post(x, y)
 
-    def post(self, x: int, y: int, right: bool = False):
+    def post(self, x: int, y: int, right: bool = False, owner: "StyledMenu | None" = None,
+             flip_x: int | None = None):
+        """Open at (x, y). As a submenu (owner set), it opens at flip_x - width instead when x runs off screen."""
         self.unpost()
+        self.owner = owner
         win = self.win = tk.Toplevel(self.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
@@ -202,35 +212,87 @@ class StyledMenu:
                 continue
             on = item["state"] != "disabled"
             rest = ACCENT if item.get("selected") else FG
-            row = tk.Label(box, text=item["label"], bg=SURFACE_2, fg=rest if on else FG_FAINT, font=self.font,
-                           anchor="w", padx=14, pady=5, cursor="hand2" if on else "")
+            sub = item.get("submenu")
+            row = tk.Frame(box, bg=SURFACE_2, cursor="hand2" if on else "")
             row.pack(fill="x")
+            text = tk.Label(row, text=item["label"], bg=SURFACE_2, fg=rest if on else FG_FAINT, font=self.font,
+                            anchor="w", padx=14, pady=5)
+            text.pack(side="left", fill="x", expand=True)
+            parts = [row, text]
+            if sub is not None:
+                arrow = tk.Label(row, text="›", bg=SURFACE_2, fg=FG_DIM if on else FG_FAINT, font=self.font,
+                                 padx=10)
+                arrow.pack(side="right")
+                parts.append(arrow)
             if on:
-                row.bind("<Enter>", lambda e, r=row: r.config(bg=HOVER, fg=ACCENT))
-                row.bind("<Leave>", lambda e, r=row, c=rest: r.config(bg=SURFACE_2, fg=c))
-                row.bind("<ButtonRelease-1>", lambda e, c=item["command"]: self._choose(c))
+                def enter(e, ps=parts, sub=sub, r=row):
+                    for p in ps:
+                        p.config(bg=HOVER)
+                    ps[1].config(fg=ACCENT)
+                    if sub is not None:
+                        self._open_sub(sub, r)
+                    elif self._sub is not None:
+                        self._close_sub()
+
+                def leave(e, ps=parts, c=rest):
+                    for p in ps:
+                        p.config(bg=SURFACE_2)
+                    ps[1].config(fg=c)
+                for p in parts:
+                    p.bind("<Enter>", enter)
+                    p.bind("<Leave>", leave)
+                    if sub is None:
+                        p.bind("<ButtonRelease-1>", lambda e, c=item["command"]: self._choose(c))
+            elif sub is None:
+                for p in parts:
+                    p.bind("<Enter>", lambda e: self._sub is not None and self._close_sub())
         win.update_idletasks()
         w, h = max(win.winfo_reqwidth(), 150), win.winfo_reqheight()
         if right:
             x -= w
         from .desktop import monitor_rect
         m_left, m_top, m_right, m_bottom = monitor_rect(win, x + w // 2, y)     # the monitor it opens on
+        if flip_x is not None and x + w > m_right - 4:
+            x = flip_x - w
         x = max(m_left + 4, min(x, m_right - w - 4))
-        y = y if y + h < m_bottom - 4 else max(m_top + 4, y - h)
+        if owner is not None:
+            y = max(m_top + 4, min(y, m_bottom - h - 4))   # a submenu stays level with its row
+        else:
+            y = y if y + h < m_bottom - 4 else max(m_top + 4, y - h)
         win.geometry(f"+{x}+{y}")
+        if owner is not None:                             # the menu it came from keeps focus and clicks
+            return
         win.bind("<Escape>", lambda e: self.unpost())
         win.bind("<FocusOut>", lambda e: self.root.after(50, self._maybe_close))
         win.focus_force()
         # a click anywhere else in the app closes it (bound after this click has finished dispatching)
         self.root.after(1, self._watch_clicks)
 
+    def _open_sub(self, sub: "StyledMenu", row: tk.Widget):
+        if self._sub is sub and sub.win is not None:
+            return
+        self._close_sub()
+        self._sub = sub
+        sub.post(row.winfo_rootx() + row.winfo_width() + 2, row.winfo_rooty() - 4, owner=self,
+                 flip_x=row.winfo_rootx() - 2)
+
+    def _close_sub(self):
+        if self._sub is not None:
+            self._sub.unpost()
+            self._sub = None
+
+    def _inside(self, widget: str) -> bool:
+        for m in (self, self._sub):
+            if m is not None and m.win is not None and (widget == str(m.win) or widget.startswith(str(m.win) + ".")):
+                return True
+        return False
+
     def _watch_clicks(self):
         if self.win is not None and not self._click_bind:
             self._click_bind = self.root.bind_all("<ButtonPress>", self._outside, add="+")
 
     def _outside(self, e):
-        w, me = str(e.widget), str(self.win)
-        if self.win is not None and w != me and not w.startswith(me + "."):
+        if self.win is not None and not self._inside(str(e.widget)):
             self.unpost()
 
     def _maybe_close(self):
@@ -238,10 +300,14 @@ class StyledMenu:
             self.unpost()
 
     def _choose(self, command):
-        self.unpost()
+        top = self
+        while top.owner is not None:                     # a pick in a submenu closes the whole menu
+            top = top.owner
+        top.unpost()
         command()
 
     def unpost(self):
+        self._close_sub()
         if self._click_bind:
             try:
                 self.root.unbind_all("<ButtonPress>")
@@ -255,6 +321,7 @@ class StyledMenu:
                 pass
             self.win = None
             self.closed_at = time.monotonic()
+        self.owner = None
 
 
 class ThinScrollbar(tk.Canvas):
@@ -502,9 +569,9 @@ class SearchWindow:
         self._drag: dict | None = None             # favorites being dragged by the grip: {"key", "to"}
         self._col_drag: dict | None = None         # a column header being dragged to a new place
         self.columns = clean_columns(cfg.get("columns", DEFAULT_COLUMNS))
-        mine = cfg.get("my_character")
-        self.my_char: Character | None = character_from_dict(mine) if isinstance(mine, dict) and mine.get("name") \
-            else None
+        self.my_chars = MyCharacters(cfg)          # up to five saved characters, one active (Set Profile)
+        self.my_char: Character | None = None
+        self._load_active()
         self._dirty = True
         self._debounce = None
         self._update_look = None
@@ -554,9 +621,6 @@ class SearchWindow:
         self._prefetch_job = None
         self._build(version)
         self._paint_me()
-        me = cfg.get("nearby_me")
-        if not self.my_char and not screenshot and isinstance(me, (list, tuple)) and len(me) == 2 and me[0]:
-            self.root.after(1500, lambda: self._me_seen(str(me[0]), int(me[1] or 0)))   # portrait for the button
         self.root.after(30, self._tick)
         self.search_entry.focus_set()
         if initial_query:
@@ -782,7 +846,10 @@ class SearchWindow:
         self.menu.add_command(label="Add to favorites", command=lambda: self._menu(self.toggle_favorite))
         self.menu.add_command(label="Copy name", command=lambda: self._menu(self._copy_name))
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
-        self.menu.add_command(label="Set as my character", command=lambda: self._menu(self.set_my_character))
+        self.profile_menu = StyledMenu(self.root, self.f_small)       # Set Profile ▸ Set Character 1-5
+        self.menu.add_cascade(label="Set Profile", menu=self.profile_menu)
+        self.switch_menu = StyledMenu(self.root, self.f_small)        # your menu ▸ Switch / Delete Character
+        self.delete_menu = StyledMenu(self.root, self.f_small)
         self._menu_base = 5                                  # Nearby / Recent add a Clear item below these
         self.col_menu = StyledMenu(self.root, self.f_small)
         self.list_menu = StyledMenu(self.root, self.f_small)
@@ -831,41 +898,74 @@ class SearchWindow:
             m.unpost()
             return
         m.delete(0, "end")
+        used = self.my_chars.used()
         if c:
             m.add_command(label="My profile", command=lambda: self.open_profile(c),
                           state="normal" if c.char_id else "disabled")
-            m.add_separator()
+        if used:
+            self.switch_menu.delete(0, "end")
+            self.delete_menu.delete(0, "end")
+            for i, d in used:
+                label = self._slot_label(i, d)
+                self.switch_menu.add_command(label=label, command=lambda i=i: self.switch_character(i),
+                                             selected=i == self.my_chars.active_slot)
+                self.delete_menu.add_command(label=label, command=lambda i=i: self.delete_character(i))
+            m.add_cascade(label="Switch Character", menu=self.switch_menu, state="normal" if len(used) > 1 else
+                          "disabled")
+            m.add_cascade(label="Delete Character", menu=self.delete_menu)
+        else:
+            m.add_command(label="Right-click a player → Set Profile", command=lambda: None, state="disabled")
+        m.add_separator()
         m.add_command(label="Settings", command=self.open_settings)
         b = self.me_btn
         m.post(b.winfo_rootx() + b.winfo_width(), b.winfo_rooty() + b.winfo_height() + 2, right=True)
 
-    def set_my_character(self, c: Character, from_game: bool = False):
-        """Who you play: shown top right, and Nearby's sides follow it (until the game says otherwise)."""
-        keep = ("char_id", "name", "race", "pc_id", "level", "server_id", "server_name", "region", "portrait")
-        self.my_char = character_from_dict({k: getattr(c, k) for k in keep})
-        self.cfg["my_character"] = {k: getattr(self.my_char, k) for k in keep}
-        if not from_game:
-            self.cfg["nearby_me"] = [c.name, c.server_id]
-            if self.nearby is not None:
-                self.nearby.set_me(c.name, c.server_id)
-                self._refresh_nearby(force=True)
+    @staticmethod
+    def _slot_label(i: int, d: dict) -> str:
+        server = f" · {d['server_name']}" if d.get("server_name") else ""
+        return f"{i + 1}.  {d['name']}{server}"
+
+    def _fill_profile_menu(self, c: Character):
+        """Right-click → Set Profile: the five slots, each showing who's in it."""
+        m = self.profile_menu
+        m.delete(0, "end")
+        for i, d in enumerate(self.my_chars.slots):
+            here = d is not None and (d.get("server_id"), d.get("char_id")) == (c.server_id, c.char_id)
+            label = f"Set Character {i + 1}" + (f"   ({d['name']})" if d else "")
+            m.add_command(label=label, command=lambda i=i: self._menu(lambda ch: self.set_my_character(ch, i)),
+                          selected=here)
+
+    def _load_active(self):
+        d = self.my_chars.active()
+        self.my_char = character_from_dict(d) if d else None
+
+    def _active_changed(self):
+        """Who "you" are changed (set, switched, deleted): the button, Nearby's sides and Alt-compare follow."""
+        before = self.my_char.key if self.my_char else None
+        self._load_active()
+        c = self.my_char
+        if self.nearby is not None and c is not None and (c.key if c else None) != before:
+            self.nearby.set_me(c.name, c.server_id)
+            self._refresh_nearby(force=True)
+        pv = self.profile_view
+        if pv is not None and (c.key if c else None) != before:
+            pv._mine = None
+            pv._want_mine()
         self.save_cfg()
         self._paint_me()
 
-    def _me_seen(self, name: str, server: int):
-        """Nearby recognised your character: look it up (portrait, profile) unless it's the one we have."""
-        c = self.my_char
-        if c and c.name == name and (not server or c.server_id == server):
-            return
-        import threading
+    def set_my_character(self, c: Character, slot: int = 0):
+        """Right-click → Set Profile → Set Character N. Only ever set by you, never from game traffic."""
+        self.my_chars.set(slot, {k: getattr(c, k) for k in PROFILE_KEEP})
+        self._active_changed()
 
-        def find():
-            try:
-                found = self.api.find_player(name, server) if server else None
-            except Exception:  # noqa: BLE001
-                found = None
-            self.inbox.put(("me_char", found))
-        threading.Thread(target=find, name="me-lookup", daemon=True).start()
+    def switch_character(self, slot: int):
+        self.my_chars.activate(slot)
+        self._active_changed()
+
+    def delete_character(self, slot: int):
+        self.my_chars.delete(slot)
+        self._active_changed()
 
     def show_back(self, text: str, cmd):
         """Swap the tabs for a Back button (profile, Settings)."""
@@ -1173,11 +1273,6 @@ class SearchWindow:
                 _, view, prof, err = msg
                 if view is self.profile_view and view is not None:
                     view.mine_ready(prof, err)
-            elif kind == "me_seen":                  # the game told Nearby who you are
-                self._me_seen(msg[1], msg[2])
-            elif kind == "me_char":
-                if msg[1] is not None:
-                    self.set_my_character(msg[1], from_game=True)
             elif kind == "toggle":
                 self.toggle_visible()
             elif kind == "show":
@@ -1799,6 +1894,7 @@ class SearchWindow:
             known = "normal" if c.char_id else "disabled"     # a nearby player NCSOFT hasn't identified
             for idx in (0, 1, 3, 4):
                 self.menu.entryconfigure(idx, state=known)
+            self._fill_profile_menu(c)
             if clear:
                 self.menu.add_separator()
                 self.menu.add_command(label=clear, command=self._clear_list)

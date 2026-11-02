@@ -46,7 +46,7 @@ Hover any item for a tooltip laid out like the game's own: stats and enchant bon
 **mana stones, theostones**, and for Arcana cards their **linked skills and set bonuses** — with the bonuses
 they actually have lit up.
 
-Hold **Alt** over any item to compare it with yours: your piece from the same slot opens beside it,
+Hold **Alt** over any item to compare it with your active character's: your piece from the same slot opens beside it,
 with ▲/▼ on item level and every stat.
 
 Hover a skill for what it does at that character's level, with its cooldown and MP, the numbers that grow with
@@ -84,6 +84,9 @@ and a ⚔ for anyone who fought you.
 
 **★ Favorites**<br>
 Star friends, rivals and your legion. Drag them into your own order.
+
+Save up to five of your own characters (right-click → **Set Profile**) and switch between them from
+your name in the top right.
 
 </td>
 <td width="33%" valign="top">
