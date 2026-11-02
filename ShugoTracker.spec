@@ -1,12 +1,17 @@
 # PyInstaller spec for ShugoTracker.exe  —  build with:  pyinstaller --noconfirm --clean ShugoTracker.spec
 # Nearby players (opt-in) captures through Windows raw sockets; psutil finds the game's connections.
 hidden = ["lz4.block", "PIL.ImageTk", "psutil"]
+# Skill descriptions from MetaBot.GG (tools/fetch_skills.py); the app runs fine without them, so a missing file
+# never stops a build.
+import os
+skill_data = [("shugotracker/data/skills.json.gz", "shugotracker/data")] \
+    if os.path.exists("shugotracker/data/skills.json.gz") else []
 
 a = Analysis(
     ["shugo_tracker.py"],
     pathex=["."],
     hiddenimports=hidden,
-    datas=[("shugotracker/data/skills.json.gz", "shugotracker/data")],   # skill descriptions (MetaBot.GG)
+    datas=skill_data,
     excludes=["scapy", "matplotlib", "numpy", "IPython", "PyQt5", "PySide2", "PySide6"],
     noarchive=False,
 )
