@@ -10,9 +10,10 @@ import gzip
 import json
 import logging
 import os
+import re
 import sys
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 log = logging.getLogger(__name__)
 SOURCE = "MetaBot.GG"
@@ -49,6 +50,21 @@ class SkillText:
     cooldown: str
     mp: str
     url: str
+    spans: list[tuple[int, int]] = field(default_factory=list)   # (start, end) of the numbers to highlight
+
+# A number as the game writes it: 1,234 / 12.5% / a range like 170–187
+_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?(?:\s*[–~]\s*\d[\d,]*(?:\.\d+)?)?%?")
+
+
+def scaling_spans(texts: list[str], i: int) -> list[tuple[int, int]]:
+    """Where texts[i]'s numbers that change with skill level are, so they can be highlighted like the game does
+    (Move Speed 12.5% is gold, the fixed 15% chance isn't). Numbers are compared by position across all levels;
+    if the levels don't line up number for number, every number is highlighted."""
+    per_level = [list(_NUMBER.finditer(t)) for t in texts]
+    mine = per_level[i]
+    if len({len(m) for m in per_level}) != 1:
+        return [m.span() for m in mine]
+    return [m.span() for k, m in enumerate(mine) if len({lv[k].group() for lv in per_level}) > 1]
 
 
 def _find(skill_id: int, name: str, cls: str) -> dict | None:
@@ -72,7 +88,8 @@ def describe(skill_id: int, level: int, name: str = "", cls: str = "") -> SkillT
     i = max(1, min(int(level or 1), len(texts))) - 1
     pick = lambda key: ((e.get(key) or [""] * len(texts)) + [""] * len(texts))[i] or ""  # noqa: E731
     return SkillText(name=e.get("name") or "", text=texts[i], level=i + 1, max_level=len(texts),
-                     cooldown=str(pick("cd")), mp=str(pick("mp")), url=e.get("url") or "")
+                     cooldown=str(pick("cd")), mp=str(pick("mp")), url=e.get("url") or "",
+                     spans=scaling_spans(texts, i))
 
 
 def count() -> int:

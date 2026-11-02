@@ -49,6 +49,19 @@ class SkillDataTest(unittest.TestCase):
         self.assertEqual(skilldata.describe(18990000, 5, "Survival Willpower", "Chanter").text, "Increases resist")
         self.assertIsNone(skilldata.describe(18990000, 5, "Survival Willpower", "Cleric"))
 
+    def test_scaling_numbers(self):
+        texts = ["Move Speed by 10.5% and a 15% chance to restore 127 (+100% Attack)-140 HP. Cooldown: 1s",
+                 "Move Speed by 12.5% and a 15% chance to restore 155 (+100% Attack)-171 HP. Cooldown: 1s"]
+        t = texts[1]
+        got = [t[a:b] for a, b in skilldata.scaling_spans(texts, 1)]
+        self.assertEqual(got, ["12.5%", "155", "171"])              # 15%, +100% and 1s don't change
+
+    def test_ranges_and_mismatch(self):
+        texts = ["restore 170–187 HP", "restore 190–210 HP"]
+        self.assertEqual([texts[0][a:b] for a, b in skilldata.scaling_spans(texts, 0)], ["170–187"])
+        odd = ["deals 5 damage", "deals 6 damage, 2 hits"]          # levels don't line up: highlight them all
+        self.assertEqual([odd[1][a:b] for a, b in skilldata.scaling_spans(odd, 1)], ["6", "2"])
+
     def test_missing_file(self):
         with mock.patch.object(skilldata, "_path", lambda: "/nope/skills.json.gz"), \
                 mock.patch.object(skilldata, "_skills", None):
@@ -63,3 +76,15 @@ class SkillDataTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WrapTest(unittest.TestCase):
+    def test_wrapped_lines(self):
+        try:
+            from shugotracker.profile_ui import wrapped_lines
+        except ImportError:                     # no Tk here
+            self.skipTest("tkinter not available")
+        m = len                                  # 1 px per character
+        self.assertEqual(wrapped_lines("aaa bbb ccc", m, 7), 2)        # "aaa bbb" / "ccc"
+        self.assertEqual(wrapped_lines("one\n\nthree", m, 50), 3)      # blank line counts
+        self.assertEqual(wrapped_lines("", m, 10), 1)

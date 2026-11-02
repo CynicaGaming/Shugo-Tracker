@@ -21,6 +21,22 @@ ICON = 36
 HERO = 44
 
 
+def wrapped_lines(text: str, measure, avail: int) -> int:
+    """How many lines text takes when word-wrapped to avail pixels (measure: text -> pixels)."""
+    n = 0
+    for para in text.split("\n"):
+        line = ""
+        n += 1
+        for word in para.split(" "):
+            trial = f"{line} {word}" if line else word
+            if line and measure(trial) > avail:
+                n += 1
+                line = word
+            else:
+                line = trial
+    return max(1, n)
+
+
 class ProfileView:
     TABS = ["Gear", "Skills", "Daevanion", "Stats", "Cosmetics", "Titles"]
 
@@ -892,7 +908,7 @@ class ProfileView:
         info = skilldata.describe(s.skill_id, s.level if s.acquired else 1, s.name, cls)
         if info is None:
             return
-        lines = [("ok", info.text)]
+        lines = [("rich", (info.text, info.spans))]
         facts = [f"Cooldown {info.cooldown}" if info.cooldown else "", f"MP {info.mp}" if info.mp else ""]
         if any(facts):
             lines.append(("dim", "  ·  ".join(f for f in facts if f)))
@@ -1034,6 +1050,9 @@ class ProfileView:
         tk.Label(box, text=title, bg=SURFACE_2, fg=FG, font=self.app.f_bold, anchor="w").pack(fill="x")
         for ln in lines:
             kind, text = ln if isinstance(ln, tuple) else ("", ln)
+            if kind == "rich":                           # text with highlighted spans: (text, [(start, end), …])
+                self._rich_text(box, *text).pack(fill="x")
+                continue
             if kind == "h":                              # a section heading inside the tooltip
                 tk.Label(box, text=text, bg=SURFACE_2, fg=ACCENT, font=self.app.f_sbold, anchor="w").pack(
                     fill="x", pady=(6, 0))
@@ -1055,6 +1074,25 @@ class ProfileView:
         x = max(left + 8, min(x, right - tip.winfo_reqwidth() - 8))
         tip.geometry(f"+{x}+{y}")
         self._tip = tip
+
+    SKILL_NUM = "#f2b84b"        # numbers that grow with skill level (gold, like the game's skill window)
+
+    def _rich_text(self, parent, text: str, spans) -> tk.Text:
+        """Wrapped text with some spans in gold: a read-only Text sized to its wrapped lines."""
+        font = self.app.f_small
+        width_px = 320
+        chars = max(20, width_px // max(1, font.measure("0")))
+        t = tk.Text(parent, bg=SURFACE_2, fg=FG, font=font, bd=0, highlightthickness=0, wrap="word", padx=0,
+                    pady=0, cursor="arrow", width=chars, height=1)
+        t.tag_configure("num", foreground=self.SKILL_NUM)
+        pos = 0
+        for a, b in sorted(spans):
+            t.insert("end", text[pos:a])
+            t.insert("end", text[a:b], "num")
+            pos = b
+        t.insert("end", text[pos:])
+        t.configure(height=wrapped_lines(text, font.measure, chars * font.measure("0") - 4), state="disabled")
+        return t
 
     def _hide_tip(self):
         for attr in ("_tip", "_tip2"):
