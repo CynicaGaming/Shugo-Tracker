@@ -49,6 +49,9 @@ they actually have lit up.
 Hold **Alt** over any item to compare it with yours: your piece from the same slot opens beside it,
 with ▲/▼ on item level and every stat.
 
+Hover a skill for what it does at that character's level, with its cooldown and MP. Skill info comes from
+<a href="https://metabot.gg/en/aion-2/skills">MetaBot.GG</a>; click a skill to open its page there.
+
 </td>
 <td width="52%"><img src="docs/images/gear.png" alt="A character's gear with an item tooltip"></td>
 </tr>
@@ -169,5 +172,6 @@ itself in ("Shugo Tracker (Nearby)"). Search, profiles and favorites never need 
 ---
 
 <p align="center">
-  <sub>Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. AION is a trademark of NCSOFT Corporation.</sub>
+  <sub>Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. AION is a trademark of NCSOFT Corporation.<br>
+  Skill descriptions courtesy of <a href="https://metabot.gg/en/aion-2/skills">MetaBot.GG</a>.</sub>
 </p>

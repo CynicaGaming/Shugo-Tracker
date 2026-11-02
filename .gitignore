@@ -9,5 +9,6 @@ shugo_cache.json
 shugo-tracker.log
 shugo-tracker-crash.log
 data/
+!shugotracker/data/
 cache/
 logs/

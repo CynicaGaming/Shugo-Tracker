@@ -150,6 +150,17 @@ def main(argv: list[str]) -> int:
             print(f"  {i}/{len(slugs)}", file=sys.stderr)
         if i < len(slugs):
             time.sleep(DELAY_S)
+    for slug in list(failed):                     # one more go for any that hit a hiccup
+        time.sleep(DELAY_S * 3)
+        url = f"{INDEX}/{slug}"
+        try:
+            got = parse_skill_page(get(url), url)
+        except Exception as e:  # noqa: BLE001
+            print(f"  {slug} (retry): {e}", file=sys.stderr)
+            continue
+        if got is not None:
+            skills[got[0]] = got[1]
+            failed.remove(slug)
     if failed:
         print(f"couldn't read {len(failed)}: {', '.join(failed)}", file=sys.stderr)
     if only:

@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import time
+import webbrowser
 from dataclasses import asdict
 import tkinter as tk
 from typing import TYPE_CHECKING
 
+from . import skilldata
 from .aion2api import Character
 from .profile import (GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile, fmt_delta,
                       slot_name, stat_deltas)
@@ -870,15 +872,40 @@ class ProfileView:
                 cell = tk.Frame(grid, bg=SURFACE, padx=8, pady=5)
                 cell.grid(row=i // 2, column=i % 2, sticky="nsew", padx=(0 if i % 2 == 0 else 4, 0 if i % 2 else 4),
                           pady=2)
-                self._icon(cell, s.icon, 30, border=ACCENT if s.equipped else BORDER).pack(side="left")
+                icon = self._icon(cell, s.icon, 30, border=ACCENT if s.equipped else BORDER)
+                icon.pack(side="left")
                 txt = tk.Frame(cell, bg=SURFACE)
                 txt.pack(side="left", fill="x", expand=True, padx=8)
-                self._fit_label(txt, s.name, self.app.f_small, bg=SURFACE,
-                                fg=FG if s.acquired else FG_FAINT).pack(fill="x")
+                name = self._fit_label(txt, s.name, self.app.f_small,   # the skill's own tooltip shows the name
+                                       tip=skilldata.describe(s.skill_id, 1) is None, bg=SURFACE,
+                                       fg=FG if s.acquired else FG_FAINT)
+                name.pack(fill="x")
                 sub = ("Not learned" if not s.acquired else f"Lv {s.level}" if s.level else "Learned") + \
                       ("  ·  Equipped" if s.equipped else "")
-                tk.Label(txt, text=sub, bg=SURFACE, fg=ACCENT if s.equipped and s.acquired else FG_FAINT,
-                         font=self.app.f_tiny, anchor="w").pack(fill="x")
+                sub_lb = tk.Label(txt, text=sub, bg=SURFACE, fg=ACCENT if s.equipped and s.acquired else FG_FAINT,
+                                  font=self.app.f_tiny, anchor="w")
+                sub_lb.pack(fill="x")
+                self._skill_tip(s, [cell, txt, name, sub_lb], [icon, *icon.winfo_children()])
+
+    def _skill_tip(self, s, widgets, extra):
+        """Hover: the skill's description at this character's level (from MetaBot.GG). Click: its MetaBot page."""
+        info = skilldata.describe(s.skill_id, s.level if s.acquired else 1)
+        if info is None:
+            return
+        lines = [("ok", info.text)]
+        facts = [f"Cooldown {info.cooldown}" if info.cooldown else "", f"MP {info.mp}" if info.mp else ""]
+        if any(facts):
+            lines.append(("dim", "  ·  ".join(f for f in facts if f)))
+        lvl = f"Level {info.level}" + (f" of {info.max_level}" if info.max_level > 1 else "")
+        if s.acquired and s.level > info.max_level:
+            lvl = f"Level {s.level} (showing {info.max_level}, the highest listed)"
+        elif not s.acquired:
+            lvl = "Not learned: level 1 shown"
+        foot = [lvl, f"Skill info from {skilldata.SOURCE}  ·  click to open"]
+        self._hover_tip(widgets, s.name, lines, foot)
+        for w in widgets + extra:
+            w.configure(cursor="hand2")
+            w.bind("<Button-1>", lambda e, url=info.url: webbrowser.open(url), add="+")
 
     def _tab_daevanion(self, p: Profile):
         if not p.boards:

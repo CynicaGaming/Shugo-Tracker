@@ -55,6 +55,7 @@ class Skill:
     acquired: bool
     icon: str | None = None
     need_level: int = 0
+    skill_id: int = 0          # the game's ID (also MetaBot.GG's): finds the description in skilldata
 
 
 @dataclass
@@ -219,7 +220,7 @@ def parse_profile(info: dict, equipment: dict | None) -> Profile:
             p.skills.append(Skill(name=s.get("name") or "", category=s.get("category") or "",
                                   level=int(s.get("skillLevel") or 0), equipped=bool(s.get("equip")),
                                   acquired=bool(s.get("acquired")), icon=s.get("icon"),
-                                  need_level=int(s.get("needLevel") or 0)))
+                                  need_level=int(s.get("needLevel") or 0), skill_id=int(s.get("id") or 0)))
     return p
 
 

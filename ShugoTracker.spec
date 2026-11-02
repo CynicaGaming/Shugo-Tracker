@@ -6,6 +6,7 @@ a = Analysis(
     ["shugo_tracker.py"],
     pathex=["."],
     hiddenimports=hidden,
+    datas=[("shugotracker/data/skills.json.gz", "shugotracker/data")],   # skill descriptions (MetaBot.GG)
     excludes=["scapy", "matplotlib", "numpy", "IPython", "PyQt5", "PySide2", "PySide6"],
     noarchive=False,
 )
