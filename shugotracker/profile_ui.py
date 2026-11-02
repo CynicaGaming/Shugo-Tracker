@@ -877,7 +877,7 @@ class ProfileView:
                 txt = tk.Frame(cell, bg=SURFACE)
                 txt.pack(side="left", fill="x", expand=True, padx=8)
                 name = self._fit_label(txt, s.name, self.app.f_small,   # the skill's own tooltip shows the name
-                                       tip=skilldata.describe(s.skill_id, 1) is None, bg=SURFACE,
+                                       tip=skilldata.describe(s.skill_id, 1, s.name, p.class_name) is None, bg=SURFACE,
                                        fg=FG if s.acquired else FG_FAINT)
                 name.pack(fill="x")
                 sub = ("Not learned" if not s.acquired else f"Lv {s.level}" if s.level else "Learned") + \
@@ -885,11 +885,11 @@ class ProfileView:
                 sub_lb = tk.Label(txt, text=sub, bg=SURFACE, fg=ACCENT if s.equipped and s.acquired else FG_FAINT,
                                   font=self.app.f_tiny, anchor="w")
                 sub_lb.pack(fill="x")
-                self._skill_tip(s, [cell, txt, name, sub_lb], [icon, *icon.winfo_children()])
+                self._skill_tip(s, p.class_name, [cell, txt, name, sub_lb], [icon, *icon.winfo_children()])
 
-    def _skill_tip(self, s, widgets, extra):
+    def _skill_tip(self, s, cls: str, widgets, extra):
         """Hover: the skill's description at this character's level (from MetaBot.GG). Click: its MetaBot page."""
-        info = skilldata.describe(s.skill_id, s.level if s.acquired else 1)
+        info = skilldata.describe(s.skill_id, s.level if s.acquired else 1, s.name, cls)
         if info is None:
             return
         lines = [("ok", info.text)]

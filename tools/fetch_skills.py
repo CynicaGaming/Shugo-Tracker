@@ -84,7 +84,8 @@ def _json_array_at(text: str, start: int) -> list:
 
 
 def parse_skill_page(html: str, url: str) -> tuple[str, dict] | None:
-    """(skill id, entry) from one MetaBot skill page, or None if it doesn't look like one."""
+    """(skill id, entry) from one MetaBot skill page, or None if it doesn't look like one.
+    The id is the game's skill ID, or "name:<class>:<skill>" for the odd page without an icon to read it from."""
     sid = name = cls = ""
     for block in _LDJSON.findall(html):
         try:
@@ -98,12 +99,15 @@ def parse_skill_page(html: str, url: str) -> tuple[str, dict] | None:
         elif str(d.get("@id") or "").endswith("#entity"):     # the skill itself: its icon is named by its ID
             m = _ICON_ID.search(str(d.get("image") or ""))
             sid = m.group(1) if m else sid
+    flight = _flight_text(html)
     if not sid:
         m = _ICON_ID.search(html)
-        if not m:
+        if m:
+            sid = m.group(1)
+        elif name and cls:                       # no icon on the page, so no ID: the app matches these by name
+            sid = f"name:{cls}:{name}"
+        else:
             return None
-        sid = m.group(1)
-    flight = _flight_text(html)
     at = flight.find('"levels":[')
     if at < 0 or not name:
         return None

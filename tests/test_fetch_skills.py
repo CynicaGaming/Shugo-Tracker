@@ -28,6 +28,11 @@ class ParseTest(unittest.TestCase):
         self.assertIn("\n\n10 Stagger", e["text"][-1])
         self.assertEqual(e["cd"][:2], ["", "8s"])
 
+    def test_no_icon_keys_by_name(self):
+        html = self.html.replace("16010000.webp", "").replace("15150000.webp", "")
+        sid, e = fs.parse_skill_page(html, URL)
+        self.assertEqual(sid, "name:Spiritmaster:Cold Shock")
+
     def test_not_a_skill(self):
         self.assertIsNone(fs.parse_skill_page("<html></html>", URL))
 

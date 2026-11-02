@@ -51,10 +51,21 @@ class SkillText:
     url: str
 
 
-def describe(skill_id: int, level: int) -> SkillText | None:
+def _find(skill_id: int, name: str, cls: str) -> dict | None:
+    skills = _load()
+    if skill_id and str(skill_id) in skills:
+        return skills[str(skill_id)]
+    if not name:
+        return None
+    if cls and f"name:{cls}:{name}" in skills:            # entries MetaBot had no ID for
+        return skills[f"name:{cls}:{name}"]
+    return None
+
+
+def describe(skill_id: int, level: int, name: str = "", cls: str = "") -> SkillText | None:
     """The description at this skill level (level 0 = not learned: shows level 1; above the data's max, as from
-    Daevanion nodes: shows the max). None when the skill isn't in the data."""
-    e = _load().get(str(skill_id)) if skill_id else None
+    Daevanion nodes: shows the max). Found by the game's skill ID, else by class + name. None when not in the data."""
+    e = _find(skill_id, name, cls)
     texts = (e or {}).get("text") or []
     if not texts:
         return None

@@ -16,7 +16,9 @@ class SkillDataTest(unittest.TestCase):
         data = {"skills": {"16010000": {"name": "Cold Shock", "class": "Spiritmaster",
                                         "url": "https://metabot.gg/en/aion-2/skills/cold-shock",
                                         "text": ["Deals 54", "Deals 75", "Deals 97"],
-                                        "cd": ["", "8s", "8s"], "mp": ["", "", "10"]}}}
+                                        "cd": ["", "8s", "8s"], "mp": ["", "", "10"]},
+                           "name:Chanter:Survival Willpower": {"name": "Survival Willpower", "url": "u",
+                                                               "text": ["Increases resist"]}}}
         with gzip.open(path, "wt", encoding="utf-8") as f:
             json.dump(data, f)
         self.p1 = mock.patch.object(skilldata, "_path", lambda: path)
@@ -42,6 +44,10 @@ class SkillDataTest(unittest.TestCase):
     def test_unknown(self):
         self.assertIsNone(skilldata.describe(1, 1))
         self.assertIsNone(skilldata.describe(0, 1))
+
+    def test_by_name(self):
+        self.assertEqual(skilldata.describe(18990000, 5, "Survival Willpower", "Chanter").text, "Increases resist")
+        self.assertIsNone(skilldata.describe(18990000, 5, "Survival Willpower", "Cleric"))
 
     def test_missing_file(self):
         with mock.patch.object(skilldata, "_path", lambda: "/nope/skills.json.gz"), \
