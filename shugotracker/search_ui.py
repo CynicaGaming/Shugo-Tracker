@@ -171,8 +171,10 @@ class StyledMenu:
         return self.win is None and time.monotonic() - self.closed_at < 0.3
 
     # tk.Menu-like API
-    def add_command(self, label: str, command, state: str = "normal", selected: bool = False):
-        self.items.append({"label": label, "command": command, "state": state, "selected": selected})
+    def add_command(self, label: str, command, state: str = "normal", selected: bool = False, on_remove=None):
+        """on_remove: show an × at the end of the row that calls it (the menu stays open)."""
+        self.items.append({"label": label, "command": command, "state": state, "selected": selected,
+                           "on_remove": on_remove})
 
     def add_cascade(self, label: str, menu: "StyledMenu", state: str = "normal"):
         """A row that opens another StyledMenu beside it on hover."""
@@ -199,6 +201,7 @@ class StyledMenu:
         """Open at (x, y). As a submenu (owner set), it opens at flip_x - width instead when x runs off screen."""
         self.unpost()
         self.owner = owner
+        self._at = (x, y, right, owner, flip_x)          # for repost
         win = self.win = tk.Toplevel(self.root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
@@ -206,6 +209,7 @@ class StyledMenu:
         box = tk.Frame(win, bg=SURFACE_2, padx=0, pady=4)
         box.pack(padx=1, pady=1, fill="both", expand=True)
         win.minsize(150, 1)
+        self._rows: list[tuple[dict, tk.Widget]] = []
         for item in self.items:
             if item is None:
                 tk.Frame(box, bg=BORDER, height=1).pack(fill="x", padx=8, pady=4)
@@ -215,6 +219,7 @@ class StyledMenu:
             sub = item.get("submenu")
             row = tk.Frame(box, bg=SURFACE_2, cursor="hand2" if on else "")
             row.pack(fill="x")
+            self._rows.append((item, row))
             text = tk.Label(row, text=item["label"], bg=SURFACE_2, fg=rest if on else FG_FAINT, font=self.font,
                             anchor="w", padx=14, pady=5)
             text.pack(side="left", fill="x", expand=True)
@@ -224,6 +229,13 @@ class StyledMenu:
                                  padx=10)
                 arrow.pack(side="right")
                 parts.append(arrow)
+            remove = item.get("on_remove")
+            if remove is not None:
+                x_btn = tk.Label(row, text="✕", bg=SURFACE_2, fg=FG_FAINT, font=self.font, padx=10, cursor="hand2")
+                x_btn.pack(side="right")
+                x_btn.bind("<Enter>", lambda e, b=x_btn: b.config(fg=RED), add="+")
+                x_btn.bind("<Leave>", lambda e, b=x_btn: b.config(fg=FG_FAINT), add="+")
+                x_btn.bind("<ButtonRelease-1>", lambda e, fn=remove: (fn(), "break")[1])
             if on:
                 def enter(e, ps=parts, sub=sub, r=row):
                     for p in ps:
@@ -243,6 +255,11 @@ class StyledMenu:
                     p.bind("<Leave>", leave)
                     if sub is None:
                         p.bind("<ButtonRelease-1>", lambda e, c=item["command"]: self._choose(c))
+                if remove is not None:
+                    x_btn.bind("<Enter>", lambda e, b=x_btn, r=row, t=text: (r.config(bg=HOVER), t.config(bg=HOVER),
+                                                                              b.config(bg=HOVER)), add="+")
+                    x_btn.bind("<Leave>", lambda e, b=x_btn, r=row, t=text, c=rest: (
+                        r.config(bg=SURFACE_2), t.config(bg=SURFACE_2, fg=c), b.config(bg=SURFACE_2)), add="+")
             elif sub is None:
                 for p in parts:
                     p.bind("<Enter>", lambda e: self._sub is not None and self._close_sub())
@@ -267,6 +284,27 @@ class StyledMenu:
         win.focus_force()
         # a click anywhere else in the app closes it (bound after this click has finished dispatching)
         self.root.after(1, self._watch_clicks)
+
+    def demo_open_sub(self):
+        """Screenshots only: open the first submenu as if hovered."""
+        for item, row in getattr(self, "_rows", []):
+            if item.get("submenu") is not None and item["state"] != "disabled":
+                self.win.update_idletasks()
+                self._open_sub(item["submenu"], row)
+                return
+
+    def repost(self):
+        """Redraw in place after its items changed (e.g. one removed with its ×); closes when none are left."""
+        if self.win is None:
+            return
+        if not self.items:
+            top = self
+            while top.owner is not None:
+                top = top.owner
+            top.unpost()
+            return
+        x, y, right, owner, flip_x = self._at
+        self.post(x if not right else x, y, right=right, owner=owner, flip_x=flip_x)
 
     def _open_sub(self, sub: "StyledMenu", row: tk.Widget):
         if self._sub is sub and sub.win is not None:
@@ -848,8 +886,7 @@ class SearchWindow:
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
         self.profile_menu = StyledMenu(self.root, self.f_small)       # Set Profile ▸ Set Character 1-5
         self.menu.add_cascade(label="Set Profile", menu=self.profile_menu)
-        self.switch_menu = StyledMenu(self.root, self.f_small)        # your menu ▸ Switch / Delete Character
-        self.delete_menu = StyledMenu(self.root, self.f_small)
+        self.switch_menu = StyledMenu(self.root, self.f_small)        # your menu ▸ Switch Character (× removes)
         self._menu_base = 5                                  # Nearby / Recent add a Clear item below these
         self.col_menu = StyledMenu(self.root, self.f_small)
         self.list_menu = StyledMenu(self.root, self.f_small)
@@ -900,25 +937,34 @@ class SearchWindow:
         m.delete(0, "end")
         used = self.my_chars.used()
         if c:
-            m.add_command(label="My profile", command=lambda: self.open_profile(c),
+            m.add_command(label="My profile", command=lambda: self.my_char and self.open_profile(self.my_char),
                           state="normal" if c.char_id else "disabled")
         if used:
-            self.switch_menu.delete(0, "end")
-            self.delete_menu.delete(0, "end")
-            for i, d in used:
-                label = self._slot_label(i, d)
-                self.switch_menu.add_command(label=label, command=lambda i=i: self.switch_character(i),
-                                             selected=i == self.my_chars.active_slot)
-                self.delete_menu.add_command(label=label, command=lambda i=i: self.delete_character(i))
-            m.add_cascade(label="Switch Character", menu=self.switch_menu, state="normal" if len(used) > 1 else
-                          "disabled")
-            m.add_cascade(label="Delete Character", menu=self.delete_menu)
+            self._fill_switch_menu()
+            m.add_cascade(label="Switch Character", menu=self.switch_menu)
         else:
             m.add_command(label="Right-click a player → Set Profile", command=lambda: None, state="disabled")
         m.add_separator()
         m.add_command(label="Settings", command=self.open_settings)
         b = self.me_btn
         m.post(b.winfo_rootx() + b.winfo_width(), b.winfo_rooty() + b.winfo_height() + 2, right=True)
+
+    def _fill_switch_menu(self):
+        """Your characters: click one to make it active, its × to remove it."""
+        m = self.switch_menu
+        m.delete(0, "end")
+        for i, d in self.my_chars.used():
+            m.add_command(label=self._slot_label(i, d), command=lambda i=i: self.switch_character(i),
+                          selected=i == self.my_chars.active_slot, on_remove=lambda i=i: self._remove_from_menu(i))
+
+    def _remove_from_menu(self, slot: int):
+        self.delete_character(slot)
+        self._fill_switch_menu()
+        self.switch_menu.repost()
+        if not self.my_chars.used():                 # last one gone: the menu's top part changes too
+            self.me_menu.unpost()
+        elif self.me_menu.win is not None:           # the click went to the submenu: give focus back so the
+            self.me_menu.win.focus_force()           # menu doesn't take it as a click elsewhere and close
 
     @staticmethod
     def _slot_label(i: int, d: dict) -> str:
@@ -2490,7 +2536,9 @@ class SearchWindow:
             (7250, lambda: len(self._view) > 2 and self.toggle_favorite(self._view[2])),   # 2 to show the grips
             (7270, lambda: len(self._view) > 1 and self.set_my_character(       # --showcase: the real one is you
                 self._view[0] if getattr(self.api.session, "real", None) else self._view[1])),
+            (7280, lambda: len(self._view) > 3 and self.set_my_character(self._view[3], 1)),   # a second one
             (7290, lambda: self._me_menu()),
+            (7310, lambda: self.me_menu.win is not None and self.me_menu.demo_open_sub()),
             (7340, lambda: self._grab(f"{base}-me-menu.png")),
             (7360, lambda: self.me_menu.unpost()),
             (7300, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
