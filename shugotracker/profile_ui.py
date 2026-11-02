@@ -877,8 +877,7 @@ class ProfileView:
             skills = p.skills_in(cat)
             if not skills:
                 continue
-            learned = sum(s.acquired for s in skills)
-            self._section(self.body, title, f"{learned}/{len(skills)} learned")
+            self._section(self.body, title)
             grid = tk.Frame(self.body, bg=BG)
             grid.pack(fill="x")
             grid.columnconfigure(0, weight=1, uniform="s")
@@ -887,19 +886,16 @@ class ProfileView:
                 cell = tk.Frame(grid, bg=SURFACE, padx=8, pady=5)
                 cell.grid(row=i // 2, column=i % 2, sticky="nsew", padx=(0 if i % 2 == 0 else 4, 0 if i % 2 else 4),
                           pady=2)
-                if s.category == "Dp" and s.acquired and s.level >= 1:     # a Stigma in use: yellow box, like the game
-                    cell.configure(highlightthickness=1, highlightbackground=self.SKILL_NUM,
-                                   highlightcolor=self.SKILL_NUM)
-                icon = self._icon(cell, s.icon, 30, border=BORDER)
+                stigma_on = s.category == "Dp" and s.level >= 1           # a Stigma in use: gold around the icon
+                icon = self._icon(cell, s.icon, 30, border=self.SKILL_NUM if stigma_on else BORDER)
                 icon.pack(side="left")
                 txt = tk.Frame(cell, bg=SURFACE)
                 txt.pack(side="left", fill="x", expand=True, padx=8)
                 name = self._fit_label(txt, s.name, self.app.f_small,   # the skill's own tooltip shows the name
                                        tip=skilldata.describe(s.skill_id, 1, s.name, p.class_name) is None, bg=SURFACE,
-                                       fg=FG if s.acquired else FG_FAINT)
+                                       fg=FG)
                 name.pack(fill="x")
-                sub = "Not learned" if not s.acquired else f"Level {s.level}" if s.level else "Learned"
-                sub_lb = tk.Label(txt, text=sub, bg=SURFACE, fg=FG_DIM if s.acquired else FG_FAINT,
+                sub_lb = tk.Label(txt, text=f"Level {s.level}" if s.level else "", bg=SURFACE, fg=FG_DIM,
                                   font=self.app.f_tiny, anchor="w")
                 sub_lb.pack(fill="x")
                 self._skill_tip(s, p.class_name, [cell, txt, name, sub_lb])
@@ -911,7 +907,7 @@ class ProfileView:
 
     def _skill_tip(self, s, cls: str, widgets):
         """Hover: the skill's description at this character's level (from MetaBot.GG)."""
-        info = skilldata.describe(s.skill_id, s.level if s.acquired else 1, s.name, cls)
+        info = skilldata.describe(s.skill_id, s.level or 1, s.name, cls)
         if info is None:
             return
         self._hover_tip(widgets, s.name, [], show=lambda cell, s=s, info=info: self._show_skill_tip(s, info, cell))
@@ -926,7 +922,7 @@ class ProfileView:
         # header: name, "Level N" in gold, icon on the right (gold frame for a Stigma in use)
         head = tk.Frame(outer, bg=hb, padx=12, pady=10)
         head.pack(fill="x")
-        stigma_on = s.category == "Dp" and s.acquired and s.level >= 1
+        stigma_on = s.category == "Dp" and s.level >= 1
         icon_box = tk.Frame(head, bg=self.SKILL_NUM if stigma_on else BORDER, padx=1, pady=1)
         icon_box.pack(side="right", anchor="n", padx=(10, 0))
         icon = tk.Label(icon_box, bg=SURFACE_2, image=self._blank(44), bd=0)
@@ -934,11 +930,10 @@ class ProfileView:
         self._set_image(icon, s.icon, 44)
         left = tk.Frame(head, bg=hb)
         left.pack(side="left", fill="x", expand=True)
-        tk.Label(left, text=s.name, bg=hb, fg=FG if s.acquired else FG_DIM, font=f.f_title, anchor="w").pack(
-            fill="x")
-        level = f"Level {s.level}" if s.acquired and s.level else "Not learned"
-        tk.Label(left, text=level, bg=hb, fg=self.SKILL_NUM if s.acquired else FG_FAINT, font=f.f_sbold,
-                 anchor="w").pack(fill="x", pady=(3, 0))
+        tk.Label(left, text=s.name, bg=hb, fg=FG, font=f.f_title, anchor="w").pack(fill="x")
+        if s.level:
+            tk.Label(left, text=f"Level {s.level}", bg=hb, fg=self.SKILL_NUM, font=f.f_sbold, anchor="w").pack(
+                fill="x", pady=(3, 0))
 
         # description, numbers that scale with level in gold
         body = tk.Frame(outer, bg=self.TIP_BG, padx=12, pady=10)
