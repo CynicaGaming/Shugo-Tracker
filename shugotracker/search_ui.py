@@ -5,6 +5,7 @@ import hashlib
 import io
 import os
 import queue
+import sys
 import time
 import tkinter as tk
 import tkinter.font as tkfont
@@ -2599,6 +2600,9 @@ class SearchWindow:
             (7290, self._me_menu),
             (7400, self._demo_me_menu),                            # once the menu is on screen (its rows placed)
             (7550, lambda: self._grab_wide(f"{base}-me-menu.png")),  # wide: the submenu opens past the window
+            (7600, self._demo_click_outside),                      # a real click off the app closes the menu
+            (7800, lambda: print(f"outside click: menu {'still open' if self.me_menu.win else 'closed'}",
+                                 flush=True)),
             (7900, lambda: self.me_menu.unpost()),
             (7950, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
             (8000, lambda: self._view and self.open_profile(self._view[0])),
@@ -2739,6 +2743,19 @@ class SearchWindow:
                     path[:-4] + "-only.png")
         except Exception as e:  # noqa: BLE001
             print(f"screenshot failed: {e}")
+
+    def _demo_click_outside(self):
+        """Screenshots only: a real mouse click on the screen beside the tracker (Windows)."""
+        if sys.platform != "win32":
+            return
+        import ctypes
+        u = ctypes.windll.user32
+        x = self.root.winfo_rootx() + self.root.winfo_width() + 250
+        y = self.root.winfo_rooty() + self.root.winfo_height() - 60
+        u.SetCursorPos(int(x), int(y))
+        u.mouse_event(0x0002, 0, 0, 0, 0)     # left down
+        u.mouse_event(0x0004, 0, 0, 0, 0)     # left up
+        print(f"outside click at {x},{y}", flush=True)
 
     def _demo_me_menu(self):
         """Screenshots: open Switch Profile from your menu, its first × hovered (and log how long that took)."""
