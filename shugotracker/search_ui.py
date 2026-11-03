@@ -2537,10 +2537,8 @@ class SearchWindow:
             (7270, lambda: len(self._view) > 1 and self.set_my_character(       # --showcase: the real one is you
                 self._view[0] if getattr(self.api.session, "real", None) else self._view[1])),
             (7280, lambda: len(self._view) > 3 and self.set_my_character(self._view[3], 1)),   # a second one
-            (7290, lambda: self._me_menu()),
-            (7340, lambda: self.me_menu.win is not None and self.me_menu.demo_open_sub()),
-            (7500, lambda: self._grab(f"{base}-me-menu.png")),    # well before the next step: _grab's update()
-            (7900, lambda: self.me_menu.unpost()),                 # runs any timer that's already due
+            (7290, lambda: self._demo_me_menu(f"{base}-me-menu.png")),
+            (7900, lambda: self.me_menu.unpost()),
             (7950, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
             (8000, lambda: self._view and self.open_profile(self._view[0])),
             (8080, lambda: self._grab(f"{base}-profile-loading.png")),
@@ -2678,6 +2676,26 @@ class SearchWindow:
                 tx, ty = tip.winfo_rootx(), tip.winfo_rooty()
                 ImageGrab.grab(bbox=(tx, ty, tx + tip.winfo_width(), ty + tip.winfo_height())).save(
                     path[:-4] + "-only.png")
+        except Exception as e:  # noqa: BLE001
+            print(f"screenshot failed: {e}")
+
+    def _demo_me_menu(self, path: str):
+        """Screenshots: your menu with Switch Character open, grabbed in one go (a later timer can't run first)."""
+        t0 = time.monotonic()
+        self._me_menu()
+        t1 = time.monotonic()
+        if self.me_menu.win is not None:
+            self.me_menu.demo_open_sub()
+        t2 = time.monotonic()
+        self.root.update_idletasks()
+        sub = self.switch_menu.win
+        print(f"me menu: open {1000 * (t1 - t0):.0f} ms, submenu {1000 * (t2 - t1):.0f} ms, "
+              f"menu {'open' if self.me_menu.win else 'closed'}, submenu {'open' if sub else 'closed'}, "
+              f"{len(self.switch_menu.items)} characters", flush=True)
+        try:
+            from PIL import ImageGrab
+            x, y = self.root.winfo_rootx(), self.root.winfo_rooty()
+            ImageGrab.grab(bbox=(x, y, x + self.root.winfo_width(), y + self.root.winfo_height())).save(path)
         except Exception as e:  # noqa: BLE001
             print(f"screenshot failed: {e}")
 
