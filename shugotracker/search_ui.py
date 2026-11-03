@@ -231,10 +231,10 @@ class StyledMenu:
                 parts.append(arrow)
             remove = item.get("on_remove")
             if remove is not None:
-                x_btn = tk.Label(row, text="×", bg=SURFACE_2, fg=FG_FAINT, font=self.font, padx=10, cursor="hand2")
+                x_btn = tk.Label(row, text="×", bg=SURFACE_2, fg=FG_DIM, font=self.font, padx=10, cursor="hand2")
                 x_btn.pack(side="right")
                 x_btn.bind("<Enter>", lambda e, b=x_btn: b.config(fg=RED), add="+")
-                x_btn.bind("<Leave>", lambda e, b=x_btn: b.config(fg=FG_FAINT), add="+")
+                x_btn.bind("<Leave>", lambda e, b=x_btn: b.config(fg=FG_DIM), add="+")
                 x_btn.bind("<ButtonRelease-1>", lambda e, fn=remove: (fn(), "break")[1])
             if on:
                 def enter(e, ps=parts, sub=sub, r=row):
