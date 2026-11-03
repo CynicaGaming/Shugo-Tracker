@@ -2611,7 +2611,7 @@ class SearchWindow:
             (8000, lambda: self._view and self.open_profile(self._view[0])),
             (8080, lambda: self._grab(f"{base}-profile-loading.png")),
         ]
-        t = 11000
+        t = 15000                                 # the first open loads everything (~5 s in the demo)
         for tab in ProfileView.TABS:
             steps.append((t, lambda tb=tab: self.profile_view and self.profile_view.show_tab(tb)))
             steps.append((t + 900, lambda tb=tab: self._grab(f"{base}-profile-{tb.lower()}.png")))
