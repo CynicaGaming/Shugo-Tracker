@@ -2539,7 +2539,7 @@ class SearchWindow:
             (7280, lambda: len(self._view) > 3 and self.set_my_character(self._view[3], 1)),   # a second one
             (7290, self._me_menu),
             (7400, self._demo_me_menu),                            # once the menu is on screen (its rows placed)
-            (7550, lambda: self._grab(f"{base}-me-menu.png")),     # Windows needs a moment to show new windows
+            (7550, lambda: self._grab_wide(f"{base}-me-menu.png")),  # wide: the submenu opens past the window
             (7900, lambda: self.me_menu.unpost()),
             (7950, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
             (8000, lambda: self._view and self.open_profile(self._view[0])),
