@@ -231,7 +231,7 @@ class StyledMenu:
                 parts.append(arrow)
             remove = item.get("on_remove")
             if remove is not None:
-                x_btn = tk.Label(row, text="✕", bg=SURFACE_2, fg=FG_FAINT, font=self.font, padx=10, cursor="hand2")
+                x_btn = tk.Label(row, text="×", bg=SURFACE_2, fg=FG_FAINT, font=self.font, padx=10, cursor="hand2")
                 x_btn.pack(side="right")
                 x_btn.bind("<Enter>", lambda e, b=x_btn: b.config(fg=RED), add="+")
                 x_btn.bind("<Leave>", lambda e, b=x_btn: b.config(fg=FG_FAINT), add="+")
@@ -2687,7 +2687,7 @@ class SearchWindow:
         if self.me_menu.win is not None:
             self.me_menu.demo_open_sub()
         t2 = time.monotonic()
-        self.root.update_idletasks()
+        self.root.update()                        # draw the menus (the next step is far enough away)
         sub = self.switch_menu.win
         print(f"me menu: open {1000 * (t1 - t0):.0f} ms, submenu {1000 * (t2 - t1):.0f} ms, "
               f"menu {'open' if self.me_menu.win else 'closed'}, submenu {'open' if sub else 'closed'}, "
