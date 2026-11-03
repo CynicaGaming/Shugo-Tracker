@@ -2537,8 +2537,9 @@ class SearchWindow:
             (7270, lambda: len(self._view) > 1 and self.set_my_character(       # --showcase: the real one is you
                 self._view[0] if getattr(self.api.session, "real", None) else self._view[1])),
             (7280, lambda: len(self._view) > 3 and self.set_my_character(self._view[3], 1)),   # a second one
-            (7290, self._demo_me_menu),
-            (7450, lambda: self._grab(f"{base}-me-menu.png")),     # Windows needs a moment to show new windows
+            (7290, self._me_menu),
+            (7400, self._demo_me_menu),                            # once the menu is on screen (its rows placed)
+            (7550, lambda: self._grab(f"{base}-me-menu.png")),     # Windows needs a moment to show new windows
             (7900, lambda: self.me_menu.unpost()),
             (7950, lambda: self._view and self.api.forget(self._view[0])),     # so the loader is visible
             (8000, lambda: self._view and self.open_profile(self._view[0])),
@@ -2681,12 +2682,11 @@ class SearchWindow:
             print(f"screenshot failed: {e}")
 
     def _demo_me_menu(self):
-        """Screenshots: your menu with Switch Character open (and how long that took, in the log)."""
+        """Screenshots: open Switch Character from your menu (and log how long that took)."""
         t0 = time.monotonic()
-        self._me_menu()
         if self.me_menu.win is not None:
             self.me_menu.demo_open_sub()
-        print(f"me menu + submenu: {1000 * (time.monotonic() - t0):.0f} ms, "
+        print(f"switch submenu: {1000 * (time.monotonic() - t0):.0f} ms, "
               f"{len(self.switch_menu.items)} characters", flush=True)
 
     def _grab(self, path: str):
