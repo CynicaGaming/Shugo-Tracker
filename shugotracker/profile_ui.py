@@ -195,10 +195,11 @@ class ProfileView:
         if p is not None and (p.equipment_error or (prog is not None and prog[0] >= prog[1])):
             self._ready = True
             if getattr(self.app, "_screenshot", False):          # CI: how long a full load took
-                print(f"profile ready: {p.name}, {len(self._worn(p))} items, "
+                print(f"profile ready: {self.char.name}, {len(self._worn(p))} items, "
                       f"{1000 * (time.monotonic() - self._opened):.0f} ms", flush=True)
             self.render()
             self._prebuild()
+            self._want_my_items()
 
     def _want_all(self, p: Profile):
         """Ask for every worn item's details at once (saved ones answer immediately)."""
@@ -914,12 +915,18 @@ class ProfileView:
         if prof is None and self._mine is not None:
             return
         self._mine = prof
-        if prof is not None and not prof.equipment_pending:
-            for it in self._worn(prof):                       # your side of Alt-compare, ready before you ask
-                self._want_my_detail(it)
+        self._want_my_items()
         hover = getattr(self, "_hover_item", None)
         if self._compare and hover is not None and hover[1].winfo_exists():
             self._show_item_tip(*hover)
+
+    def _want_my_items(self):
+        """Your side of Alt-compare, ready before you ask: loaded once the profile on screen is complete, so it
+        never slows that down."""
+        mine = self._mine
+        if self._ready and mine is not None and not mine.equipment_pending:
+            for it in self._worn(mine):
+                self._want_my_detail(it)
 
     def _my_item(self, it: Item) -> Item | None:
         return self._mine.gear.get(it.slot) if self._mine is not None else None

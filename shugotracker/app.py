@@ -405,13 +405,32 @@ def _bench(name: str) -> int:
             times.setdefault("first", time.perf_counter() - t2)
             if not prof.equipment_pending:
                 times.setdefault("full", time.perf_counter() - t2)
+                got_prof.append(prof)
                 fin.set()
+        got_prof: list = []
         api.fetch_profile(top[0], on_prof)
         fin.wait(30)
+        # every worn item's details, as opening the profile now loads them
+        from .profile import GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN
+        items = [it for s in GEAR_MAIN + GEAR_ACCESSORIES + GEAR_ARCANA
+                 if got_prof and (it := got_prof[0].gear.get(s)) is not None and it.slot_pos and it.item_id]
+        left_items, all_in = [len(items)], _t.Event()
+
+        def on_item(_det):
+            with lock:
+                left_items[0] -= 1
+                if left_items[0] <= 0:
+                    all_in.set()
+        t3 = time.perf_counter()
+        for it in items:
+            api.fetch_item_detail(top[0], it, on_item)
+        if items:
+            all_in.wait(60)
+        t_items = time.perf_counter() - t3
         api.close()
         print(f"{label}: first results {first[0] or 0:.2f}s, all regions {t_search:.2f}s | "
               f"10 cards' GS/CP {t_cards:.2f}s | profile first paint {times.get('first', -1):.2f}s, "
-              f"complete {times.get('full', -1):.2f}s")
+              f"complete {times.get('full', -1):.2f}s | {len(items)} items' details {t_items:.2f}s")
 
     run("cold (nothing cached)")
     run("warm (new app start, cached)")
