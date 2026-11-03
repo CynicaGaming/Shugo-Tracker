@@ -468,7 +468,7 @@ class NearbyService:
         return ph
 
     def set_me(self, name: str, server: int) -> None:
-        """You picked your character (right-click → Set Profile, or Switch Character): sides follow it at once."""
+        """You picked your character (right-click → Set Profile, or Switch Profile): sides follow it at once."""
         with self._lock:
             self.tracker.me.name = name
             if server:

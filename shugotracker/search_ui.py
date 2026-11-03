@@ -230,12 +230,11 @@ class StyledMenu:
                 arrow.pack(side="right")
                 parts.append(arrow)
             remove = item.get("on_remove")
-            if remove is not None:
+            x_btn = None
+            if remove is not None:                        # part of the row: it highlights with it, only turns red
                 x_btn = tk.Label(row, text="×", bg=SURFACE_2, fg=FG_DIM, font=self.font, padx=10, cursor="hand2")
                 x_btn.pack(side="right")
-                x_btn.bind("<Enter>", lambda e, b=x_btn: b.config(fg=RED), add="+")
-                x_btn.bind("<Leave>", lambda e, b=x_btn: b.config(fg=FG_DIM), add="+")
-                x_btn.bind("<ButtonRelease-1>", lambda e, fn=remove: (fn(), "break")[1])
+                parts.append(x_btn)
             if on:
                 def enter(e, ps=parts, sub=sub, r=row):
                     for p in ps:
@@ -246,20 +245,27 @@ class StyledMenu:
                     elif self._sub is not None:
                         self._close_sub()
 
-                def leave(e, ps=parts, c=rest):
+                def leave(e, ps=parts, c=rest, r=row):
+                    # moving between the row's own parts (onto its ×, say) isn't leaving the row
+                    try:
+                        px, py = r.winfo_pointerxy()
+                        if r.winfo_rootx() <= px < r.winfo_rootx() + r.winfo_width() and \
+                                r.winfo_rooty() <= py < r.winfo_rooty() + r.winfo_height():
+                            return
+                    except tk.TclError:
+                        return
                     for p in ps:
                         p.config(bg=SURFACE_2)
                     ps[1].config(fg=c)
                 for p in parts:
                     p.bind("<Enter>", enter)
                     p.bind("<Leave>", leave)
-                    if sub is None:
+                    if sub is None and p is not x_btn:
                         p.bind("<ButtonRelease-1>", lambda e, c=item["command"]: self._choose(c))
-                if remove is not None:
-                    x_btn.bind("<Enter>", lambda e, b=x_btn, r=row, t=text: (r.config(bg=HOVER), t.config(bg=HOVER),
-                                                                              b.config(bg=HOVER)), add="+")
-                    x_btn.bind("<Leave>", lambda e, b=x_btn, r=row, t=text, c=rest: (
-                        r.config(bg=SURFACE_2), t.config(bg=SURFACE_2, fg=c), b.config(bg=SURFACE_2)), add="+")
+                if x_btn is not None:
+                    x_btn.bind("<Enter>", lambda e, b=x_btn: b.config(fg=RED), add="+")
+                    x_btn.bind("<Leave>", lambda e, b=x_btn: b.config(fg=FG_DIM), add="+")
+                    x_btn.bind("<ButtonRelease-1>", lambda e, fn=remove: (fn(), "break")[1])
             elif sub is None:
                 for p in parts:
                     p.bind("<Enter>", lambda e: self._sub is not None and self._close_sub())
@@ -886,7 +892,7 @@ class SearchWindow:
         self.menu.add_command(label="Refresh", command=lambda: self._menu(self._refresh))
         self.profile_menu = StyledMenu(self.root, self.f_small)       # Set Profile ▸ Set Character 1-5
         self.menu.add_cascade(label="Set Profile", menu=self.profile_menu)
-        self.switch_menu = StyledMenu(self.root, self.f_small)        # your menu ▸ Switch Character (× removes)
+        self.switch_menu = StyledMenu(self.root, self.f_small)        # your menu ▸ Switch Profile (× removes)
         self._menu_base = 5                                  # Nearby / Recent add a Clear item below these
         self.col_menu = StyledMenu(self.root, self.f_small)
         self.list_menu = StyledMenu(self.root, self.f_small)
@@ -941,7 +947,7 @@ class SearchWindow:
                           state="normal" if c.char_id else "disabled")
         if used:
             self._fill_switch_menu()
-            m.add_cascade(label="Switch Character", menu=self.switch_menu)
+            m.add_cascade(label="Switch Profile", menu=self.switch_menu)
         else:
             m.add_command(label="Right-click a player → Set Profile", command=lambda: None, state="disabled")
         m.add_separator()
@@ -977,7 +983,7 @@ class SearchWindow:
         m.delete(0, "end")
         for i, d in enumerate(self.my_chars.slots):
             here = d is not None and (d.get("server_id"), d.get("char_id")) == (c.server_id, c.char_id)
-            label = f"Set Character {i + 1}" + (f"   ({d['name']})" if d else "")
+            label = d["name"] if d else f"Set Character {i + 1}"     # a slot in use shows who's in it
             m.add_command(label=label, command=lambda i=i: self._menu(lambda ch: self.set_my_character(ch, i)),
                           selected=here)
 
@@ -2682,10 +2688,16 @@ class SearchWindow:
             print(f"screenshot failed: {e}")
 
     def _demo_me_menu(self):
-        """Screenshots: open Switch Character from your menu (and log how long that took)."""
+        """Screenshots: open Switch Profile from your menu, its first × hovered (and log how long that took)."""
         t0 = time.monotonic()
         if self.me_menu.win is not None:
             self.me_menu.demo_open_sub()
+            rows = getattr(self.switch_menu, "_rows", [])
+            if rows and self.switch_menu.win is not None:
+                self.switch_menu.win.update_idletasks()
+                kids = rows[0][1].winfo_children()          # [name, ×]: hover the ×
+                if len(kids) > 1:
+                    kids[-1].event_generate("<Enter>")
         print(f"switch submenu: {1000 * (time.monotonic() - t0):.0f} ms, "
               f"{len(self.switch_menu.items)} characters", flush=True)
 
