@@ -183,12 +183,6 @@ class Updater:
         self.progress = 1.0
         self._set("ready")
 
-    def check_and_download(self) -> None:
-        """Check, and download if newer (kept for older call sites)."""
-        self.check()
-        if self.state == "available" and self.can_install:
-            self.download()
-
     # ───── install ─────
     def apply(self, restart: bool, argv: list[str] | None = None) -> bool:
         """Swap the staged exe in. With restart=True the new version is launched (caller then exits)."""

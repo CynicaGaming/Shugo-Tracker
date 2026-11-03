@@ -259,24 +259,6 @@ class CapturePacketTests(unittest.TestCase):
     def test_memoryview(self):
         self.assertEqual(self.cap.parse_ipv4_tcp(memoryview(ip_tcp(b"hi")))[5], b"hi")
 
-    def test_pcap_replay(self):
-        import struct
-        import tempfile
-        eth = b"\0" * 12 + b"\x08\x00"
-        frames = [eth + ip_tcp(b"ab", seq=1), eth + ip_tcp(b"cd", seq=3), eth + ip_tcp(b"zz", sport=443)]
-        data = struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
-        for f in frames:
-            data += struct.pack("<IIII", 1, 0, len(f), len(f)) + f
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "x.pcap")
-            with open(path, "wb") as fh:
-                fh.write(data)
-            got = []
-            n = self.cap.replay_pcap(path, lambda k, b, g: got.append(b), {13328})
-        self.assertEqual(n, 2)
-        self.assertEqual(b"".join(got), b"abcd")
-
-
 class RecentTests(unittest.TestCase):
     def test_recent_limit_from_settings(self):
         svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"recent_max": 0})

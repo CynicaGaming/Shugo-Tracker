@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import threading
+import time
 import unittest
 
 from shugotracker import aion2api as a
@@ -155,24 +156,6 @@ class FetchProfileTests(unittest.TestCase):
         self.assertFalse(got[-1].equipment_pending)
         self.assertIn("MainHand", got[-1].gear)
 
-    def test_prefetch_and_click_share_one_fetch(self):
-        gate = threading.Event()
-
-        class Slow(FakeSession):
-            def get(self, url, params=None, timeout=None):
-                gate.wait(5)
-                return super().get(url, params, timeout)
-
-        sess = Slow()
-        api = self.make(sess)
-        c = char()
-        api.prefetch_profile(c)                           # pointer rests on the card
-        got, done = [], threading.Event()
-        api.fetch_profile(c, lambda ch, p, e: (got.append(p), (p and not p.equipment_pending) and done.set()))
-        gate.set()
-        self.assertTrue(done.wait(5))
-        self.assertEqual(len(sess.calls), 2)              # one info + one equipment call in total
-
     def test_profiles_persist_and_stale_ones_show_then_refresh(self):
         folder = tempfile.mkdtemp()
         sess = FakeSession()
@@ -269,17 +252,17 @@ class LegionTests(unittest.TestCase):
 
 class StatBonusTests(unittest.TestCase):
     def test_per_point(self):
-        from shugotracker.profile import STAT_BONUSES, Stat
-        self.assertEqual(Stat("INT", "Intelligence", 0).per_point, ["Status Effect Chance +0.1%"])
-        self.assertEqual(Stat("Illusion", "Illusion", 0).per_point, ["Cooldown -0.1%", "Endurance Penetration +0.1%"])
-        self.assertEqual(Stat("Unknown", "?", 0).per_point, [])
+        from shugotracker.profile import STAT_BONUSES
+        self.assertEqual(STAT_BONUSES["INT"], [("Status Effect Chance", "+")])
+        self.assertEqual(STAT_BONUSES["Illusion"], [("Cooldown", "-"), ("Endurance Penetration", "+")])
         self.assertEqual(len(STAT_BONUSES), 16)
 
     def test_bonus_table_matches_live_text(self):
         # the API's own lines for a stat with points: label and sign must match our table
-        from shugotracker.profile import Stat
-        s = Stat("Justice", "Justice [Nezekan]", 69, ["Defense increase +6.9%", "Perfect Chance +6.9%"])
-        self.assertEqual([p.rsplit(" ", 1)[0] for p in s.per_point], [e.rsplit(" ", 1)[0] for e in s.effects])
+        from shugotracker.profile import STAT_BONUSES
+        live = ["Defense increase +6.9%", "Perfect Chance +6.9%"]          # Justice, 69 points
+        self.assertEqual([f"{label} {sign}" for label, sign in STAT_BONUSES["Justice"]],
+                         [e[:e.rindex(" ") + 2] for e in live])          # "Defense increase +"
 
 
 class ReuseCardInfoTests(unittest.TestCase):
@@ -335,3 +318,78 @@ class ItemDetailTests(unittest.TestCase):
         self.assertEqual(card.linked_skills, [("Judgment", 2, "")])
         self.assertEqual((card.set_name, card.set_equipped, card.set_size), ("Primal Vigor", 4, 5))
         self.assertEqual(card.theostones, ["Chance to freeze"])
+
+
+class ItemCacheTests(unittest.TestCase):
+    """Worn items' details are saved with the profile: a profile opened again (even after a restart) asks for
+    none of them, stale ones are shown at once then refreshed, and Refresh asks for everything again."""
+
+    class Sess:
+        def __init__(self):
+            self.headers, self.calls = {}, []
+
+        def get(self, url, params=None, timeout=None):
+            from shugotracker.profile import ITEM_URL
+            self.calls.append((url, (params or {}).get("slotPos")))
+            if url == ITEM_URL:
+                return FakeResp({"level": 80 + int(params["slotPos"]), "categoryName": "Longsword"})
+            raise AssertionError(url)
+
+    def api(self, folder, sess):
+        api = a.Api(session=sess, rate=1000, db_path=os.path.join(folder, "shugo.db"))
+        self.addCleanup(api.close)
+        return api
+
+    def get(self, api, c, item):
+        got, done = [], threading.Event()
+        api.fetch_item_detail(c, item, lambda det: (got.append(det), done.set()))
+        self.assertTrue(done.wait(5))
+        return got[0]
+
+    def item(self, slot=1, enchant=10):
+        from shugotracker.profile import Item
+        return Item(slot="MainHand", name="Sword", grade="Epic", enchant=enchant, item_id=1234, slot_pos=slot)
+
+    def test_saved_across_restarts(self):
+        folder, c = tempfile.mkdtemp(), char()
+        s1 = self.Sess()
+        api1 = self.api(folder, s1)
+        self.assertEqual(self.get(api1, c, self.item()).item_level, 81)
+        api1.store.put_profile(c.key, {}, {})            # items are kept as long as their profile
+        api1.close()
+        s2 = self.Sess()
+        api2 = self.api(folder, s2)
+        got = []
+        api2.fetch_item_detail(c, self.item(), got.append)
+        self.assertEqual([d.item_level for d in got], [81])    # answered at once, from disk
+        self.assertEqual(s2.calls, [])
+
+    def test_new_enchant_is_a_new_item(self):
+        c, s = char(), self.Sess()
+        api = self.api(tempfile.mkdtemp(), s)
+        self.get(api, c, self.item(enchant=10))
+        self.get(api, c, self.item(enchant=11))
+        self.assertEqual(len(s.calls), 2)
+
+    def test_stale_shown_then_refreshed(self):
+        c, s = char(), self.Sess()
+        api = self.api(tempfile.mkdtemp(), s)
+        self.get(api, c, self.item())
+        key = (c.key, 1, 1234, 10)
+        api._item_details[key] = (time.time() - a.ITEM_FRESH_S - 1, api._item_details[key][1])
+        got = []
+        api.fetch_item_detail(c, self.item(), got.append)
+        self.assertEqual(len(got), 1)                          # the old answer, at once
+        deadline = time.time() + 5
+        while len(s.calls) < 2 and time.time() < deadline:
+            time.sleep(0.01)
+        self.assertEqual(len(s.calls), 2)                      # …and one quiet refresh
+
+    def test_refresh_forgets_items(self):
+        folder, c, s = tempfile.mkdtemp(), char(), self.Sess()
+        api = self.api(folder, s)
+        self.get(api, c, self.item())
+        api.forget(c)
+        self.get(api, c, self.item())
+        self.assertEqual(len(s.calls), 2)
+        self.assertEqual(len(api.store.items_of(c.key)), 1)

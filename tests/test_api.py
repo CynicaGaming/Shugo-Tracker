@@ -73,7 +73,6 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(luna.char_id, "F0Ubce33Dq_LpNdYg_lVavO_-GjY11B-Q4kqxiWG-ok=")
         self.assertEqual((luna.class_name, luna.faction, luna.level), ("Chanter", "Asmodian", 45))
         self.assertTrue(luna.portrait.startswith("https://profileimg.plaync.com/"))
-        self.assertEqual(luna.shugo_url, "https://shugo.gg/character/global/nae-israphel/Luna")
         self.assertEqual(chars[0].class_name, "Gladiator")  # pcId 5-8
         self.assertEqual(chars[2].name, "Aluna")
         self.assertIsNone(chars[2].portrait)

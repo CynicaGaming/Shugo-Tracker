@@ -14,15 +14,14 @@ import collections
 import html
 import itertools
 import json
-import os
 import queue
 import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass
 from typing import Callable
-from urllib.parse import quote, unquote
+from urllib.parse import unquote
 
 import requests
 
@@ -121,10 +120,6 @@ class Character:
     def faction(self) -> str:
         return {1: "Elyos", 2: "Asmodian"}.get(self.race, "?")
 
-    @property
-    def shugo_url(self) -> str:
-        return f"https://shugo.gg/character/global/{self.region}-{sv.re_slug(self.server_name)}/{quote(self.name, safe='')}"
-
 
 def parse_search(data: dict) -> tuple[list[Character], int]:
     out = []
@@ -222,6 +217,8 @@ SEARCH_KEEP_S = 15 * 60            # identical searches within this window are a
 PROFILE_FRESH_S = 10 * 60
 PROFILE_KEEP_S = 7 * 86400
 PROFILE_DISK_MAX = 300
+ITEM_FRESH_S = 6 * 3600            # a worn item's details are reused this long without asking again (an item
+                                   # with a new enchant level is a different item; Refresh asks again)
 RECENT_INFO_S = 120                # a card's info response is reused for its profile for this long
 RECENT_INFO_MAX = 200
 LOOKUP_KEEP_S = 3 * 86400          # "who is called X here" answers are reused this long (Nearby: instant repeats)
@@ -252,8 +249,9 @@ class Api:
         self._inflight: dict[str, list] = {}
         self._pflock = threading.Lock()
         self._search_cache: dict[tuple, tuple[float, dict]] = {}
-        self._item_details: dict[tuple, object] = {}              # (character, slot, item, enchant) -> ItemDetail
+        self._item_details: dict[tuple, tuple[float, object]] = {}   # (character, slot, item, enchant) -> (ts, ItemDetail)
         self._item_waiting: dict[tuple, list] = {}
+        self._items_loaded: set[str] = set()                         # characters whose saved items are in memory
         # the raw info response behind each card's numbers: opening that profile soon after reuses it
         self._recent_info: collections.OrderedDict[str, tuple[float, dict]] = collections.OrderedDict()
         # details: newest request first, stale generations dropped
@@ -335,18 +333,6 @@ class Api:
         found = [c for c in chars if c.name.casefold() == want]
         self.store.put_lookup(q, [{k: getattr(c, k) for k in _IDENTITY} for c in found])
         return found
-
-    def find_player(self, name: str, server_id: int) -> Character | None:
-        """The character called `name` on `server_id` (exact name), via the search endpoint; None if not found."""
-        region = sv.REGION_PREFIX.get(sv.region_of(server_id))
-        if not region:
-            return None
-        chars, _ = self.search_region(name, region, page=1, size=10, filters={"serverId": server_id})
-        want = name.casefold()
-        for c in chars:
-            if c.server_id == server_id and c.name.casefold() == want:
-                return c
-        return None
 
     def search(self, keyword: str, regions: list[str], page: int = 1, size: int = 30,
                on_done: Callable[[str, list[Character], int, str | None], None] | None = None,
@@ -466,7 +452,7 @@ class Api:
           - with a partial profile (prof.equipment_pending) as soon as the info call returns,
             when there was nothing cached to show;
           - with the complete, fresh profile.
-        Concurrent requests for the same character (hover prefetch, then click) share one fetch.
+        Concurrent requests for the same character share one fetch.
         """
         from .profile import parse_profile
         key = c.key
@@ -488,56 +474,66 @@ class Api:
                          daemon=True).start()
 
     def fetch_item_detail(self, c: Character, item, on_done: Callable[[object | None], None]) -> None:
-        """One worn item in full (mana stones, theostone, stats, Arcana linked skills / set), in the background.
-        on_done(ItemDetail | None) runs on a worker thread; answers are kept for the session."""
-        from .profile import ITEM_URL, parse_item_detail
+        """One worn item in full (mana stones, theostone, stats, Arcana linked skills / set).
+        on_done(ItemDetail | None): at once (on the caller's thread) when it's saved, else from a worker thread.
+        Saved answers older than ITEM_FRESH_S are still given at once, then quietly refreshed."""
         key = (c.key, item.slot_pos, item.item_id, item.enchant)
+        self._load_items(c.key)
         with self._pflock:
             hit = self._item_details.get(key)
-            if hit is not None:
-                waiting = None
-            else:
+            if hit is None:
                 waiting = self._item_waiting.setdefault(key, [])
                 waiting.append(on_done)
                 if len(waiting) > 1:
                     return                        # already being fetched: this caller gets the same answer
+            elif time.time() - hit[0] >= ITEM_FRESH_S and key not in self._item_waiting:
+                self._item_waiting[key] = []      # refresh in the background; nobody waits for it
+                self._profile_pool.submit(self._fetch_item, c, item, key)
         if hit is not None:
-            on_done(hit)
+            on_done(hit[1])
             return
+        self._profile_pool.submit(self._fetch_item, c, item, key)
 
-        def run():
-            det = None
-            try:
-                data = self._get_json(ITEM_URL, {"id": item.item_id, "enchantLevel": item.enchant, "characterId": c.char_id,
-                                                 "serverId": c.server_id, "slotPos": item.slot_pos, "lang": "en",
-                                                 "region": c.region})
-                det = parse_item_detail(data)
-            except Exception as e:  # noqa: BLE001
-                self.log(f"api: item detail for {c.name} slot {item.slot_pos} failed: {e}")
-            with self._pflock:
-                if det is not None:
-                    self._item_details[key] = det
-                    while len(self._item_details) > 2000:
-                        self._item_details.pop(next(iter(self._item_details)))
-                callbacks = self._item_waiting.pop(key, [])
-            for cb in callbacks:
-                try:
-                    cb(det)
-                except Exception as e:  # noqa: BLE001
-                    self.log(f"api: item detail callback failed: {e}")
-        self._profile_pool.submit(run)
-
-    def prefetch_profile(self, c: Character) -> None:
-        """Warm the cache (e.g. while the pointer rests on a card) so opening the profile is instant."""
-        if not c.char_id:
+    def _load_items(self, owner: str) -> None:
+        """A character's saved items, read once per session in a single query."""
+        if owner in self._items_loaded:
             return
-        hit = self._profiles.get(c.key)
-        if hit and time.time() - hit[0] < PROFILE_FRESH_S:
-            return
+        from .profile import parse_item_detail
+        self._items_loaded.add(owner)
+        saved = self.store.items_of(owner)
         with self._pflock:
-            if c.key in self._inflight:
-                return
-        self.fetch_profile(c, lambda *a: None)
+            for k, (ts, raw) in saved.items():
+                try:
+                    _o, slot, item_id, enchant = k.rsplit("|", 3)
+                    self._item_details.setdefault((owner, int(slot), int(item_id), int(enchant)),
+                                                  (ts, parse_item_detail(raw)))
+                except (ValueError, TypeError, AttributeError):
+                    continue
+
+    def _fetch_item(self, c: Character, item, key: tuple) -> None:
+        from .profile import ITEM_URL, parse_item_detail
+        det = None
+        try:
+            raw = self._get_json(ITEM_URL, {"id": item.item_id, "enchantLevel": item.enchant, "characterId": c.char_id,
+                                            "serverId": c.server_id, "slotPos": item.slot_pos, "lang": "en",
+                                            "region": c.region})
+            det = parse_item_detail(raw)
+            self.store.put_item("|".join(str(x) for x in key), c.key, raw)
+        except Exception as e:  # noqa: BLE001
+            self.log(f"api: item detail for {c.name} slot {item.slot_pos} failed: {e}")
+        with self._pflock:
+            if det is not None:
+                self._item_details[key] = (time.time(), det)
+                while len(self._item_details) > 4000:
+                    self._item_details.pop(next(iter(self._item_details)))
+            elif key in self._item_details:
+                det = self._item_details[key][1]  # a failed refresh keeps the saved answer
+            callbacks = self._item_waiting.pop(key, [])
+        for cb in callbacks:
+            try:
+                cb(det)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"api: item detail callback failed: {e}")
 
     def _deliver(self, key: str, c: Character, prof, err, final: bool) -> None:
         with self._pflock:
@@ -601,6 +597,8 @@ class Api:
         with self._pflock:                        # Refresh: item details are asked again too
             for k in [k for k in self._item_details if k[0] == c.key]:
                 del self._item_details[k]
+        self._items_loaded.add(c.key)             # nothing saved to load any more
+        self.store.drop_items(c.key)
         self.store.drop_profile(c.key)
         self.store.drop_details(c.key)
         with self._cache_lock:
@@ -637,16 +635,10 @@ class Api:
             self._recent_info.clear()
         with self._pflock:
             self._profiles.clear()
+            self._item_details.clear()
+        self._items_loaded.clear()
         self._search_cache.clear()
         self.store.clear()
 
-    def save_cache(self) -> None:
-        """Kept for callers: everything is written as it arrives now."""
-
-
 def character_from_dict(d: dict) -> Character:
     return Character(**{k: v for k, v in d.items() if k in Character.__dataclass_fields__})
-
-
-def character_to_dict(c: Character) -> dict:
-    return asdict(c)

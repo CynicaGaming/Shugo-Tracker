@@ -716,7 +716,6 @@ class SearchWindow:
         self.compact = False
         self.row_h, self.portrait_px = CARD_H, PORTRAIT
         self.images = ImageLoader(os.path.join(cache_dir, "images") if cache_dir else None)
-        self._prefetch_job = None
         self._build(version)
         self._paint_me()
         self.root.after(30, self._tick)
@@ -1636,7 +1635,11 @@ class SearchWindow:
                 self._last_frame = now
         finally:
             if not getattr(self, "_closed", False):
-                self.root.after(30, self._tick)
+                try:
+                    hidden = self.root.state() in ("withdrawn", "iconic")
+                except tk.TclError:
+                    hidden = False
+                self.root.after(250 if hidden else 30, self._tick)   # hidden: just keep up with the inbox
 
     def _render(self, shimmer_only: bool = False) -> bool:
         cv = self.canvas
@@ -2718,16 +2721,6 @@ class SearchWindow:
                 problems.append(f"{len(visible)} frames packed in the profile body (expected 1)")
         with open(path, "w", encoding="utf-8") as f:
             f.write("FAIL: " + "; ".join(problems) if problems else "OK")
-
-    def _grab_area(self, path: str, widget, pad: int = 0):
-        try:
-            from PIL import ImageGrab
-            widget.update()
-            x, y = widget.winfo_rootx() - pad, widget.winfo_rooty() - pad
-            ImageGrab.grab(bbox=(max(0, x), max(0, y), x + widget.winfo_width() + 2 * pad,
-                                 y + widget.winfo_height() + 2 * pad)).save(path)
-        except Exception as e:  # noqa: BLE001
-            print(f"screenshot failed: {e}")
 
     def _grab_wide(self, path: str, extra: int = 330):
         """Screenshots only: the window plus what sits just right of it (item tooltips)."""

@@ -1,14 +1,13 @@
 """Settings page (opened with ⚙): window, startup, updates, data."""
 from __future__ import annotations
 
-import os
 import tkinter as tk
 import webbrowser
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from . import desktop
-from .search_ui import (ACCENT, ACCENT_FG, BG, BORDER, FG, FG_DIM, FG_FAINT, GOLD_SOFT, GOLD_TEXT, GREEN, PAD, RED,
+from .search_ui import (ACCENT, ACCENT_FG, BG, BORDER, FG, FG_DIM, FG_FAINT, GREEN, PAD, RED,
                         SURFACE, SURFACE_2, ThinScrollbar)
 from .settings import AUTOCLEAR_CHOICES, OPACITY_MIN, RECENT_CHOICES, clamp_opacity
 
@@ -254,28 +253,6 @@ class SettingsView:
         self._set("always_on_top", on)
         self.app.root.attributes("-topmost", on)
         self.app._paint_pin()
-
-    def _choice(self, parent, options, current, on_pick):
-        """A small segmented control: one of options [(value, label)]."""
-        seg = tk.Frame(parent, bg=SURFACE_2, padx=2, pady=2)
-        seg.pack()
-        labels = {}
-
-        def paint(v):
-            for val, lb in labels.items():
-                on = val == v
-                lb.config(bg=GOLD_SOFT if on else SURFACE_2, fg=GOLD_TEXT if on else FG_DIM,
-                          font=self.app.f_sbold if on else self.app.f_small)
-
-        def pick(v):
-            paint(v)
-            on_pick(v)
-        for val, text in options:
-            lb = tk.Label(seg, text=text, padx=10, pady=2, cursor="hand2")
-            lb.pack(side="left", padx=(0, 1))
-            lb.bind("<Button-1>", lambda e, v=val: pick(v))
-            labels[val] = lb
-        paint(current)
 
     def _update_click(self):
         self.app._update_click()

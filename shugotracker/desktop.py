@@ -1,4 +1,4 @@
-"""Desktop integration for the overlay: global hotkey, single instance, window styling (Windows)."""
+"""Desktop integration (Windows): single instance, window styling, autostart, Alt and mouse state."""
 from __future__ import annotations
 
 import ctypes
@@ -7,98 +7,6 @@ import socket
 import sys
 import threading
 from typing import Callable
-
-# ───── hotkey parsing ─────
-MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, MOD_NOREPEAT = 0x1, 0x2, 0x4, 0x8, 0x4000
-_MODS = {"ctrl": MOD_CONTROL, "control": MOD_CONTROL, "shift": MOD_SHIFT, "alt": MOD_ALT, "win": MOD_WIN}
-_NAMED_KEYS = {
-    **{f"f{i}": 0x6F + i for i in range(1, 25)},
-    "space": 0x20, "tab": 0x09, "home": 0x24, "end": 0x23, "insert": 0x2D, "ins": 0x2D, "delete": 0x2E,
-    "pageup": 0x21, "pagedown": 0x22, "`": 0xC0, "backquote": 0xC0, "pause": 0x13, "scrolllock": 0x91,
-}
-
-
-def parse_hotkey(text: str) -> tuple[int, int] | None:
-    """'ctrl+shift+s' -> (modifiers, virtual key). None if it can't be parsed."""
-    if not text:
-        return None
-    parts = [p.strip().lower() for p in text.replace("-", "+").split("+") if p.strip()]
-    mods, key = 0, None
-    for p in parts:
-        if p in _MODS:
-            mods |= _MODS[p]
-        elif key is None:
-            if len(p) == 1 and p.isalnum():
-                key = ord(p.upper())
-            elif p in _NAMED_KEYS:
-                key = _NAMED_KEYS[p]
-            else:
-                return None
-        else:
-            return None
-    if key is None:
-        return None
-    if mods == 0 and not (0x70 <= key <= 0x87 or key in (0x13, 0x91)):
-        return None  # a bare letter would steal typing from the game
-    return mods, key
-
-
-def hotkey_label(text: str) -> str:
-    """'ctrl+shift+s' -> 'Ctrl+Shift+S'."""
-    out = []
-    for p in text.replace("-", "+").split("+"):
-        p = p.strip()
-        if p:
-            out.append(p.upper() if len(p) == 1 else p[:1].upper() + p[1:].lower())
-    return "+".join(out)
-
-
-class GlobalHotkey:
-    """RegisterHotKey on its own thread; on_press is called from that thread (post to the UI yourself)."""
-
-    WM_HOTKEY = 0x0312
-
-    def __init__(self, text: str, on_press: Callable[[], None]):
-        self.text = text
-        self.on_press = on_press
-        self.ok = False
-        self.error: str | None = None
-        self._thread_id = None
-        self._ready = threading.Event()
-
-    def start(self) -> bool:
-        parsed = parse_hotkey(self.text)
-        if os.name != "nt" or parsed is None:
-            self.error = "unsupported" if os.name != "nt" else f"can't parse hotkey {self.text!r}"
-            return False
-        threading.Thread(target=self._run, args=parsed, name="hotkey", daemon=True).start()
-        self._ready.wait(2)
-        return self.ok
-
-    def _run(self, mods: int, vk: int) -> None:
-        from ctypes import wintypes
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        self._thread_id = kernel32.GetCurrentThreadId()
-        self.ok = bool(user32.RegisterHotKey(None, 1, mods | MOD_NOREPEAT, vk))
-        if not self.ok:
-            self.error = "already used by another program"
-        self._ready.set()
-        if not self.ok:
-            return
-        msg = wintypes.MSG()
-        while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
-            if msg.message == self.WM_HOTKEY:
-                try:
-                    self.on_press()
-                except Exception:  # noqa: BLE001
-                    pass
-        user32.UnregisterHotKey(None, 1)
-
-    def stop(self) -> None:
-        if self._thread_id and os.name == "nt":
-            ctypes.windll.user32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)  # WM_QUIT
-
 
 # ───── single instance ─────
 class SingleInstance:

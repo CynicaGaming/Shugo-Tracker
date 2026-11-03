@@ -4,6 +4,7 @@ One small SQLite file for everything Shugo Tracker caches about characters:
   details   card numbers (CP, GS, legion, level, portrait …) per character        key -> compact JSON
   profiles  full profiles (info + equipment) per character                       key -> zlib-packed JSON
   lookups   name lookups ("who is called X in region R, with class/faction F")  query -> the characters found
+  items     each worn item's full details (stats, stones, sets) per character     key -> zlib-packed JSON
 
 Replaces character_cache.json (rewritten whole on every exit) and one JSON file per profile. Lookups are what
 make Nearby fast: a player you've met before resolves without asking NCSOFT again.
@@ -22,6 +23,9 @@ CREATE TABLE IF NOT EXISTS details (key TEXT PRIMARY KEY, ts REAL NOT NULL, data
 CREATE TABLE IF NOT EXISTS profiles (key TEXT PRIMARY KEY, ts REAL NOT NULL, data BLOB NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS lookups (q TEXT PRIMARY KEY, ts REAL NOT NULL, data TEXT NOT NULL) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS profiles_ts ON profiles (ts);
+CREATE TABLE IF NOT EXISTS items (key TEXT PRIMARY KEY, owner TEXT NOT NULL, ts REAL NOT NULL, data BLOB NOT NULL)
+    WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS items_owner ON items (owner);
 """
 _DUMPS = dict(separators=(",", ":"), ensure_ascii=False)
 
@@ -97,6 +101,24 @@ class Store:
     def drop_profile(self, key: str) -> None:
         self._run("DELETE FROM profiles WHERE key = ?", (key,))
 
+    # ───── worn items (tooltip details) ─────
+    def items_of(self, owner: str) -> dict[str, tuple[float, dict]]:
+        """Every saved item of one character, in one query: key -> (ts, raw response)."""
+        out = {}
+        for key, ts, data in self._run("SELECT key, ts, data FROM items WHERE owner = ?", (owner,)):
+            try:
+                out[key] = (ts, json.loads(zlib.decompress(data)))
+            except (zlib.error, ValueError):
+                pass
+        return out
+
+    def put_item(self, key: str, owner: str, raw: dict, ts: float | None = None) -> None:
+        blob = zlib.compress(json.dumps(raw, **_DUMPS).encode(), 6)
+        self._run("INSERT OR REPLACE INTO items VALUES (?, ?, ?, ?)", (key, owner, ts or time.time(), blob))
+
+    def drop_items(self, owner: str) -> None:
+        self._run("DELETE FROM items WHERE owner = ?", (owner,))
+
     # ───── name lookups ─────
     @staticmethod
     def lookup_key(region: str, name: str, pc_ids=None, race=None) -> str:
@@ -125,9 +147,11 @@ class Store:
         self._run("DELETE FROM lookups WHERE ts < ?", (now - lookups_keep,))
         self._run("DELETE FROM profiles WHERE ts < ? OR key NOT IN "
                   "(SELECT key FROM profiles ORDER BY ts DESC LIMIT ?)", (now - profiles_keep, profiles_max))
+        # items go with their profile: kept as long as it is
+        self._run("DELETE FROM items WHERE ts < ? OR owner NOT IN (SELECT key FROM profiles)", (now - profiles_keep,))
 
     def clear(self) -> None:
-        for table in ("details", "profiles", "lookups"):
+        for table in ("details", "profiles", "lookups", "items"):
             self._run(f"DELETE FROM {table}")
         self._run("VACUUM")
 
@@ -137,7 +161,8 @@ class Store:
         return sum(os.path.getsize(self.path + s) for s in ("", "-wal") if os.path.exists(self.path + s))
 
     def counts(self) -> dict[str, int]:
-        return {t: (self._run(f"SELECT COUNT(*) FROM {t}") or [(0,)])[0][0] for t in ("details", "profiles", "lookups")}
+        return {t: (self._run(f"SELECT COUNT(*) FROM {t}") or [(0,)])[0][0]
+                for t in ("details", "profiles", "lookups", "items")}
 
     def close(self) -> None:
         with self._lock:

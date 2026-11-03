@@ -27,26 +27,6 @@ def name_of(server: int) -> str:
     return SERVER_NAMES.get(server, str(server))
 
 
-def re_slug(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "", name.lower())
-
-
-def slug_of(server: int) -> str:
-    return re_slug(name_of(server))
-
-
-def shugo_server_path(server: int, kr_tw_region: str = "kr") -> str | None:
-    """'global/nae-siel' for Global ids, 'kr/kochi' for region-0 (KR/TW) ids."""
-    if server not in SERVER_NAMES:
-        return None
-    reg = region_of(server)
-    if reg in REGION_PREFIX:
-        return f"global/{REGION_PREFIX[reg]}-{slug_of(server)}"
-    if reg == 0:
-        return f"{kr_tw_region}/{slug_of(server)}"
-    return None
-
-
 def mirror_server(server: int) -> int | None:
     """The opposite-faction server with the same region and number (Siel 1101 <-> Israphel 2101)."""
     r = race_of(server)

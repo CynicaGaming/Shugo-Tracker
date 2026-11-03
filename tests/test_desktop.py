@@ -5,22 +5,6 @@ import unittest
 from shugotracker import desktop as d
 
 
-class HotkeyParseTests(unittest.TestCase):
-    def test_parse(self):
-        self.assertEqual(d.parse_hotkey("ctrl+shift+s"), (d.MOD_CONTROL | d.MOD_SHIFT, ord("S")))
-        self.assertEqual(d.parse_hotkey("Alt + F9"), (d.MOD_ALT, 0x78))
-        self.assertEqual(d.parse_hotkey("ctrl-`"), (d.MOD_CONTROL, 0xC0))
-        self.assertEqual(d.parse_hotkey("F10"), (0, 0x79))          # a bare F-key is fine
-
-    def test_rejects(self):
-        for bad in ("", "s", "ctrl", "ctrl+shift+s+d", "ctrl+banana"):
-            self.assertIsNone(d.parse_hotkey(bad), bad)              # a bare letter would steal game input
-
-    def test_label(self):
-        self.assertEqual(d.hotkey_label("ctrl+shift+s"), "Ctrl+Shift+S")
-        self.assertEqual(d.hotkey_label("alt+f9"), "Alt+F9")
-
-
 class SingleInstanceTests(unittest.TestCase):
     def test_second_launch_shows_first(self):
         port = 47999

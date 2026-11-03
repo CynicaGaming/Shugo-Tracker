@@ -486,11 +486,6 @@ class NearbyService:
             g = self.tracker.groups()
             return {k: len(v) for k, v in g.items()}
 
-    def is_nearby(self, c: Character) -> bool:
-        with self._lock:
-            hit = self._chars.get(c.name)
-            return hit is not None and hit.key == c.key
-
     # ───── troubleshooting recording ─────
     def start_recording(self, seconds: float = 60.0) -> str | None:
         """Save the next `seconds` of decoded-ready game traffic to a file (for fixing the decoder)."""

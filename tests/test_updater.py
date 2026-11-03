@@ -87,7 +87,7 @@ class UpdateFlowTests(unittest.TestCase):
 
     def test_download_verify_and_swap(self):
         u = self.make(release("v1.1.0", b"NEW-EXE"))
-        u.check_and_download()
+        u.check(); u.download()
         self.assertEqual(u.state, "ready")
         self.assertIn("v1.1.0", u.banner())
         with mock.patch.object(up.subprocess, "Popen") as popen:
@@ -100,7 +100,7 @@ class UpdateFlowTests(unittest.TestCase):
 
     def test_bad_checksum_is_discarded(self):
         u = self.make(release("v1.1.0", b"NEW-EXE", sha="0" * 64))
-        u.check_and_download()
+        u.check(); u.download()
         self.assertEqual(u.state, "error")
         self.assertFalse(os.path.exists(self.exe + ".new"))
         self.assertFalse(u.apply(restart=False))
@@ -108,13 +108,13 @@ class UpdateFlowTests(unittest.TestCase):
 
     def test_up_to_date(self):
         u = self.make(release("v1.0.0", b"X"))
-        u.check_and_download()
+        u.check(); u.download()
         self.assertEqual(u.state, "uptodate")
         self.assertIsNone(u.banner())
 
     def test_no_release_yet(self):
         u = self.make({"https://api.github.com/repos/" + up.DEFAULT_REPO + "/releases/latest": FakeResp(404)})
-        u.check_and_download()
+        u.check(); u.download()
         self.assertEqual(u.state, "uptodate")
 
 

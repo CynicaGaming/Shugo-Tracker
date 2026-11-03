@@ -65,12 +65,6 @@ class Stat:
     value: int
     effects: list[str] = field(default_factory=list)
 
-    @property
-    def per_point(self) -> list[str]:
-        """What one point of this stat adds, e.g. ["Attack increase +0.1%"] (empty for unknown stats)."""
-        return [f"{label} {sign}{STAT_PER_POINT:g}%" for label, sign in STAT_BONUSES.get(self.type, ())]
-
-
 # Every point of a stat adds 0.1% to each of its bonuses (checked against ~50 live characters; the API only
 # lists bonuses for stats that have points, so this lets empty stats show what they would give).
 STAT_PER_POINT = 0.1

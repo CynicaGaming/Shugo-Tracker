@@ -20,7 +20,7 @@ from __future__ import annotations
 import struct
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Callable, Iterator
+from typing import Callable
 
 from .lz4block import decompress as lz4_decompress
 
@@ -599,9 +599,3 @@ def _varint_ending_at(data: bytes, end: int, min_start: int, lo: int, hi: int) -
         if fallback is None:
             fallback = v
     return fallback
-
-
-def iter_hex(data: bytes, width: int = 16) -> Iterator[str]:
-    for i in range(0, len(data), width):
-        chunk = data[i:i + width]
-        yield f"{i:06x}  " + " ".join(f"{x:02x}" for x in chunk)

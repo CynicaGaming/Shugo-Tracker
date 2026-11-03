@@ -62,20 +62,3 @@ def decompress_py(src: bytes, size: int) -> bytes:
         if len(out) > size:
             raise ValueError("output overrun")
     return bytes(out)
-
-
-def compress_literals(data: bytes) -> bytes:
-    """A valid (uncompressed) LZ4 block holding `data` as literals - used by tests."""
-    n = len(data)
-    out = bytearray()
-    if n < 15:
-        out.append(n << 4)
-    else:
-        out.append(0xF0)
-        rest = n - 15
-        while rest >= 255:
-            out.append(255)
-            rest -= 255
-        out.append(rest)
-    out += data
-    return bytes(out)

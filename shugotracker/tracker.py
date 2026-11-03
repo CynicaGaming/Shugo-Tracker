@@ -87,7 +87,6 @@ class Tracker:
         self.forget_after_s = forget_after_s
         self.extra_enemy_servers = extra_enemy_servers or []
         self.log = log or (lambda s: None)
-        self.on_retry: Callable[[str], None] | None = None
         self.map_id: int | None = None
         self.version = 0  # bumps whenever something visible changes
 
@@ -264,15 +263,6 @@ class Tracker:
         if result.class_name and not p.class_name:
             p.class_name = result.class_name
         self.version += 1
-
-    def retry(self, name: str) -> None:
-        p = self.players.get(name)
-        if p:
-            if self.on_retry:
-                self.on_retry(name)
-            p.lookup = Lookup()
-            p.tried_servers.clear()
-            self._consider(p, combat=bool(p.last_combat))
 
     # ───── housekeeping / views ─────
     def expire(self, now: float | None = None) -> None:

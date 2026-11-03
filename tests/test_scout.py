@@ -4,13 +4,29 @@ import struct
 import unittest
 
 from shugotracker import servers as sv
-from shugotracker.lz4block import compress_literals, decompress_py
+from shugotracker.lz4block import decompress_py
 from shugotracker.protocol import (EntityGone, Hit, MapLoaded, OwnerRecord, PlayerSeen, SelfSeen, StreamDecoder,
                                  encode_varint, read_varint)
 from shugotracker.reassembly import TcpStream
-from shugotracker.shugo import parse_profile, profile_url
 from shugotracker.tracker import (ALLY, ENEMY, PRIO_ALLY, PRIO_COMBAT, PRIO_ENEMY, PRIO_UNKNOWN, UNKNOWN,
                                Lookup, Tracker)
+
+
+def compress_literals(data: bytes) -> bytes:
+    """A valid (uncompressed) LZ4 block holding `data` as literals - for building test streams."""
+    n = len(data)
+    out = bytearray()
+    if n < 15:
+        out.append(n << 4)
+    else:
+        out.append(0xF0)
+        rest = n - 15
+        while rest >= 255:
+            out.append(255)
+            rest -= 255
+        out.append(rest)
+    out += data
+    return bytes(out)
 
 
 def frame(body: bytes) -> bytes:
@@ -135,45 +151,9 @@ class ProtocolTests(unittest.TestCase):
 
 class ServerTests(unittest.TestCase):
     def test_paths(self):
-        self.assertEqual(sv.shugo_server_path(1101), "global/nae-siel")
-        self.assertEqual(sv.shugo_server_path(2501), "global/as-israphel")
-        self.assertEqual(sv.shugo_server_path(2311), "global/eu-ludra")
-        self.assertEqual(sv.shugo_server_path(1404), "global/la-kaisinel")
         self.assertEqual(sv.mirror_server(1101), 2101)
         self.assertEqual(sv.parse_server("nae-siel"), 1101)
         self.assertEqual(sv.parse_server("EU Ludra"), 2311)
-        self.assertEqual(profile_url("Bloody丶Mia", 1101),
-                         "https://shugo.gg/character/global/nae-siel/Bloody%E4%B8%B6Mia")
-
-
-PAGE = """<html><head><meta name="description" content="Luna: AION 2 Level 45 Elyos Templar (2,465 GS) of the legion Power on Siel (Global).">
-</head><body><h1>Luna - AION 2 character profile</h1>
-<p>Luna is an AION 2 character on Siel (Global, North America - East). Level 45 · Templar · Elyos · Legion: Power ·
-Gear score 2,465 · Combat power 113,407.</p></body></html>"""
-
-
-class ShugoTests(unittest.TestCase):
-    def test_parse(self):
-        d = parse_profile(PAGE)
-        self.assertEqual(d["gear_score"], 2465)
-        self.assertEqual(d["combat_power"], 113407)
-        self.assertEqual(d["level"], 45)
-        self.assertEqual(d["class_name"], "Templar")
-        self.assertEqual(d["faction"], sv.ELYOS)
-        self.assertEqual(d["legion"], "Power")
-
-    def test_parse_asmodian(self):
-        d = parse_profile(PAGE.replace("Elyos", "Asmodians"))
-        self.assertEqual(d["faction"], sv.ASMODIAN)
-
-    def test_parse_title_and_leaderboard(self):
-        page = ("<p>Level 45 · Ranger · Asmodians · Legion: X · Gear score 2,826 · Title: Treading on White Wings · "
-                "Combat power 170,729.</p><h2>Top Combat Power on Israphel</h2><td>Combat power 999,999</td>")
-        d = parse_profile(page)
-        self.assertEqual((d["gear_score"], d["combat_power"]), (2826, 170729))
-
-    def test_parse_missing(self):
-        self.assertIsNone(parse_profile("<html>Character not found</html>"))
 
 
 class TrackerTests(unittest.TestCase):

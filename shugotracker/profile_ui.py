@@ -1,6 +1,7 @@
 """In-app character profile: identity, a stat strip, and tabs (gear table, skills, Daevanion, stats, …)."""
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import asdict
 import tkinter as tk
@@ -50,7 +51,13 @@ class ProfileView:
             self.tab = "Gear"
         self._img_slots: list[tuple[tk.Label, str, int, bool]] = []
         self._blanks: dict[int, tk.PhotoImage] = {}
-        self._skel_items: list[tuple[tk.Canvas, int, int]] = []
+        # the whole profile is loaded before it's shown (info, gear and every item's details), so tabs and
+        # tooltips never wait; a cached one shows at once
+        self._ready = False
+        self._opened = time.monotonic()
+        self._batch = False
+        self._details: dict[tuple, object] = {}
+        self._ring: tuple | None = None
         # compare: your character's profile (for holding Alt over an item), and whether Alt is held
         self._mine: Profile | None = None
         self._compare = False
@@ -160,12 +167,75 @@ class ProfileView:
         self.frame.destroy()
 
     # ───── state ─────
-    GEAR_TABS = {"Gear", "Skills", "Cosmetics"}   # need the equipment call
-
     @property
     def animating(self) -> bool:
+        return not self.error and (self.loading or not self._ready)
+
+    @staticmethod
+    def _worn(p: Profile) -> list[Item]:
+        """The items with a tooltip: everything worn, Arcana included."""
+        return [it for s in GEAR_MAIN + GEAR_ACCESSORIES + GEAR_ARCANA
+                if (it := p.gear.get(s)) is not None and it.slot_pos and it.item_id]
+
+    def _progress(self) -> tuple[int, int] | None:
+        """(done, total) steps while loading; None until the gear list is known."""
         p = self.profile
-        return self.loading or bool(p and p.equipment_pending and self.tab in self.GEAR_TABS)
+        if p is None or p.equipment_pending:
+            return None
+        items = self._worn(p)
+        done = sum(1 for it in items if self._details.get(self._dkey(it)) is not None)
+        return done + 2, len(items) + 2                  # + info and equipment, already in
+
+    def _check_ready(self):
+        """Show the profile once everything it needs is here."""
+        if self._ready or self._batch or self.loading:
+            return
+        prog = self._progress()
+        p = self.profile
+        if p is not None and (p.equipment_error or (prog is not None and prog[0] >= prog[1])):
+            self._ready = True
+            if getattr(self.app, "_screenshot", False):          # CI: how long a full load took
+                print(f"profile ready: {p.name}, {len(self._worn(p))} items, "
+                      f"{1000 * (time.monotonic() - self._opened):.0f} ms", flush=True)
+            self.render()
+            self._prebuild()
+
+    def _want_all(self, p: Profile):
+        """Ask for every worn item's details at once (saved ones answer immediately)."""
+        self._batch = True
+        try:
+            for it in self._worn(p):
+                self._want_detail(it)
+        finally:
+            self._batch = False
+        self._check_ready()
+
+    def _prebuild(self):
+        """Build the tabs not shown yet, one per idle moment, so switching to them is instant."""
+        p = self.profile
+        if p is None or not self._ready:
+            return
+        todo = [t for t in self.TABS if t not in self._frames]
+        if not todo:
+            if getattr(self.app, "_screenshot", False):
+                print(f"profile tabs prebuilt: {1000 * (time.monotonic() - self._opened):.0f} ms", flush=True)
+            return
+
+        def build(name=todo[0], p=p):
+            try:
+                if self.profile is not p or not self._ready or not self.frame.winfo_exists():
+                    return
+            except tk.TclError:
+                return
+            if name not in self._frames:
+                frame = self._frames[name] = tk.Frame(self.body_root, bg=BG)
+                shown, self.body = self.body, frame
+                try:
+                    getattr(self, f"_tab_{name.lower()}")(p)
+                finally:
+                    self.body = shown
+            self._prebuild()
+        self.frame.after(15, build)
 
     @staticmethod
     def _fingerprint(prof: Profile | None):
@@ -186,10 +256,21 @@ class ProfileView:
         self.profile, self.error = prof, err
         self._drop_frames()
         self._paint_hero()
+        if prof is not None and not prof.equipment_pending:
+            if self._ready:                               # a refreshed copy: redraw, then rebuild the rest
+                self.render(keep_scroll=True)
+                self._want_all(prof)
+                self._prebuild()
+                return
+            self._want_all(prof)                          # saved items answer at once: shown right away
+            if not self._ready:
+                self.render()                             # …otherwise the ring, until they're in
+            return
         self.render(keep_scroll=True)
 
     def reload(self):
         self._details = {}
+        self._ready = False
         self.app.api.forget(self.char)
         self.loading, self.profile, self.error = True, None, None
         self._drop_frames()
@@ -280,10 +361,10 @@ class ProfileView:
         if self._transient is not None:
             self._transient.destroy()
             self._transient = None
-        self._skel_items = []
+        self._ring = None
 
         p = self.profile
-        if self.loading or (p and p.equipment_pending and self.tab in self.GEAR_TABS):
+        if not self.error and (self.loading or not self._ready):
             self.body = self._transient = tk.Frame(self.body_root, bg=BG)
             self.body.pack(fill="x")
             self._skeleton()
@@ -311,27 +392,39 @@ class ProfileView:
         self.canvas.yview_moveto(y)
 
     def _skeleton(self):
-        """A spinning ring while the profile (or its gear) loads."""
+        """A progress ring while the profile loads: it fills as the gear's details come in."""
         cv = tk.Canvas(self.body, bg=BG, height=220, highlightthickness=0)
         cv.pack(fill="x")
-        r, w = 18, 4
+        r, w = 22, 4
         ring = cv.create_oval(0, 0, 0, 0, outline=SURFACE_2, width=w)
         arc = cv.create_arc(0, 0, 0, 0, start=90, extent=100, style="arc", outline=ACCENT, width=w)
+        text = cv.create_text(0, 0, text="", fill=FG_DIM, font=self.app.f_small)
 
         def place(e):
             cx, cy = e.width / 2, 90
             for item in (ring, arc):
                 cv.coords(item, cx - r, cy - r, cx + r, cy + r)
+            cv.coords(text, cx, cy + r + 22)
         cv.bind("<Configure>", place)
-        self._skel_items.append((cv, arc, 0))
+        self._ring = (cv, arc, text)
+        self.shimmer()
 
     def shimmer(self):
-        start = -(time.monotonic() * 360) % 360          # one turn per second
-        for cv, arc, _tone in self._skel_items:
-            try:
-                cv.itemconfigure(arc, start=start)
-            except tk.TclError:
-                pass
+        ring = self._ring
+        if ring is None:
+            return
+        cv, arc, text = ring
+        prog = self._progress() if not self.loading else None
+        try:
+            if prog is None:                                  # not knowing how much is left: spin
+                cv.itemconfigure(arc, start=-(time.monotonic() * 360) % 360, extent=100)
+                cv.itemconfigure(text, text="Loading profile…")
+            else:
+                done, total = prog
+                cv.itemconfigure(arc, start=90, extent=-max(6.0, 359.9 * done / total))
+                cv.itemconfigure(text, text=f"Loading gear  {done - 2} / {total - 2}")
+        except tk.TclError:
+            self._ring = None
 
     # helpers
     def _section(self, parent, title: str, extra: str = ""):
@@ -436,7 +529,6 @@ class ProfileView:
             tk.Label(t, text=text, bg=BG, fg=FG_DIM, font=f.f_tiny, anchor=anchor).grid(
                 row=0, column=i, sticky="ew", padx=(8 if i == 0 else 0, 8), pady=(0, 4))
         tk.Frame(t, bg=LINE, height=1).grid(row=1, column=0, columnspan=4, sticky="ew", pady=(0, 2))
-        self._details: dict[str, object] = getattr(self, "_details", {})
         for r, (label, it) in enumerate(rows, start=2):
             slot_lb = tk.Label(t, text=label, bg=BG, fg=FG_DIM, font=f.f_small, anchor="w")
             slot_lb.grid(row=r, column=0, sticky="ew", padx=(8, 8), pady=3)
@@ -460,7 +552,6 @@ class ProfileView:
                 self._item_hover([slot_lb, cell, icon, *icon.winfo_children(), name, grade, plus], it)
                 self._row_anchor = getattr(self, "_row_anchor", {})
                 self._row_anchor[it.slot] = cell
-                self._want_detail(it)               # fetched in the background: ready by the time you hover
 
     # ───── item details (mana stones, theostone, stats, Arcana linked skills / set) ─────
     @staticmethod
@@ -474,7 +565,10 @@ class ProfileView:
         self._details[key] = None                            # asked for
 
         def done(det, key=key):
-            self.app.inbox.put(("item_detail", self, key, det))
+            if threading.current_thread() is threading.main_thread():
+                self.item_detail_ready(key, det)            # saved: answered right here
+            else:
+                self.app.inbox.put(("item_detail", self, key, det))
         self.app.api.fetch_item_detail(self.char, it, done)
 
     def item_detail_ready(self, key: tuple, det):
@@ -483,6 +577,9 @@ class ProfileView:
             self._details[key] = det
         elif self._details.get(key) is None:
             self._details[key] = False                       # failed: the tooltip says so
+        if not self._ready:
+            self._check_ready()
+            return
         hover = getattr(self, "_hover_item", None)
         if hover is None or not hover[1].winfo_exists():
             return
@@ -817,6 +914,9 @@ class ProfileView:
         if prof is None and self._mine is not None:
             return
         self._mine = prof
+        if prof is not None and not prof.equipment_pending:
+            for it in self._worn(prof):                       # your side of Alt-compare, ready before you ask
+                self._want_my_detail(it)
         hover = getattr(self, "_hover_item", None)
         if self._compare and hover is not None and hover[1].winfo_exists():
             self._show_item_tip(*hover)
@@ -831,7 +931,10 @@ class ProfileView:
         self._details[key] = None
 
         def done(det, key=key):
-            self.app.inbox.put(("item_detail", self, key, det))
+            if threading.current_thread() is threading.main_thread():
+                self.item_detail_ready(key, det)
+            else:
+                self.app.inbox.put(("item_detail", self, key, det))
         self.app.api.fetch_item_detail(self.app.my_char, it, done)
 
     def _alt_key(self, down: bool):
