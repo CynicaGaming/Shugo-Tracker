@@ -776,6 +776,7 @@ class ProfileView:
         y = max(top + 8, min(anchor.winfo_rooty() - 20, bottom - h - 8))
         tip.geometry(f"+{int(x)}+{int(y)}")
         self._tip = tip
+        self._guard_tip()
 
     def _place_pair(self, tip, yours, anchor):
         """Hovered tooltip next to the window, yours beside it on the outside (flipped when there's no room)."""
@@ -797,6 +798,7 @@ class ProfileView:
             y = max(top + 8, min(anchor.winfo_rooty() - 20, bottom - t.winfo_reqheight() - 8))
             t.geometry(f"+{int(tx)}+{int(y)}")
         self._tip, self._tip2 = tip, yours
+        self._guard_tip()
 
     # ───── compare: your own gear, for holding Alt over an item ─────
     def _can_compare(self) -> bool:
@@ -1114,6 +1116,7 @@ class ProfileView:
         x = max(left + 8, min(x, right - tip.winfo_reqwidth() - 8))
         tip.geometry(f"+{x}+{y}")
         self._tip = tip
+        self._guard_tip()
 
     SKILL_NUM = "#f2b84b"        # numbers that grow with skill level (gold, like the game's skill window)
 
@@ -1132,6 +1135,32 @@ class ProfileView:
         t.insert("end", text[pos:])
         t.configure(height=wrapped_lines(text, font.measure, chars * font.measure("0") - 4), state="disabled")
         return t
+
+    def _guard_tip(self):
+        """A safety net for tooltips: gone once the pointer is off the tracker or the window is hidden, even if
+        the hover-out event never came (a fast move out, a click into the game)."""
+        if getattr(self, "_tip_guard", None) is not None:
+            return
+        root = self.app.root
+
+        def tick():
+            self._tip_guard = None
+            if getattr(self, "_tip", None) is None:
+                return
+            try:
+                x, y = root.winfo_pointerxy()
+                over = root.winfo_rootx() <= x < root.winfo_rootx() + root.winfo_width() and \
+                    root.winfo_rooty() <= y < root.winfo_rooty() + root.winfo_height()
+                shown = root.state() not in ("withdrawn", "iconic")
+            except tk.TclError:
+                return
+            if not (over and shown):
+                self._hover_item = None
+                self._stop_alt_poll()
+                self._hide_tip()
+                return
+            self._tip_guard = root.after(150, tick)
+        self._tip_guard = root.after(150, tick)
 
     def _hide_tip(self):
         for attr in ("_tip", "_tip2"):

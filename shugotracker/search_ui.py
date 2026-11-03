@@ -156,11 +156,14 @@ class StyledMenu:
     tk_popup / post / unpost. Closes on a click elsewhere, Esc, or when the window loses focus.
     """
 
+    _open: list["StyledMenu"] = []                 # menus open right now (top level ones; submenus ride along)
+    _bound: set[str] = set()                       # roots with the shared click-anywhere binding
+
     def __init__(self, root: tk.Tk, font):
         self.root, self.font = root, font
         self.items: list[dict | None] = []          # None = separator
         self.win: tk.Toplevel | None = None
-        self._click_bind = None
+        self._watch_job = None
         self.closed_at = 0.0                        # when it last closed (see just_closed)
         self.owner: StyledMenu | None = None        # set while open as a submenu of another menu
         self._sub: StyledMenu | None = None         # the submenu open beside this one
@@ -200,6 +203,9 @@ class StyledMenu:
              flip_x: int | None = None):
         """Open at (x, y). As a submenu (owner set), it opens at flip_x - width instead when x runs off screen."""
         self.unpost()
+        if owner is None:
+            for other in list(StyledMenu._open):          # one menu at a time
+                other.unpost()
         self.owner = owner
         self._at = (x, y, right, owner, flip_x)          # for repost
         win = self.win = tk.Toplevel(self.root)
@@ -288,8 +294,13 @@ class StyledMenu:
         win.bind("<Escape>", lambda e: self.unpost())
         win.bind("<FocusOut>", lambda e: self.root.after(50, self._maybe_close))
         win.focus_force()
-        # a click anywhere else in the app closes it (bound after this click has finished dispatching)
-        self.root.after(1, self._watch_clicks)
+        StyledMenu._open.append(self)
+        # a click anywhere else closes it: in the app through one shared binding (bound after this click has
+        # finished dispatching), outside it (the game, the desktop) by watching the mouse buttons
+        self.root.after(1, self._bind_clicks)
+        from .desktop import mouse_down
+        self._was_down = bool(mouse_down())               # the click that opened it doesn't count
+        self._watch_job = self.root.after(40, self._watch_mouse)
 
     def demo_open_sub(self):
         """Screenshots only: open the first submenu as if hovered."""
@@ -331,13 +342,53 @@ class StyledMenu:
                 return True
         return False
 
-    def _watch_clicks(self):
-        if self.win is not None and not self._click_bind:
-            self._click_bind = self.root.bind_all("<ButtonPress>", self._outside, add="+")
+    def _bind_clicks(self):
+        key = str(self.root)
+        if key not in StyledMenu._bound:                  # once, never removed: menus can't unbind each other
+            StyledMenu._bound.add(key)
+            self.root.bind_all("<ButtonPress>", StyledMenu._click_anywhere, add="+")
 
-    def _outside(self, e):
-        if self.win is not None and not self._inside(str(e.widget)):
-            self.unpost()
+    @staticmethod
+    def _click_anywhere(e):
+        for m in list(StyledMenu._open):
+            if m.win is not None and not m._inside(str(e.widget)):
+                m.unpost()
+
+    def _over(self, x: int, y: int) -> bool:
+        """Is the screen point over this menu or its open submenu?"""
+        for m in (self, self._sub):
+            w = m.win if m is not None else None
+            if w is None:
+                continue
+            try:
+                if w.winfo_rootx() <= x < w.winfo_rootx() + w.winfo_width() and \
+                        w.winfo_rooty() <= y < w.winfo_rooty() + w.winfo_height():
+                    return True
+            except tk.TclError:
+                pass
+        return False
+
+    def _watch_mouse(self):
+        """While open: a button pressed anywhere outside the menu closes it, even over another app, where Tk
+        sees nothing. So does the app being hidden or minimised."""
+        self._watch_job = None
+        if self.win is None:
+            return
+        from .desktop import mouse_down
+        try:
+            if self.root.state() in ("withdrawn", "iconic"):
+                self.unpost()
+                return
+            down = mouse_down()
+            if down is None:                              # can't ask (not Windows): Tk's events do the work
+                return
+            if down and not self._was_down and not self._over(*self.root.winfo_pointerxy()):
+                self.unpost()
+                return
+            self._was_down = down
+        except tk.TclError:
+            return
+        self._watch_job = self.root.after(40, self._watch_mouse)
 
     def _maybe_close(self):
         if self.win is not None and self.root.focus_get() is None:
@@ -352,12 +403,14 @@ class StyledMenu:
 
     def unpost(self):
         self._close_sub()
-        if self._click_bind:
+        if self in StyledMenu._open:
+            StyledMenu._open.remove(self)
+        if self._watch_job is not None:
             try:
-                self.root.unbind_all("<ButtonPress>")
+                self.root.after_cancel(self._watch_job)
             except tk.TclError:
                 pass
-            self._click_bind = None
+            self._watch_job = None
         if self.win is not None:
             try:
                 self.win.destroy()

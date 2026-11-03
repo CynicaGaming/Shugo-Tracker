@@ -465,3 +465,15 @@ def alt_down() -> bool | None:
         return bool(ctypes.windll.user32.GetAsyncKeyState(0x12) & 0x8000)   # VK_MENU
     except Exception:  # noqa: BLE001
         return None
+
+
+def mouse_down() -> bool | None:
+    """Whether any mouse button is held right now, wherever the pointer is (the game, the desktop, another app).
+    None where we can't ask the system (not Windows)."""
+    if sys.platform != "win32":
+        return None
+    try:
+        state = ctypes.windll.user32.GetAsyncKeyState
+        return any(state(vk) & 0x8000 for vk in (0x01, 0x02, 0x04))   # left, right, middle
+    except Exception:  # noqa: BLE001
+        return None
