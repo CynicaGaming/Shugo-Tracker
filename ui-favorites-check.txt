@@ -1,0 +1,2 @@
+first: added | D:\a\Shugo-Tracker\Shugo-Tracker\dist\data
+second: loaded 1 | D:\a\Shugo-Tracker\Shugo-Tracker\moved\data

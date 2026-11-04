@@ -1,0 +1,10 @@
+02:22:45 Shugo Tracker v0.0.0-dev (demo data)
+02:22:45 app folder: D:\a\Shugo-Tracker\Shugo-Tracker  �  0 favorites
+real right-click on a name: menu open
+real click on your name: menu open
+switch submenu: 0 ms, 0 characters
+outside click at 890,700
+outside click: menu closed
+profile ready: Luna, 27 items, 5078 ms
+profile tabs prebuilt: 6031 ms
+02:23:17 nearby: region nae (from your name)

@@ -1,0 +1,3 @@
+02:25:57 Shugo Tracker v0.0.1
+02:25:57 app folder: D:\a\Shugo-Tracker\Shugo-Tracker\moved  ·  1 favorites
+02:26:03 update: v1.45.0 available (running v0.0.1)

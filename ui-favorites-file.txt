@@ -1,0 +1,14 @@
+[
+ {
+  "char_id": "nJOC5G0srR3cLYkKRj4zD1ndQuh9E--a54YyxcP3Mn0=",
+  "name": "LUNA",
+  "race": 1,
+  "pc_id": 30,
+  "level": 45,
+  "server_id": 1501,
+  "server_name": "Siel",
+  "region": "as",
+  "portrait": "https://profileimg.plaync.com/game_profile_images/aion2global/images?gameServerKey=1501&charKey=422493940042964354",
+  "legion": "1"
+ }
+]

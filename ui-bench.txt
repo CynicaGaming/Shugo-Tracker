@@ -1,0 +1,9 @@
+  cold (nothing cached): 0/10 cards cached before asking
+  cards: ['ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok']
+cold (nothing cached): first results 0.95s, all regions 1.00s | 10 cards' GS/CP 3.20s | profile first paint 0.01s, complete 0.62s | 25 items' details 4.55s
+  warm (new app start, cached): 3/10 cards cached before asking
+  cards: ['ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok']
+warm (new app start, cached): first results 0.93s, all regions 1.14s | 10 cards' GS/CP 1.33s | profile first paint 0.00s, complete 0.00s | 25 items' details 0.00s
+search size 10: nae 0.85s, naw 0.41s, eu 0.41s, la 0.57s, as 0.49s
+search size 30: nae 0.41s, naw 0.40s, eu 0.43s, la 0.41s, as 0.45s
+search size 50: nae 0.42s, naw 0.41s, eu 0.42s, la 0.42s, as 0.42s
