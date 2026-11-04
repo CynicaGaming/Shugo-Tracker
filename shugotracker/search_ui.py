@@ -296,9 +296,12 @@ class StyledMenu:
         win.bind("<FocusOut>", lambda e: self.root.after(50, self._maybe_close))
         win.focus_force()
         StyledMenu._open.append(self)
-        # a click anywhere else closes it: in the app through one shared binding (bound after this click has
-        # finished dispatching), outside it (the game, the desktop) by watching the mouse buttons
-        self.root.after(1, self._bind_clicks)
+        # a click anywhere else closes it: in the app through one shared binding, outside it (the game, the
+        # desktop) by watching the mouse buttons. Not the click that opened it: that one is still being
+        # handled (the shared binding runs after the widget's own), so the menu only listens from the next one.
+        self._armed = False
+        self._bind_clicks()
+        self.root.after(1, self._arm)
         from .desktop import mouse_down
         self._was_down = bool(mouse_down())               # the click that opened it doesn't count
         self._watch_job = self.root.after(40, self._watch_mouse)
@@ -349,10 +352,13 @@ class StyledMenu:
             StyledMenu._bound.add(key)
             self.root.bind_all("<ButtonPress>", StyledMenu._click_anywhere, add="+")
 
+    def _arm(self):
+        self._armed = self.win is not None
+
     @staticmethod
     def _click_anywhere(e):
         for m in list(StyledMenu._open):
-            if m.win is not None and not m._inside(str(e.widget)):
+            if m.win is not None and getattr(m, "_armed", False) and not m._inside(str(e.widget)):
                 m.unpost()
 
     def _over(self, x: int, y: int) -> bool:
@@ -2595,6 +2601,16 @@ class SearchWindow:
             (500, self._update_click),
             (900, lambda: self._grab(f"{base}-loading.png")),
             (7000, lambda: self._grab(f"{base}.png")),
+            # real clicks open menus (and the click that opens one doesn't close it again)
+            (7020, lambda: self._demo_real_click(self.canvas, 80, self.row_h // 2 + 2, right=True)),
+            (7100, lambda: print(f"real right-click on a name: menu {'open' if self.menu.win else 'NOT open'}",
+                                 flush=True)),
+            (7110, lambda: self.menu.unpost()),
+            (7120, lambda: self._demo_real_click(self.me_btn, self.me_btn.winfo_width() // 2,
+                                                 self.me_btn.winfo_height() // 2)),
+            (7180, lambda: print(f"real click on your name: menu {'open' if self.me_menu.win else 'NOT open'}",
+                                 flush=True)),
+            (7190, lambda: self.me_menu.unpost()),
             (7200, lambda: self._view and self.toggle_favorite(self._view[0])),
             (7250, lambda: len(self._view) > 2 and self.toggle_favorite(self._view[2])),   # 2 to show the grips
             (7270, lambda: len(self._view) > 1 and self.set_my_character(       # --showcase: the real one is you
@@ -2736,6 +2752,17 @@ class SearchWindow:
                     path[:-4] + "-only.png")
         except Exception as e:  # noqa: BLE001
             print(f"screenshot failed: {e}")
+
+    def _demo_real_click(self, widget, dx: int, dy: int, right: bool = False):
+        """Screenshots only: a real mouse click on a widget (Windows), as a person would."""
+        if sys.platform != "win32":
+            return
+        import ctypes
+        u = ctypes.windll.user32
+        u.SetCursorPos(int(widget.winfo_rootx() + dx), int(widget.winfo_rooty() + dy))
+        down, up = (0x0008, 0x0010) if right else (0x0002, 0x0004)
+        u.mouse_event(down, 0, 0, 0, 0)
+        u.mouse_event(up, 0, 0, 0, 0)
 
     def _demo_click_outside(self):
         """Screenshots only: a real mouse click on the screen beside the tracker (Windows)."""
