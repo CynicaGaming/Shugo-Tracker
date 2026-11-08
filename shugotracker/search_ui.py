@@ -879,11 +879,6 @@ class SearchWindow:
         for w in (clock, self.clock_badge, self.clock_time):
             w.bind("<Button-1>", lambda e: self._toggle_clock())
         self._tick_clock()
-        self.clear_btn = tk.Label(self.status_row, text="", bg=BG, fg=FG_DIM, font=self.f_small, padx=PAD,
-                                  cursor="hand2")                   # Nearby / Recent: clear the list
-        self.clear_btn.bind("<Button-1>", lambda e: self._clear_list())
-        self.clear_btn.bind("<Enter>", lambda e: self.clear_btn.config(fg=GOLD_TEXT))
-        self.clear_btn.bind("<Leave>", lambda e: self.clear_btn.config(fg=FG_DIM))
         self.status.pack(side="left", fill="x", expand=True)
         self.status.bind("<Shift-Button-1>", lambda e: self._nearby_record())   # hidden: Nearby capture
 
@@ -1869,13 +1864,6 @@ class SearchWindow:
         self.save_cfg()
 
     def _update_status(self, view):
-        label = self._clear_label()
-        if label:
-            self.clear_btn.config(text=label)
-            if not self.clear_btn.winfo_manager():
-                self.clear_btn.pack(side="right", before=self.status)
-        elif self.clear_btn.winfo_manager():
-            self.clear_btn.pack_forget()
         if self.mode in ("nearby", "recent"):
             self.status.config(text=self._nearby_status_text(view), fg=FG_DIM)
             return
