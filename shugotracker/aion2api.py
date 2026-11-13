@@ -245,6 +245,9 @@ class Api:
         self._cache_lock = threading.Lock()
         self._search_pool = ThreadPoolExecutor(max_workers=len(SUB_REGIONS), thread_name_prefix="search")
         self._profile_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="profile")
+        # boards are asked for when you click one: their own workers, so they never queue behind a profile's
+        # (or your Alt-compare gear's) item details
+        self._board_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="board")
         self._profiles: dict[str, tuple[float, dict, dict | None]] = {}   # key -> (ts, info, equipment)
         self._inflight: dict[str, list] = {}
         self._pflock = threading.Lock()
@@ -275,6 +278,7 @@ class Api:
             self._dq.put((-1, 0, 0, None, None))
         self._search_pool.shutdown(wait=False, cancel_futures=True)
         self._profile_pool.shutdown(wait=False, cancel_futures=True)
+        self._board_pool.shutdown(wait=False, cancel_futures=True)
         self.store.close()
 
     # ───── HTTP ─────
@@ -536,7 +540,7 @@ class Api:
                     cb(got if got is not None else old)   # a failed fetch still shows the older copy
                 except Exception as e:  # noqa: BLE001
                     self.log(f"api: board callback failed: {e}")
-        self._profile_pool.submit(run)
+        self._board_pool.submit(run)
 
     def _load_items(self, owner: str) -> None:
         """A character's saved items, read once per session in a single query."""
