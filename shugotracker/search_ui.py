@@ -1375,6 +1375,10 @@ class SearchWindow:
                 _, view, slot, det = msg
                 if view is self.profile_view and view is not None:
                     view.item_detail_ready(slot, det)
+            elif kind == "board":                    # a Daevanion board's layout
+                _, view, bid, raw = msg
+                if view is self.profile_view and view is not None:
+                    view.board_ready(bid, raw)
             elif kind == "my_profile":               # your own profile, for Alt-compare on someone else's
                 _, view, prof, err = msg
                 if view is self.profile_view and view is not None:
@@ -2619,6 +2623,10 @@ class SearchWindow:
         for tab in ProfileView.TABS:
             steps.append((t, lambda tb=tab: self.profile_view and self.profile_view.show_tab(tb)))
             steps.append((t + 900, lambda tb=tab: self._grab(f"{base}-profile-{tb.lower()}.png")))
+            if tab == "Daevanion":               # a board node, hovered
+                steps.append((t + 1000, lambda: self.profile_view and self.profile_view.demo_hover_node()))
+                steps.append((t + 1100, lambda: self._grab(f"{base}-profile-daevanion-node.png")))
+                steps.append((t + 1300, lambda: self.profile_view and self.profile_view._hide_tip()))
             if tab == "Gear":                    # a piece of gear and an Arcana card, hovered
                 steps.append((t + 1000, lambda: self.profile_view and self.profile_view.demo_hover_item("MainHand")))
                 steps.append((t + 1100, lambda: self._grab_wide(f"{base}-profile-gear-tip.png")))

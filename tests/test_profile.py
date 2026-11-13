@@ -393,3 +393,73 @@ class ItemCacheTests(unittest.TestCase):
         self.get(api, c, self.item())
         self.assertEqual(len(s.calls), 2)
         self.assertEqual(len(api.store.items_of(c.key)), 1)
+
+
+def board_raw(opened=(1, 2)):
+    """A small board shaped like the real response: Start in the middle, two nodes beside it, empty cells."""
+    nodes = [{"boardId": 21, "nodeId": 1, "row": 2, "col": 2, "type": "Start", "grade": "None", "name": "Nezekan - Start",
+              "open": 0, "effectList": [{"desc": ""}], "icon": ""},
+             {"boardId": 21, "nodeId": 2, "row": 2, "col": 3, "type": "Stat", "grade": "Common", "name": "Critical Hit",
+              "open": int(2 in opened), "effectList": [{"desc": "Critical Hit +5"}], "icon": ""},
+             {"boardId": 21, "nodeId": 3, "row": 1, "col": 2, "type": "SkillLevel", "grade": "Legend",
+              "name": "Skill Level Up - Annihilate", "open": int(1 in opened), "effectList": [{"desc": "Annihilate +1"}],
+              "icon": ""},
+             {"boardId": 21, "nodeId": 4, "row": 1, "col": 1, "type": "None", "grade": "None", "name": "", "open": 0,
+              "effectList": [], "icon": ""}]
+    return {"nodeList": nodes, "openStatEffectList": [{"desc": "Critical Hit +5"}],
+            "openSkillEffectList": [{"desc": "Annihilate +1"}]}
+
+
+class BoardTests(unittest.TestCase):
+    def test_parse(self):
+        from shugotracker.profile import parse_board, parse_profile
+        d = parse_board(board_raw())
+        self.assertEqual([n.kind for n in d.nodes], ["Start", "Stat", "SkillLevel"])     # empty cells dropped
+        self.assertEqual(d.opened, 2)
+        self.assertEqual(d.nodes[1].effects, ["Critical Hit +5"])
+        self.assertEqual(d.nodes[0].effects, [])
+        self.assertEqual((d.stat_effects, d.skill_effects), (["Critical Hit +5"], ["Annihilate +1"]))
+        p = parse_profile({"daevanion": {"boardList": [{"id": 21, "name": "Nezekan", "openNodeCount": 2,
+                                                         "totalNodeCount": 88}]}}, None)
+        self.assertEqual(p.boards[0].board_id, 21)
+
+    class Sess:
+        def __init__(self, opened=(1, 2)):
+            self.headers, self.calls, self.opened = {}, [], opened
+
+        def get(self, url, params=None, timeout=None):
+            self.calls.append(params.get("boardId"))
+            return FakeResp(board_raw(self.opened))
+
+    def api(self, folder, sess):
+        api = a.Api(session=sess, rate=1000, db_path=os.path.join(folder, "shugo.db"))
+        self.addCleanup(api.close)
+        return api
+
+    def get(self, api, opened):
+        got, done = [], threading.Event()
+        api.fetch_board(char(), 21, opened, lambda raw: (got.append(raw), done.set()))
+        self.assertTrue(done.wait(5))
+        return got[0]
+
+    def test_saved_and_reused_until_a_node_opens(self):
+        folder = tempfile.mkdtemp()
+        s1 = self.Sess()
+        api1 = self.api(folder, s1)
+        self.get(api1, 2)
+        api1.store.put_profile(char().key, {}, {})        # boards are kept as long as their profile
+        api1.close()
+        s2 = self.Sess(opened=(1, 2, 3))
+        api2 = self.api(folder, s2)
+        self.get(api2, 2)
+        self.assertEqual(s2.calls, [])                    # same opened count: from disk, no request
+        self.get(api2, 3)
+        self.assertEqual(s2.calls, [21])                  # the profile says a node opened: ask again
+
+    def test_refresh_forgets_boards(self):
+        folder, s = tempfile.mkdtemp(), self.Sess()
+        api = self.api(folder, s)
+        self.get(api, 2)
+        api.forget(char())
+        self.get(api, 2)
+        self.assertEqual(s.calls, [21, 21])

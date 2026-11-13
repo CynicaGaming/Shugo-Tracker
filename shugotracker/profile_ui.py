@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from . import skilldata
 from .aion2api import Character
 from .profile import (GEAR_ACCESSORIES, GEAR_ARCANA, GEAR_MAIN, SKILL_CATEGORIES, Item, Profile, fmt_delta,
-                      slot_name, stat_deltas)
+                      parse_board, slot_name, stat_deltas)
 from .search_ui import (ACCENT, ASMO, BG, BORDER, CLASS_COLORS, ELYOS, FG, FG_DIM, FG_FAINT, GRADE_COLORS, HOVER,
                         LINE, PAD, RED, REGION_NAMES, SURFACE, SURFACE_2, fmt_int, round_rect, ThinScrollbar)
 
@@ -58,6 +58,7 @@ class ProfileView:
         self._batch = False
         self._details: dict[tuple, object] = {}
         self._ring: tuple | None = None
+        self._boards: dict[int, object] = {}          # board id -> raw layout, None while loading, False if failed
         # compare: your character's profile (for holding Alt over an item), and whether Alt is held
         self._mine: Profile | None = None
         self._compare = False
@@ -271,6 +272,7 @@ class ProfileView:
 
     def reload(self):
         self._details = {}
+        self._boards = {}
         self._ready = False
         self.app.api.forget(self.char)
         self.loading, self.profile, self.error = True, None, None
@@ -283,6 +285,8 @@ class ProfileView:
         self.tab = name
         self.app.cfg["profile_tab"] = name
         self.render()
+        if name == "Daevanion" and self._ready:
+            self._want_board(self._board_sel())
 
     def paint_star(self):
         fav = self.char.key in self.app.favorites
@@ -1079,27 +1083,198 @@ class ProfileView:
         total_open = sum(b.opened for b in p.boards)
         total = sum(b.total for b in p.boards)
         self._section(self.body, "Daevanion boards", f"{total_open}/{total} nodes")
-        for b in p.boards:
-            row = tk.Frame(self.body, bg=SURFACE, padx=10, pady=8)
-            row.pack(fill="x", pady=3)
-            self._icon(row, b.icon, 30).pack(side="left")
-            mid = tk.Frame(row, bg=SURFACE)
-            mid.pack(side="left", fill="x", expand=True, padx=10)
-            top = tk.Frame(mid, bg=SURFACE)
-            top.pack(fill="x")
-            tk.Label(top, text=f"{b.opened}/{b.total}  ·  {b.percent}%", bg=SURFACE, fg=FG_DIM,
-                     font=self.app.f_small).pack(side="right")
-            self._fit_label(top, b.name, self.app.f_bold, bg=SURFACE, fg=FG).pack(side="left", fill="x", expand=True)
-            bar = tk.Canvas(mid, height=8, bg=SURFACE, highlightthickness=0)
-            bar.pack(fill="x", pady=(5, 0))
-            bar.bind("<Configure>", lambda e, cv=bar, pct=b.percent: self._bar(cv, e.width, pct))
+        # the boards to pick from, three to a row
+        grid = tk.Frame(self.body, bg=BG)
+        grid.pack(fill="x")
+        for c in range(3):
+            grid.columnconfigure(c, weight=1, uniform="b")
+        self._chips: dict[int, tk.Frame] = {}
+        for i, b in enumerate(p.boards):
+            chip = tk.Frame(grid, bg=SURFACE, padx=8, pady=6, cursor="hand2", highlightthickness=1,
+                            highlightbackground=BG, highlightcolor=BG)
+            chip.grid(row=i // 3, column=i % 3, sticky="nsew", padx=(0 if i % 3 == 0 else 3, 0), pady=3)
+            icon = self._icon(chip, b.icon, 24)
+            icon.pack(side="left")
+            mid = tk.Frame(chip, bg=SURFACE)
+            mid.pack(side="left", fill="x", expand=True, padx=(8, 0))
+            name = self._fit_label(mid, b.name, self.app.f_sbold, tip=False, bg=SURFACE, fg=FG)
+            name.pack(fill="x")
+            count = tk.Label(mid, text=f"{b.opened}/{b.total}  ·  {b.percent}%", bg=SURFACE, fg=FG_DIM,
+                             font=self.app.f_tiny, anchor="w")
+            count.pack(fill="x")
+            bar = tk.Canvas(mid, height=4, bg=SURFACE, highlightthickness=0)
+            bar.pack(fill="x", pady=(3, 0))
+            bar.bind("<Configure>", lambda e, cv=bar, pct=b.percent: self._bar(cv, e.width, pct, 4))
+            for w in (chip, icon, *icon.winfo_children(), mid, name, count, bar):
+                w.bind("<Button-1>", lambda e, bid=b.board_id: self._pick_board(bid))
+            self._chips[b.board_id] = chip
+        self._board_area = tk.Frame(self.body, bg=BG)
+        self._board_area.pack(fill="x", pady=(8, 0))
+        self._paint_chips()
+        self._draw_board_area()
+        if self.tab == "Daevanion":                      # (not while the tab is built in the background)
+            self._want_board(self._board_sel())
+
+    # ───── Daevanion: one board drawn like the game's grid ─────
+    def _board_sel(self) -> int:
+        p = self.profile
+        boards = p.boards if p else []
+        want = self.app.cfg.get("daevanion_board")
+        for b in boards:
+            if b.name == want:
+                return b.board_id
+        return boards[0].board_id if boards else 0
+
+    def _board(self, board_id: int):
+        return next((b for b in (self.profile.boards if self.profile else []) if b.board_id == board_id), None)
+
+    def _pick_board(self, board_id: int):
+        b = self._board(board_id)
+        if b is None:
+            return
+        self.app.cfg["daevanion_board"] = b.name
+        self._paint_chips()
+        self._draw_board_area()
+        self._want_board(board_id)
+
+    def _paint_chips(self):
+        sel = self._board_sel()
+        for bid, chip in getattr(self, "_chips", {}).items():
+            try:
+                col = ACCENT if bid == sel else BG
+                chip.configure(highlightbackground=col, highlightcolor=col)
+            except tk.TclError:
+                pass
+
+    def _want_board(self, board_id: int):
+        b = self._board(board_id)
+        if b is None or board_id in self._boards:
+            return
+        self._boards[board_id] = None                       # asked for
+
+        def done(raw, bid=board_id):
+            if threading.current_thread() is threading.main_thread():
+                self.board_ready(bid, raw)
+            else:
+                self.app.inbox.put(("board", self, bid, raw))
+        self.app.api.fetch_board(self.char, board_id, b.opened, done)
+
+    def board_ready(self, board_id: int, raw):
+        """(main thread) a board's layout arrived."""
+        self._boards[board_id] = raw if raw is not None else False
+        if board_id == self._board_sel():
+            self._draw_board_area()
+
+    def _draw_board_area(self):
+        area = getattr(self, "_board_area", None)
+        try:
+            if area is None or not area.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        for w in area.winfo_children():
+            w.destroy()
+        raw = self._boards.get(self._board_sel())
+        if not raw:
+            text = "Couldn't load this board" if raw is False else "Loading board…"
+            tk.Label(area, text=text, bg=BG, fg=FG_DIM if raw is None else RED, font=self.app.f_small,
+                     height=6).pack(fill="x")
+            self._refresh_scroll()
+            return
+        d = parse_board(raw)
+        cv = tk.Canvas(area, bg=BG, highlightthickness=0, height=360)
+        cv.pack(fill="x")
+        cv.bind("<Configure>", lambda e, cv=cv, d=d: self._paint_board(cv, d, e.width))
+        cv.bind("<Motion>", lambda e, cv=cv, d=d: self._board_hover(cv, d, e))
+        cv.bind("<Leave>", lambda e: (setattr(self, "_node_tip", None), self._hide_tip()))
+        self._board_view = (cv, d)
+        for title, effects in (("Stat bonuses", d.stat_effects), ("Skill bonuses", d.skill_effects)):
+            if not effects:
+                continue
+            self._section(area, title, str(len(effects)))
+            grid = tk.Frame(area, bg=BG)
+            grid.pack(fill="x")
+            for c in range(2):
+                grid.columnconfigure(c, weight=1, uniform="e")
+            for i, e in enumerate(effects):
+                tk.Label(grid, text=e, bg=SURFACE, fg=FG, font=self.app.f_small, anchor="w", padx=10, pady=4).grid(
+                    row=i // 2, column=i % 2, sticky="nsew", padx=(0 if i % 2 == 0 else 3, 0), pady=1)
+        self._refresh_scroll()
+
+    def _refresh_scroll(self):
+        try:
+            self.body_root.update_idletasks()
+            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        except tk.TclError:
+            pass
+
+    NODE_START = "#e8c46a"
 
     @staticmethod
-    def _bar(cv: tk.Canvas, width: int, pct: int):
+    def _blend(c1: str, c2: str, t: float) -> str:
+        """c1 mixed toward c2 by t (0 = c1, 1 = c2)."""
+        a = [int(c1[i:i + 2], 16) for i in (1, 3, 5)]
+        b = [int(c2[i:i + 2], 16) for i in (1, 3, 5)]
+        return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(a, b))
+
+    def _board_geometry(self, width: int) -> tuple[float, float, float]:
+        side = min(max(width, 200), 420)
+        cell = side / 15
+        return (width - side) / 2, 0.0, cell
+
+    def _paint_board(self, cv: tk.Canvas, d, width: int):
+        """The grid: links between neighbouring nodes (gold where both are open), then the nodes, by grade."""
+        ox, oy, cell = self._board_geometry(width)
+        cv.configure(height=int(cell * 15) + 2)
         cv.delete("all")
-        round_rect(cv, 0, 0, width, 8, 4, fill=SURFACE_2, outline="")
+        at = {(n.row, n.col): n for n in d.nodes}
+        lit = lambda n: n.opened or n.kind == "Start"            # noqa: E731
+        centre = lambda r, c: (ox + (c - 0.5) * cell, oy + (r - 0.5) * cell)  # noqa: E731
+        for (r, c), n in at.items():
+            for nr, nc in ((r, c + 1), (r + 1, c)):
+                m = at.get((nr, nc))
+                if m is None:
+                    continue
+                on = lit(n) and lit(m)
+                cv.create_line(*centre(r, c), *centre(nr, nc), fill=ACCENT if on else BORDER, width=3 if on else 2)
+        for (r, c), n in at.items():
+            x, y = centre(r, c)
+            if n.kind == "Start":
+                k = cell * 0.36
+                cv.create_oval(x - k, y - k, x + k, y + k, fill=BG, outline=self.NODE_START, width=2)
+                cv.create_oval(x - k / 2.4, y - k / 2.4, x + k / 2.4, y + k / 2.4, fill=self.NODE_START, outline="")
+                continue
+            col = GRADE_COLORS.get(n.grade, FG_DIM)
+            fill = col if n.opened else self._blend(col, BG, 0.78)
+            line = self._blend(col, "#ffffff", 0.35) if n.opened else self._blend(col, BG, 0.45)
+            if n.kind == "SkillLevel":                               # skill nodes: diamonds
+                k = cell * 0.36
+                cv.create_polygon(x, y - k, x + k, y, x, y + k, x - k, y, fill=fill, outline=line, width=1.5)
+            else:                                                    # stat nodes: rounded squares
+                k = cell * 0.27
+                round_rect(cv, x - k, y - k, x + k, y + k, max(2, k * 0.35), fill=fill, outline=line, width=1.5)
+
+    def _board_hover(self, cv: tk.Canvas, d, e):
+        ox, oy, cell = self._board_geometry(cv.winfo_width())
+        c, r = int((e.x - ox) // cell) + 1, int((e.y - oy) // cell) + 1
+        node = next((n for n in d.nodes if n.row == r and n.col == c), None)
+        if node is getattr(self, "_node_tip", None):
+            return
+        self._node_tip = node
+        if node is None:
+            self._hide_tip()
+            return
+        state = "Opened" if node.opened else "Not opened"
+        sub = state if node.kind == "Start" else f"{node.grade}  ·  {state}"
+        lines = [("ok", e2) for e2 in node.effects] + [("dim", sub)]
+        self._show_tip(cv, node.name or node.kind, lines, at=(e.x_root, e.y_root))
+
+    @staticmethod
+    def _bar(cv: tk.Canvas, width: int, pct: int, h: int = 8):
+        cv.delete("all")
+        round_rect(cv, 0, 0, width, h, h / 2, fill=SURFACE_2, outline="")
         if pct > 0:
-            round_rect(cv, 0, 0, max(8, width * pct / 100), 8, 4, fill=ACCENT, outline="")
+            round_rect(cv, 0, 0, max(h, width * pct / 100), h, h / 2, fill=ACCENT, outline="")
 
     def _tab_stats(self, p: Profile):
         self._first_tip = None
@@ -1156,6 +1331,17 @@ class ProfileView:
                 self._show_item_tip(it, anchor)
                 return
 
+    def demo_hover_node(self):
+        """Screenshots only: hover the first opened node on the board shown."""
+        cv, d = getattr(self, "_board_view", (None, None))
+        node = next((n for n in (d.nodes if d else []) if n.opened and n.kind != "Start"), None)
+        if node is None:
+            return
+        ox, oy, cell = self._board_geometry(cv.winfo_width())
+        x, y = int(ox + (node.col - 0.5) * cell), int(oy + (node.row - 0.5) * cell)
+        ev = type("E", (), {"x": x, "y": y, "x_root": cv.winfo_rootx() + x, "y_root": cv.winfo_rooty() + y})()
+        self._board_hover(cv, d, ev)
+
     def demo_hover_first_stat(self):
         """Used by the screenshot run: show the first stat's tooltip as if hovered."""
         if getattr(self, "_first_tip", None):
@@ -1191,7 +1377,9 @@ class ProfileView:
             w.bind("<Enter>", enter, add="+")
             w.bind("<Leave>", leave, add="+")
 
-    def _show_tip(self, anchor: tk.Widget, title: str, lines: list[str], foot: list[str] | None = None):
+    def _show_tip(self, anchor: tk.Widget, title: str, lines: list[str], foot: list[str] | None = None,
+                  at: tuple[int, int] | None = None):
+        """A small popup below anchor, or beside the screen point `at` (a node on a Daevanion board)."""
         self._hide_tip()
         tip = tk.Toplevel(self.frame)
         tip.overrideredirect(True)
@@ -1214,14 +1402,14 @@ class ProfileView:
         for ln in foot or []:
             tk.Label(box, text=ln, bg=SURFACE_2, fg=FG_FAINT, font=self.app.f_tiny, anchor="w").pack(fill="x", pady=(3, 0))
         tip.update_idletasks()
-        x = anchor.winfo_rootx()
-        y = anchor.winfo_rooty() + anchor.winfo_height() + 4
+        x = anchor.winfo_rootx() if at is None else at[0] + 16
+        y = anchor.winfo_rooty() + anchor.winfo_height() + 4 if at is None else at[1] + 16
         # keep it on screen: flip above the cell near the bottom edge
         from .desktop import monitor_rect
         left, top, right, bottom = monitor_rect(anchor, anchor.winfo_rootx(), anchor.winfo_rooty())
         h = tip.winfo_reqheight()
         if y + h > bottom - 8:
-            y = anchor.winfo_rooty() - h - 4
+            y = (anchor.winfo_rooty() if at is None else at[1] - 8) - h - 4
         y = max(top + 8, min(y, bottom - h - 8))               # a tall tooltip still fits on the monitor
         x = max(left + 8, min(x, right - tip.winfo_reqwidth() - 8))
         tip.geometry(f"+{x}+{y}")

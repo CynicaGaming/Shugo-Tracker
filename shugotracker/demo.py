@@ -44,7 +44,10 @@ class DemoSession:
         if url == a.INFO_URL:
             time.sleep(random.uniform(0.15, 0.9) * self.slow)
             return _Resp(self._info(p["characterId"]))
-        from .profile import EQUIPMENT_URL, ITEM_URL
+        from .profile import DAEVANION_URL, EQUIPMENT_URL, ITEM_URL
+        if url == DAEVANION_URL:
+            time.sleep(random.uniform(0.1, 0.3) * self.slow)
+            return _Resp(self._board(p))
         if url == ITEM_URL:
             time.sleep(random.uniform(0.1, 0.4) * self.slow)
             return _Resp(self._item(p))
@@ -52,6 +55,36 @@ class DemoSession:
             time.sleep(random.uniform(0.2, 0.8) * self.slow)
             return _Resp(self._equipment(p["characterId"]))
         raise ValueError(url)
+
+    # A real board's layout (Nezekan): U/L/R/C = Unique/Legend/Rare/Common, upper case = opened, S = start
+    _BOARD = ["  Ucc rcL RCU  ", "  C Lcc CCC c  ", "  RCC cLC LCR  ", "   C  c C c c  ", "  CCLCcCCrccc  ",
+              "  L  C S c  l  ", "  cccRCCCCLcc  ", "  c c C c  c   ", "  rcL CLC ccr  ", "  c CCC CCL c  ",
+              "  UCR LcR CCU  "]
+
+    def _board(self, p):
+        """A board for --demo: the real layout, as much of it open as the profile says."""
+        grades = {"u": "Unique", "l": "Legend", "r": "Rare", "c": "Common"}
+        stats = ["Critical Hit", "Attack Bonus", "Defense Bonus", "HP", "MP", "Critical Hit Resist"]
+        nodes, n = [], 0
+        for r, line in enumerate(self._BOARD, start=3):
+            for c, ch in enumerate(line, start=1):
+                if ch == " ":
+                    continue
+                n += 1
+                if ch == "S":
+                    nodes.append({"row": r, "col": c, "type": "Start", "grade": "None", "name": "Start", "open": 0,
+                                  "effectList": [{"desc": ""}]})
+                    continue
+                grade = grades[ch.lower()]
+                skill = grade in ("Legend", "Rare")
+                stat = stats[n % len(stats)]
+                nodes.append({"row": r, "col": c, "type": "SkillLevel" if skill else "Stat", "grade": grade,
+                              "name": f"Skill Level Up - Skill {n % 7 + 1}" if skill else stat, "open": int(ch.isupper()),
+                              "effectList": [{"desc": f"Skill {n % 7 + 1} +1" if skill else f"{stat} +{5 + n % 4 * 5}"}]})
+        return {"nodeList": nodes,
+                "openStatEffectList": [{"desc": d} for d in ("HP +800", "MP +200", "Critical Hit +25", "Attack Bonus +15",
+                                                            "Defense Bonus +180", "Combat Speed +3%")],
+                "openSkillEffectList": [{"desc": f"Skill {i} +1"} for i in range(1, 7)]}
 
     def _item(self, p):
         r = self._rnd(p.get("characterId"), p.get("slotPos"))
@@ -106,9 +139,10 @@ class DemoSession:
                           "titleList": [{"name": "Golden Glow", "equipCategory": "Attack", "grade": "Unique",
                                          "ownedPercent": 70, "equipStatList": [{"desc": "Critical Attack +45"}],
                                          "statList": [{"desc": "Critical Attack +3"}]}]},
-                "daevanion": {"boardList": [{"name": n, "openNodeCount": r.randint(0, tot), "totalNodeCount": tot}
-                                            for n, tot in [("Nezekan", 88), ("Zikel", 88), ("Vaizel", 88),
-                                                           ("Triniel", 116), ("Azphel", 152)]]}}
+                "daevanion": {"boardList": [{"id": 21 + i, "name": n, "openNodeCount": r.randint(0, tot),
+                                             "totalNodeCount": tot}
+                                            for i, (n, tot) in enumerate([("Nezekan", 88), ("Zikel", 88), ("Vaizel", 88),
+                                                                          ("Triniel", 116), ("Azphel", 152)])]}}
 
     def _equipment(self, char_id):
         r = self._rnd(char_id, "eq")

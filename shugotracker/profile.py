@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 EQUIPMENT_URL = "https://aion2.plaync.com/api/character/equipment"
 ITEM_URL = "https://aion2.plaync.com/api/character/equipment/item"      # one worn item in full (see ItemDetail)
+DAEVANION_URL = "https://aion2.plaync.com/api/character/daevanion/detail"   # one board's nodes (see BoardDetail)
 
 # Display groups for the gear tab, in the order the game's character window uses.
 GEAR_MAIN = ["MainHand", "SubHand", "Helmet", "Shoulder", "Torso", "Pants", "Gloves", "Boots", "Cape", "Belt"]
@@ -95,6 +96,7 @@ class Board:
     total: int
     icon: str | None = None
     game_percent: int | None = None   # the game's own rounding
+    board_id: int = 0                 # for its full layout (DAEVANION_URL)
 
     @property
     def percent(self) -> int:
@@ -190,7 +192,8 @@ def parse_profile(info: dict, equipment: dict | None) -> Profile:
     for b in (info.get("daevanion") or {}).get("boardList") or []:
         p.boards.append(Board(name=b.get("name") or "", opened=int(b.get("openNodeCount") or 0),
                               total=int(b.get("totalNodeCount") or 0), icon=b.get("icon"),
-                              game_percent=int(b["openPercent"]) if b.get("openPercent") is not None else None))
+                              game_percent=int(b["openPercent"]) if b.get("openPercent") is not None else None,
+                              board_id=int(b.get("id") or 0)))
     tinfo = info.get("title") or {}
     p.titles_owned, p.titles_total = tinfo.get("ownedCount"), tinfo.get("totalCount")
     for t in tinfo.get("titleList") or []:
@@ -337,3 +340,45 @@ def fmt_delta(d: float, pct: bool = False) -> str:
     n = abs(d)
     txt = f"{n:,.0f}" if n == int(n) else f"{n:,.1f}"
     return ("▲" if d > 0 else "▼") + txt + ("%" if pct else "")
+
+
+# ───── Daevanion board layout ─────
+@dataclass
+class Node:
+    row: int                 # 1-15, like the game's grid
+    col: int
+    kind: str                # "Stat", "SkillLevel" or "Start"
+    grade: str               # Common / Rare / Legend / Unique ("None" for Start)
+    name: str
+    opened: bool
+    effects: list[str] = field(default_factory=list)
+
+
+@dataclass
+class BoardDetail:
+    nodes: list[Node] = field(default_factory=list)          # only real nodes (the grid's empty cells left out)
+    stat_effects: list[str] = field(default_factory=list)    # everything the opened nodes add, summed by the game
+    skill_effects: list[str] = field(default_factory=list)
+
+    @property
+    def opened(self) -> int:
+        return sum(n.opened for n in self.nodes)
+
+
+def open_count(raw: dict) -> int:
+    """How many nodes a saved board response has open (to tell whether the board has changed since)."""
+    return sum(1 for n in (raw or {}).get("nodeList") or [] if n.get("open"))
+
+
+def parse_board(raw: dict) -> BoardDetail:
+    d = BoardDetail()
+    for n in (raw or {}).get("nodeList") or []:
+        kind = n.get("type") or "None"
+        if kind == "None":
+            continue
+        d.nodes.append(Node(row=int(n.get("row") or 0), col=int(n.get("col") or 0), kind=kind,
+                            grade=n.get("grade") or "None", name=n.get("name") or "", opened=bool(n.get("open")),
+                            effects=[e["desc"] for e in n.get("effectList") or [] if e.get("desc")]))
+    d.stat_effects = [e["desc"] for e in (raw or {}).get("openStatEffectList") or [] if e.get("desc")]
+    d.skill_effects = [e["desc"] for e in (raw or {}).get("openSkillEffectList") or [] if e.get("desc")]
+    return d

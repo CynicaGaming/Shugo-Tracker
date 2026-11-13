@@ -5,6 +5,7 @@ One small SQLite file for everything Shugo Tracker caches about characters:
   profiles  full profiles (info + equipment) per character                       key -> zlib-packed JSON
   lookups   name lookups ("who is called X in region R, with class/faction F")  query -> the characters found
   items     each worn item's full details (stats, stones, sets) per character     key -> zlib-packed JSON
+  boards    each Daevanion board's layout and opened nodes per character           key -> zlib-packed JSON
 
 Replaces character_cache.json (rewritten whole on every exit) and one JSON file per profile. Lookups are what
 make Nearby fast: a player you've met before resolves without asking NCSOFT again.
@@ -26,6 +27,9 @@ CREATE INDEX IF NOT EXISTS profiles_ts ON profiles (ts);
 CREATE TABLE IF NOT EXISTS items (key TEXT PRIMARY KEY, owner TEXT NOT NULL, ts REAL NOT NULL, data BLOB NOT NULL)
     WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS items_owner ON items (owner);
+CREATE TABLE IF NOT EXISTS boards (key TEXT PRIMARY KEY, owner TEXT NOT NULL, ts REAL NOT NULL, data BLOB NOT NULL)
+    WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS boards_owner ON boards (owner);
 """
 _DUMPS = dict(separators=(",", ":"), ensure_ascii=False)
 
@@ -119,6 +123,23 @@ class Store:
     def drop_items(self, owner: str) -> None:
         self._run("DELETE FROM items WHERE owner = ?", (owner,))
 
+    # ───── Daevanion boards ─────
+    def get_board(self, owner: str, board_id: int) -> tuple[float, dict] | None:
+        rows = self._run("SELECT ts, data FROM boards WHERE key = ?", (f"{owner}|{board_id}",))
+        if not rows:
+            return None
+        try:
+            return rows[0][0], json.loads(zlib.decompress(rows[0][1]))
+        except (zlib.error, ValueError):
+            return None
+
+    def put_board(self, owner: str, board_id: int, raw: dict, ts: float | None = None) -> None:
+        blob = zlib.compress(json.dumps(raw, **_DUMPS).encode(), 6)
+        self._run("INSERT OR REPLACE INTO boards VALUES (?, ?, ?, ?)", (f"{owner}|{board_id}", owner, ts or time.time(), blob))
+
+    def drop_boards(self, owner: str) -> None:
+        self._run("DELETE FROM boards WHERE owner = ?", (owner,))
+
     # ───── name lookups ─────
     @staticmethod
     def lookup_key(region: str, name: str, pc_ids=None, race=None) -> str:
@@ -149,9 +170,10 @@ class Store:
                   "(SELECT key FROM profiles ORDER BY ts DESC LIMIT ?)", (now - profiles_keep, profiles_max))
         # items go with their profile: kept as long as it is
         self._run("DELETE FROM items WHERE ts < ? OR owner NOT IN (SELECT key FROM profiles)", (now - profiles_keep,))
+        self._run("DELETE FROM boards WHERE ts < ? OR owner NOT IN (SELECT key FROM profiles)", (now - profiles_keep,))
 
     def clear(self) -> None:
-        for table in ("details", "profiles", "lookups", "items"):
+        for table in ("details", "profiles", "lookups", "items", "boards"):
             self._run(f"DELETE FROM {table}")
         self._run("VACUUM")
 
@@ -162,7 +184,7 @@ class Store:
 
     def counts(self) -> dict[str, int]:
         return {t: (self._run(f"SELECT COUNT(*) FROM {t}") or [(0,)])[0][0]
-                for t in ("details", "profiles", "lookups", "items")}
+                for t in ("details", "profiles", "lookups", "items", "boards")}
 
     def close(self) -> None:
         with self._lock:

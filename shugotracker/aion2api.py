@@ -252,6 +252,8 @@ class Api:
         self._item_details: dict[tuple, tuple[float, object]] = {}   # (character, slot, item, enchant) -> (ts, ItemDetail)
         self._item_waiting: dict[tuple, list] = {}
         self._items_loaded: set[str] = set()                         # characters whose saved items are in memory
+        self._boards: dict[tuple, dict] = {}                         # (character, board) -> raw layout
+        self._board_waiting: dict[tuple, list] = {}
         # the raw info response behind each card's numbers: opening that profile soon after reuses it
         self._recent_info: collections.OrderedDict[str, tuple[float, dict]] = collections.OrderedDict()
         # details: newest request first, stale generations dropped
@@ -494,6 +496,48 @@ class Api:
             return
         self._profile_pool.submit(self._fetch_item, c, item, key)
 
+    def fetch_board(self, c: Character, board_id: int, opened: int, on_done: Callable[[dict | None], None]) -> None:
+        """One Daevanion board's layout (raw response; parse with profile.parse_board).
+        A saved copy is used as long as it has the same number of opened nodes as the profile says (`opened`):
+        the board only changes when a node is opened. on_done runs at once for a saved copy, else on a worker."""
+        from .profile import open_count
+        key = (c.key, board_id)
+        with self._pflock:
+            raw = self._boards.get(key)
+        if raw is None:
+            hit = self.store.get_board(c.key, board_id)
+            raw = hit[1] if hit else None
+        if raw is not None and open_count(raw) == opened:
+            with self._pflock:
+                self._boards[key] = raw
+            on_done(raw)
+            return
+        with self._pflock:
+            waiting = self._board_waiting.setdefault(key, [])
+            waiting.append(on_done)
+            if len(waiting) > 1:
+                return
+
+        def run(old=raw):
+            from .profile import DAEVANION_URL
+            got = None
+            try:
+                got = self._get_json(DAEVANION_URL, {"lang": "en-US", "characterId": c.char_id, "serverId": c.server_id,
+                                                     "region": c.region, "boardId": board_id})
+                self.store.put_board(c.key, board_id, got)
+            except Exception as e:  # noqa: BLE001
+                self.log(f"api: Daevanion board {board_id} for {c.name} failed: {e}")
+            with self._pflock:
+                if got is not None:
+                    self._boards[key] = got
+                callbacks = self._board_waiting.pop(key, [])
+            for cb in callbacks:
+                try:
+                    cb(got if got is not None else old)   # a failed fetch still shows the older copy
+                except Exception as e:  # noqa: BLE001
+                    self.log(f"api: board callback failed: {e}")
+        self._profile_pool.submit(run)
+
     def _load_items(self, owner: str) -> None:
         """A character's saved items, read once per session in a single query."""
         if owner in self._items_loaded:
@@ -599,6 +643,10 @@ class Api:
                 del self._item_details[k]
         self._items_loaded.add(c.key)             # nothing saved to load any more
         self.store.drop_items(c.key)
+        with self._pflock:
+            for k in [k for k in self._boards if k[0] == c.key]:
+                del self._boards[k]
+        self.store.drop_boards(c.key)
         self.store.drop_profile(c.key)
         self.store.drop_details(c.key)
         with self._cache_lock:
@@ -636,6 +684,7 @@ class Api:
         with self._pflock:
             self._profiles.clear()
             self._item_details.clear()
+            self._boards.clear()
         self._items_loaded.clear()
         self._search_cache.clear()
         self.store.clear()
