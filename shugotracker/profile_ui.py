@@ -1217,15 +1217,24 @@ class ProfileView:
         b = [int(c2[i:i + 2], 16) for i in (1, 3, 5)]
         return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(a, b))
 
-    def _board_geometry(self, width: int) -> tuple[float, float, float]:
-        side = min(max(width, 200), 420)
-        cell = side / 15
-        return (width - side) / 2, 0.0, cell
+    @staticmethod
+    def _board_geometry(d, width: int) -> tuple[float, float, float]:
+        """(x, y) of grid cell (1, 1) and the cell size: the board cropped to where its nodes are (the game's
+        15x15 grid has empty outer rows), as large as fits, centred."""
+        rows = [n.row for n in d.nodes] or [1]
+        cols = [n.col for n in d.nodes] or [1]
+        r0, c0 = min(rows), min(cols)
+        nr, nc = max(rows) - r0 + 1, max(cols) - c0 + 1
+        cell = min(max(width, 200) / nc, 460 / max(nr, nc), 40)
+        ox = (width - nc * cell) / 2 - (c0 - 1) * cell
+        oy = 4 - (r0 - 1) * cell
+        return ox, oy, cell
 
     def _paint_board(self, cv: tk.Canvas, d, width: int):
         """The grid: links between neighbouring nodes (gold where both are open), then the nodes, by grade."""
-        ox, oy, cell = self._board_geometry(width)
-        cv.configure(height=int(cell * 15) + 2)
+        ox, oy, cell = self._board_geometry(d, width)
+        rows = [n.row for n in d.nodes] or [1]
+        cv.configure(height=int((max(rows) - min(rows) + 1) * cell) + 8)
         cv.delete("all")
         at = {(n.row, n.col): n for n in d.nodes}
         lit = lambda n: n.opened or n.kind == "Start"            # noqa: E731
@@ -1255,7 +1264,7 @@ class ProfileView:
                 round_rect(cv, x - k, y - k, x + k, y + k, max(2, k * 0.35), fill=fill, outline=line, width=1.5)
 
     def _board_hover(self, cv: tk.Canvas, d, e):
-        ox, oy, cell = self._board_geometry(cv.winfo_width())
+        ox, oy, cell = self._board_geometry(d, cv.winfo_width())
         c, r = int((e.x - ox) // cell) + 1, int((e.y - oy) // cell) + 1
         node = next((n for n in d.nodes if n.row == r and n.col == c), None)
         if node is getattr(self, "_node_tip", None):
@@ -1337,7 +1346,7 @@ class ProfileView:
         node = next((n for n in (d.nodes if d else []) if n.opened and n.kind != "Start"), None)
         if node is None:
             return
-        ox, oy, cell = self._board_geometry(cv.winfo_width())
+        ox, oy, cell = self._board_geometry(d, cv.winfo_width())
         x, y = int(ox + (node.col - 0.5) * cell), int(oy + (node.row - 0.5) * cell)
         ev = type("E", (), {"x": x, "y": y, "x_root": cv.winfo_rootx() + x, "y_root": cv.winfo_rooty() + y})()
         self._board_hover(cv, d, ev)
