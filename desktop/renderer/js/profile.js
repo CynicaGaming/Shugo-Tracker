@@ -383,10 +383,13 @@ export class ProfileView {
   tabTitles(p) {
     const out = h("div");
     out.append(h("div.bar", {}, "Title", p.titles_total ? h("span.extra", {}, `${p.titles_owned}/${p.titles_total}`) : null));
-    if (!p.titles?.length) { out.append(h("div.empty", {}, "No titles equipped")); return out; }
     const cards = h("div.tcards");
-    for (const t of p.titles) {
-      cards.append(h("div.tcard", {}, h("div.nm", {}, t.name), t.category ? h("span.cat", {}, t.category) : null,
+    const NAMES = { Attack: "Offensive", Defense: "Defensive", Etc: "Other" };
+    for (const cat of ["Offensive", "Defensive", "Other"]) {        // always the game's three slots, in its order
+      const t = (p.titles || []).find((x) => (NAMES[x.category] || x.category) === cat);
+      const head = h("div.cat", {}, h("span", {}, cat), t?.total ? h("span.cnt", {}, `${t.owned}/${t.total}`) : null);
+      if (!t) { cards.append(h("div.tcard.none", {}, head, h("div.nm", {}, "None"))); continue; }
+      cards.append(h("div.tcard", {}, head, h("div.nm", {}, t.name),
         t.effects?.length ? h("ul", {}, t.effects.map((e) => h("li", {}, e))) : null,
         t.owned_percent != null ? h("div.own", {}, `Owned by ${t.owned_percent}% of players`) : null));
     }

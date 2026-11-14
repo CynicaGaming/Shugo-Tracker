@@ -165,13 +165,15 @@ input { font: inherit; }
   display: block; cursor: pointer;
 }
 .row:hover { background: var(--hover); }
+.row > .c { margin-left: -6px; }   /* columns are laid out in list coordinates; the row is inset 6px */
 .row .c { position: absolute; top: 0; height: 100%; display: flex; align-items: center; min-width: 0; white-space: nowrap; }
 .row .c > span { overflow: hidden; text-overflow: ellipsis; }
 .row .name { gap: 9px; font-weight: 600; color: #fff; }
 .row .badge {
   flex: none; width: 24px; height: 24px; border-radius: var(--radius); display: grid; place-items: center;
-  font-size: 11px; font-weight: 700; background: var(--panel-2);
+  font-size: 11px; font-weight: 700; background: var(--panel-2); overflow: hidden;
 }
+.row .badge img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
 .row .faction { flex: none; width: 6px; height: 6px; transform: rotate(45deg); border-radius: 1px; }
 .row .dim { color: var(--dim); }
 .row .num { justify-content: flex-end; font-variant-numeric: tabular-nums; color: var(--text-2); }
@@ -246,3 +248,39 @@ input { font: inherit; }
 input[type=range] { accent-color: var(--gold-2); }
 
 .spinner { width: 44px; height: 44px; }
+
+/* ───── find your character (first start) ───── */
+.finder { padding-bottom: 14px; }
+.fhead { padding: 16px 14px 10px; text-align: center; }
+.fhead .ft { font-size: 17px; font-weight: 700; color: #fff; letter-spacing: 0.02em; }
+.fsteps { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.fsteps .sep { color: var(--faint); }
+.fstep { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 4px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--dim); font: inherit; font-size: 12px; cursor: pointer; }
+.fstep:disabled { cursor: default; }
+.fstep .n { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px;
+  font-weight: 700; background: var(--panel-2); color: var(--dim); }
+.fstep.on { border-color: rgba(232, 196, 106, 0.55); color: var(--text); }
+.fstep.on .n { background: var(--gold); color: #1a1306; }
+.fstep.done { color: var(--text); }
+.fstep.done .n { background: rgba(99, 208, 255, 0.18); color: var(--cyan); }
+.fgrid, .flist { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; padding: 8px 12px; }
+.flist { grid-template-columns: 1fr; padding: 6px 4px; }
+.fcols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 8px; }
+.fpick { padding: 9px 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel);
+  color: var(--text); font: inherit; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fpick:hover { border-color: rgba(99, 208, 255, 0.5); background: var(--hover); color: #fff; }
+.fresults { padding: 2px 8px; }
+.frow { display: flex; align-items: center; gap: 9px; width: 100%; height: 40px; padding: 0 8px; border: 0;
+  border-radius: var(--radius); background: none; color: var(--text-2); font: inherit; text-align: left; cursor: pointer; }
+.frow:hover { background: var(--hover); }
+.frow .badge { flex: none; width: 26px; height: 26px; border-radius: var(--radius); display: grid; place-items: center;
+  font-size: 11px; font-weight: 700; background: var(--panel-2); overflow: hidden; }
+.frow .badge img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.frow .nm { color: #fff; font-weight: 600; }
+.frow .lg { color: var(--green); font-size: 12px; }
+.frow .lv { min-width: 44px; text-align: right; color: var(--dim); }
+.fnote { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 22px 10px; color: var(--dim); }
+.fspin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--panel-3); border-top-color: var(--gold);
+  animation: fspin 0.9s linear infinite; }
+@keyframes fspin { to { transform: rotate(360deg); } }

@@ -112,6 +112,13 @@ class Title:
     grade: str
     effects: list[str] = field(default_factory=list)
     owned_percent: int | None = None
+    owned: int | None = None              # titles of this category the character has
+    total: int | None = None              # titles of this category in the game
+
+
+# The game's names and order for the three title slots.
+TITLE_CATEGORIES = {"Attack": "Offensive", "Defense": "Defensive", "Etc": "Other"}
+_TITLE_ORDER = {name: i for i, name in enumerate(TITLE_CATEGORIES.values())}
 
 
 @dataclass
@@ -204,10 +211,13 @@ def parse_profile(info: dict, equipment: dict | None) -> Profile:
     tinfo = info.get("title") or {}
     p.titles_owned, p.titles_total = tinfo.get("ownedCount"), tinfo.get("totalCount")
     for t in tinfo.get("titleList") or []:
-        p.titles.append(Title(name=t.get("name") or "", category=t.get("equipCategory") or "",
+        cat = t.get("equipCategory") or ""
+        p.titles.append(Title(name=t.get("name") or "", category=TITLE_CATEGORIES.get(cat, cat),
                               grade=t.get("grade") or "", owned_percent=t.get("ownedPercent"),
+                              owned=t.get("ownedCount"), total=t.get("totalCount"),
                               effects=[e.get("desc", "") for e in (t.get("equipStatList") or [])]
                               + [e.get("desc", "") for e in (t.get("statList") or [])]))
+    p.titles.sort(key=lambda t: _TITLE_ORDER.get(t.category, len(_TITLE_ORDER)))
     if equipment:
         eq = equipment.get("equipment") or {}
         for d in eq.get("equipmentList") or []:

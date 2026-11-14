@@ -6,18 +6,19 @@ import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LO
 import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
 import { ProfileView } from "./profile.js";
 import { SettingsView } from "./settings.js";
+import { FinderView } from "./finder.js";
 
 const ROW = 38;
 const S = {                                    // everything the window shows
   cfg: {}, version: "", demo: false, regions: [],
-  mode: "search", screen: "list",              // screen: list | profile | settings
+  mode: "search", screen: "list",              // screen: list | profile | settings | finder
   keyword: "", gen: 0, results: [], regionState: {},
   chars: new Map(), favorites: [], my: { slots: [], active: null },
   nearby: { enabled: false, state: "", rows: [], recent: [] },
   hover: null,
   update: { state: "idle" },                   // the self-updater (desktop/updater.js)
 };
-export const app = { S, call, save, openProfile, closeScreen, myChar, refreshList: () => list.render() };
+export const app = { S, call, save, openProfile, closeScreen, myChar, pickMine, refreshList: () => list.render() };
 
 function save(key, value) { S.cfg[key] = value; call("config.set", { key, value }); }
 const fset = (key) => new Set(S.cfg[key] || []);
@@ -34,7 +35,7 @@ function paintTitlebar() {
   titlebar.append(h("span.logo", { html: LOGO }));
   const tabs = h("div.tabs");
   if (S.screen !== "list") {
-    const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent" }[S.mode], settings: "Back" }[S.screen];
+    const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent" }[S.mode], settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
     tabs.append(h("button.tab.back", { onClick: closeScreen }, h("span", { html: ICONS.back, style: { display: "contents" } }), back));
   } else {
     const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode) },
@@ -82,7 +83,8 @@ function meMenu(anchor) {
   const items = [];
   if (me) items.push({ label: "My profile", onClick: async () => openProfile(await call("my.character")) });
   if (used.length) items.push({ label: "Switch Profile", submenu: switchItems });
-  else items.push({ label: "Right-click a player → Set Profile", disabled: true });
+  const free = S.my.slots.findIndex((d) => !d);
+  if (free >= 0) items.push({ label: used.length ? "Add character" : "Find my character", onClick: () => openFinder(free) });
   items.push("-", { label: "Settings", onClick: openSettings });
   showMenu(items, r.right, r.bottom + 2, { alignRight: true });
 }
@@ -112,12 +114,27 @@ function setMode(mode) {
 }
 
 function closeScreen() {
-  profile?.destroy(); profile = null; settings = null;
+  if (S.screen === "finder" && !S.cfg.setup_done) save("setup_done", true);   // skipped: don't ask again
+  profile?.destroy(); profile = null; settings = null; finder = null;
   S.screen = "list";
   render();
 }
 
-let profile = null, settings = null;
+let profile = null, settings = null, finder = null;
+function openFinder(slot) {
+  closeMenus();
+  S.screen = "finder";
+  finder = new FinderView(app, slot);
+  render();
+}
+/** Found yourself: save the character in the given (or first free) slot, make it active, back to the list. */
+async function pickMine(c, slot) {
+  const free = S.my.slots.findIndex((d) => !d);
+  const i = slot ?? (free >= 0 ? free : 0);
+  await setMy("my.set", { key: c.key, slot: i });
+  if (S.my.active !== i) await setMy("my.switch", { slot: i });
+  closeScreen();
+}
 function openProfile(c) {
   if (!c) return;
   closeMenus();
@@ -330,7 +347,9 @@ const list = (() => {
         const col = CLASS_COLORS[c.class_name] || "var(--dim)";
         return h("div.c.name", { style },
           S.mode === "favorites" ? h("span.grip", { html: ICONS.grip, style: { width: "12px", display: "flex" }, onMousedown: (e) => startDrag(e, c) }) : null,
-          h("span.badge", { style: { color: col, boxShadow: `inset 0 0 0 1px ${col}33` } }, (c.class_name || "?")[0]),
+          h("span.badge", { style: { color: col, boxShadow: `inset 0 0 0 1px ${col}33` } },
+            c.portrait ? h("img", { src: c.portrait, loading: "lazy", onError: (e) => e.target.replaceWith((c.class_name || "?")[0]) })
+              : (c.class_name || "?")[0]),
           h("span", {}, c.name), h("span.faction", { style: { background: factionColor(c.race) } }));
       }
       case "legion": return h("div.c.dim", { style }, h("span", {}, c.legion || ""));
@@ -499,6 +518,7 @@ function render() {
   clear(view);
   if (S.screen === "profile" && profile) view.append(profile.el);
   else if (S.screen === "settings" && settings) view.append(settings.el);
+  else if (S.screen === "finder" && finder) view.append(finder.el);
   else {
     if (S.mode === "search") view.append(h("div.searchbox", {}, h("span", { html: ICONS.search, style: { display: "contents" } }), searchInput));
     if (S.mode !== "nearby" || S.nearby.enabled) view.append(filtersBar(), list.head);
@@ -520,7 +540,8 @@ app.render = render;
   win.setAlwaysOnTop(S.cfg.always_on_top !== false);
   if (S.cfg.opacity) win.setOpacity(S.cfg.opacity);
   paintClock();
-  render();
+  if (!S.my.slots.some(Boolean) && !S.cfg.setup_done && !S.demo) openFinder(0);   // first start: find yourself
+  else render();
   const q = new URLSearchParams(location.search).get("q");
   if (q) { searchInput.value = q; runSearch(q); }
   window.__app = app;                       // (screenshots / debugging)

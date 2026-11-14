@@ -362,6 +362,21 @@ class Core:
         self.nearby.set_recent_max(int(n))
         return True
 
+    def rpc_find_mine(self, name: str, server_id: int) -> list[dict]:
+        """First-run setup: characters on one server whose names start with `name` (one search request)."""
+        sid = int(server_id)
+        region = sv.REGION_PREFIX.get(sv.region_of(sid))
+        name = (name or "").strip()
+        if not region or not name:
+            return []
+        try:
+            chars, _total = self.api.search_region(name, region, 1, 30, {"serverId": sid, "race": sv.race_of(sid)})
+        except Exception as e:  # noqa: BLE001
+            self.log(f"core: find_mine: {e}")
+            raise RuntimeError("Couldn't reach the AION 2 site. Try again in a moment.") from e
+        mine = [c for c in chars if c.server_id == sid] or (chars if self.demo else [])
+        return self._keep(rank(mine, name))
+
     def rpc_servers(self) -> dict:
         """Server id -> name (for labels)."""
         return {str(k): v for k, v in sv.SERVER_NAMES.items()}
