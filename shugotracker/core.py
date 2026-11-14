@@ -48,7 +48,7 @@ def to_json(o):
 class Core:
     def __init__(self, root: str, emit: Callable[[dict], None], demo: bool = False, log=None):
         """root: the app folder (data, cache, logs live next to the exe). emit: sends one message to the UI."""
-        from .app import DEFAULT_CONFIG, load_config, save_config
+        from .app import DEFAULT_CONFIG, load_config, migrate_to_app_folder, save_config
         from .favorites import Favorites
         from .profiles import MyCharacters
         from .settings import migrate
@@ -58,6 +58,11 @@ class Core:
         for d in (self.data, self.cache, self.logs):
             os.makedirs(d, exist_ok=True)
         self.log = log or (lambda m: None)
+        if not demo:
+            try:
+                migrate_to_app_folder(root)              # very old versions kept everything in %APPDATA%
+            except OSError:
+                pass
         self.config_path = os.path.join(self.data, "config.json")
         self._save_config = save_config
         self.cfg = {**DEFAULT_CONFIG, **load_config(self.config_path)} if not demo else dict(DEFAULT_CONFIG)

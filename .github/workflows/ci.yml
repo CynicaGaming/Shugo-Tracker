@@ -1,8 +1,10 @@
+# Every push: Python tests and live API checks, then the real app — the Python core plus the Electron window,
+# built into one portable ShugoTracker.exe — with screenshots in demo mode (pushed to the ci-screenshots branch).
 name: Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, electron]
   pull_request:
   workflow_dispatch:
 
@@ -17,7 +19,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: python -m pip install -r requirements.txt pyinstaller
+
       - name: Unit tests
         shell: pwsh
         run: |
@@ -38,99 +44,83 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          python -m shugotracker.app --bench Luna *> bench.txt
-          Copy-Item bench.txt ui-bench.txt
-          Get-Content bench.txt | Select-Object -Last 4 | ForEach-Object { Write-Output "::notice title=bench::$_" }
+          New-Item -ItemType Directory -Force shots | Out-Null
+          python -m shugotracker.app --bench Luna *> shots\bench.txt
+          Get-Content shots\bench.txt | Select-Object -Last 4 | ForEach-Object { Write-Output "::notice title=bench::$_" }
 
       - name: Raw-socket capture sees real traffic
         shell: pwsh
         run: |
-          python tools/rawsock_check.py *> raw1.txt
-          Get-Content raw1.txt | ForEach-Object { Write-Output "::notice title=rawsock-before::$_" }
-          python tools/rawsock_check.py --firewall *> ui-rawsock-check.txt
+          python tools/rawsock_check.py --firewall *> rawsock.txt
           $code = $LASTEXITCODE
-          Get-Content ui-rawsock-check.txt | ForEach-Object { Write-Output "::notice title=rawsock-app-rule::$_" }
+          Get-Content rawsock.txt | ForEach-Object { Write-Output "::notice title=rawsock::$_" }
           exit $code
 
-      - name: UI screenshots (demo data)
+      - name: Build the core (shugo-core.exe)
+        run: python -m PyInstaller --noconfirm --clean ShugoCore.spec
+
+      - name: Core answers over stdin / stdout
         shell: pwsh
         run: |
-          python -m shugotracker.app --demo --query Luna --screenshot ui-demo.png *> ui-demo-log.txt
-          $code = $LASTEXITCODE
-          Get-Content ui-demo-log.txt | Select-Object -Last 15 | ForEach-Object { Write-Output "::notice title=demo::$_" }
-          exit $code
+          $out = '{"id":1,"method":"init","params":{}}' + "`n" + '{"method":"quit"}' | .\dist\shugo-core.exe --root $env:RUNNER_TEMP\coretest --demo
+          Write-Output "::notice title=core::$(($out | Select-Object -First 1).Substring(0, 120))"
+          if (-not ($out -match '"result"')) { exit 1 }
 
-      - name: UI screenshots (README showcase, one live character)
-        continue-on-error: true
-        run: python -m shugotracker.app --showcase Cynica@Kaisinel=Cynica --query Cynica --screenshot ui-show.png
+      - name: Install Electron
+        working-directory: desktop
+        run: npm install --no-audit --no-fund && npm install --no-save --no-audit --no-fund playwright@1.48.2
 
-      - name: UI screenshots (live data)
-        continue-on-error: true
-        run: python -m shugotracker.app --query Luna --screenshot ui-live.png
+      - name: Screenshots of the real window (demo data)
+        working-directory: desktop
+        env:
+          PYTHON: python
+        run: node test/shots.js
 
-      - name: Packaged exe keeps favorites (start, star, quit, start again from another folder)
+      - name: Build ShugoTracker.exe
+        working-directory: desktop
+        run: npx electron-builder --win portable --publish never
+
+      - name: Exe icon as Windows shows it, start-up time, size
         shell: pwsh
         run: |
-          python -m pip install pyinstaller
-          Set-Content -Path shugotracker/_version.py -Value '__version__ = "0.0.1"'
-          python -m PyInstaller --noconfirm --clean ShugoTracker.spec *> build.txt
-          git checkout -- shugotracker/_version.py
-          $mb = [math]::Round((Get-Item dist\ShugoTracker.exe).Length / 1MB, 1)
+          Add-Type -AssemblyName System.Drawing
+          $exe = (Resolve-Path desktop\dist\ShugoTracker.exe).Path
+          [System.Drawing.Icon]::ExtractAssociatedIcon($exe).ToBitmap().Save("$PWD\shots\exe-icon.png")
+          $dir = Join-Path $env:RUNNER_TEMP "portable"
+          foreach ($i in 1, 2) {
+            Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force $dir | Out-Null
+            Copy-Item $exe $dir
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $p = Start-Process (Join-Path $dir "ShugoTracker.exe") -ArgumentList "--demo" -PassThru
+            while (-not (Test-Path (Join-Path $dir "logs\shugo-core.log")) -and $sw.Elapsed.TotalSeconds -lt 60) { Start-Sleep -Milliseconds 100 }
+            $t = [math]::Round($sw.Elapsed.TotalSeconds, 1)
+            Write-Output "::notice title=startup::run ${i}: backend running after $t s"
+            "startup run ${i}: $t s" | Add-Content shots\log.txt
+            Get-Process | Where-Object { $_.Path -and ($_.Path -like "*ShugoTracker*" -or $_.Path -like "*shugo-core*") } | Stop-Process -Force -ErrorAction SilentlyContinue
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep 2
+          }
+          $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
           Write-Output "::notice title=exe::ShugoTracker.exe is $mb MB"
-          "exe size: $mb MB" | Set-Content ui-exe-size.txt
-          # portable: everything lives next to the exe, and moving the whole folder keeps it
-          Remove-Item dist\data, dist\cache, dist\logs -Recurse -ErrorAction SilentlyContinue
-          $r1 = Join-Path $env:RUNNER_TEMP "fav1.txt"; $r2 = Join-Path $env:RUNNER_TEMP "fav2.txt"
-          Start-Process dist\ShugoTracker.exe -ArgumentList "--selftest-favorites", "`"$r1`"" -Wait
-          Copy-Item dist -Destination moved -Recurse
-          $fav = "moved\data\favorites.json"
-          Start-Process moved\ShugoTracker.exe -ArgumentList "--selftest-favorites", "`"$r2`"" -Wait
-          $a = Get-Content $r1 -ErrorAction SilentlyContinue; $b = Get-Content $r2 -ErrorAction SilentlyContinue
-          Write-Output "::notice title=favorites::first run: $a"
-          Write-Output "::notice title=favorites::second run: $b"
-          "first: $a`nsecond: $b" | Set-Content ui-favorites-check.txt
-          if (Test-Path $fav) { Get-Content $fav | Set-Content ui-favorites-file.txt }
-          $log = "moved\logs\shugo-tracker.log"
-          if (Test-Path $log) { Get-Content $log | Set-Content ui-favorites-log.txt }
-          if (-not ($b -like "loaded*")) { Write-Error "favorites did not survive a restart"; exit 1 }
-
-      - name: App log (update / api lines)
-        if: always()
-        shell: pwsh
-        run: |
-          if (Test-Path shugo-tracker.log) {
-            Get-Content shugo-tracker.log | Select-String -Pattern "update:|api:" | Select-Object -Last 8 |
-              ForEach-Object { Write-Output "::notice title=applog::$_" }
-          }
-
-      - name: UI self-check
-        shell: pwsh
-        run: |
-          foreach ($f in Get-ChildItem ui-*-check.txt) {
-            $r = Get-Content $f
-            Write-Output "::notice title=ui-check::$($f.Name): $r"
-            if ($r -like "FAIL*") { exit 1 }
-          }
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ui-screenshots
-          path: ui-*.png
-          if-no-files-found: warn
+          "exe: $mb MB" | Add-Content shots\log.txt
 
       - name: Publish screenshots to the ci-screenshots branch
         if: always() && github.event_name != 'pull_request'
         shell: pwsh
         run: |
-          if (-not (Test-Path ui-*)) { exit 0 }
-          New-Item -ItemType Directory -Force shots | Out-Null
-          Copy-Item ui-*.png shots\ -ErrorAction SilentlyContinue
-          Copy-Item ui-*.txt shots\ -ErrorAction SilentlyContinue
+          if (-not (Test-Path shots)) { exit 0 }
           Set-Location shots
           git init -q -b ci-screenshots
           git config user.name "github-actions"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -q -m "UI screenshots for ${{ github.sha }}"
+          git commit -q -m "Screenshots for ${{ github.sha }}"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-screenshots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ShugoTracker
+          path: desktop/dist/ShugoTracker.exe
+          if-no-files-found: warn

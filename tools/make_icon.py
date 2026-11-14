@@ -1,9 +1,9 @@
-"""Regenerate assets/ShugoTracker.ico from the drawing in shugotracker/desktop.py."""
+"""Regenerate assets/ShugoTracker.ico from the drawing in tools/icons.py."""
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from shugotracker.desktop import make_bubble_image, make_icon_image, save_ico  # noqa: E402
+from icons import make_bubble_image, make_icon_image, save_ico  # noqa: E402
 
 here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
 save_ico(os.path.join(here, "ShugoTracker.ico"))

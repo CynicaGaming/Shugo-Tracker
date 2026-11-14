@@ -1,6 +1,6 @@
 name: Publish release
 
-# Builds ShugoTracker.exe and publishes it as a GitHub Release. Runs ONLY when you publish:
+# Builds ShugoTracker.exe (the Python core inside a portable Electron app) and publishes it as a GitHub Release. Runs ONLY when you publish:
 #   - Actions tab → "Publish release" → Run workflow → enter a version like 1.2.0, or
 #   - push a tag:  git tag v1.2.0 && git push origin v1.2.0
 # The in-app updater picks up the newest release automatically.
@@ -37,10 +37,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt pyinstaller
+        run: python -m pip install -r requirements.txt pyinstaller
 
       - name: Test
         run: python -m unittest discover -s tests -t .
@@ -49,29 +51,29 @@ jobs:
         shell: pwsh
         run: |
           Set-Content -Path shugotracker/_version.py -Value "__version__ = `"${{ steps.v.outputs.version }}`""
+          $v = "${{ steps.v.outputs.version }}"
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { $v = "$v.0" }
+          Push-Location desktop
+          npm version $v --no-git-tag-version --allow-same-version
+          Pop-Location
 
-      - name: Build exe
-        run: python -m PyInstaller --noconfirm --clean ShugoTracker.spec
+      - name: Build the core (shugo-core.exe)
+        run: python -m PyInstaller --noconfirm --clean ShugoCore.spec
 
-      - name: Check that Restart-after-update relaunches the exe
-        shell: pwsh
-        run: |
-          $marker = Join-Path $env:RUNNER_TEMP "relaunch-ok.txt"
-          Remove-Item $marker -ErrorAction SilentlyContinue
-          $p = Start-Process dist\ShugoTracker.exe -ArgumentList "--selftest-relaunch", "`"$marker`"" -PassThru -Wait
-          for ($i = 0; $i -lt 40 -and -not (Test-Path $marker); $i++) { Start-Sleep -Milliseconds 500 }
-          if (-not (Test-Path $marker)) { Write-Error "the relaunched exe did not start"; exit 1 }
-          Write-Output "relaunched copy started: $(Get-Content $marker)"
+      - name: Build ShugoTracker.exe (portable Electron app)
+        working-directory: desktop
+        run: npm install --no-audit --no-fund && npx electron-builder --win portable --publish never
 
       - name: Package
         shell: pwsh
         run: |
-          $hash = (Get-FileHash dist\ShugoTracker.exe -Algorithm SHA256).Hash.ToLower()
-          "$hash  ShugoTracker.exe" | Set-Content -NoNewline dist\ShugoTracker.exe.sha256
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item desktop\dist\ShugoTracker.exe out\
+          $hash = (Get-FileHash out\ShugoTracker.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  ShugoTracker.exe" | Set-Content -NoNewline out\ShugoTracker.exe.sha256
           New-Item -ItemType Directory -Force pkg | Out-Null
-          Copy-Item dist\ShugoTracker.exe, README.md, LICENSE pkg\
-          Copy-Item config.example.json pkg\config.json
-          Compress-Archive -Path pkg\* -DestinationPath ShugoTracker-windows.zip -Force
+          Copy-Item out\ShugoTracker.exe, README.md, LICENSE pkg\
+          Compress-Archive -Path pkg\* -DestinationPath out\ShugoTracker-windows.zip -Force
 
       - name: Publish
         uses: softprops/action-gh-release@v2
@@ -81,6 +83,6 @@ jobs:
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: |
-            dist/ShugoTracker.exe
-            dist/ShugoTracker.exe.sha256
-            ShugoTracker-windows.zip
+            out/ShugoTracker.exe
+            out/ShugoTracker.exe.sha256
+            out/ShugoTracker-windows.zip

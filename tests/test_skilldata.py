@@ -76,15 +76,3 @@ class SkillDataTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class WrapTest(unittest.TestCase):
-    def test_wrapped_lines(self):
-        try:
-            from shugotracker.profile_ui import wrapped_lines
-        except ImportError:                     # no Tk here
-            self.skipTest("tkinter not available")
-        m = len                                  # 1 px per character
-        self.assertEqual(wrapped_lines("aaa bbb ccc", m, 7), 2)        # "aaa bbb" / "ccc"
-        self.assertEqual(wrapped_lines("one\n\nthree", m, 50), 3)      # blank line counts
-        self.assertEqual(wrapped_lines("", m, 10), 1)

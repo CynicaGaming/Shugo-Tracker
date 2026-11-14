@@ -2,7 +2,8 @@
 import sys
 sys.path.insert(0, ".")
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from shugotracker.desktop import make_icon_image
+sys.path.insert(0, "tools")
+from icons import make_icon_image  # noqa: E402
 
 S = sys.argv[1] if len(sys.argv) > 1 else "shots/"   # a folder with the CI screenshots (ci-screenshots branch)
 OUT = "docs/images/"

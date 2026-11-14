@@ -1,4 +1,6 @@
-"""Entry point: the search window (with Nearby), plus the command-line tools (--search-cli, --bench, …)."""
+"""Config and app-folder helpers used by the core, plus the command-line tools (--search-cli, --bench, --replay-bin).
+
+The app itself is the Electron window in desktop/, which starts shugotracker.core."""
 from __future__ import annotations
 
 import argparse
@@ -8,7 +10,7 @@ import sys
 import time
 
 from . import servers as sv
-from .updater import Updater, __version__
+from ._version import __version__
 
 FROZEN = getattr(sys, "frozen", False)
 # Next to ShugoTracker.exe when built, else the project folder.
@@ -143,183 +145,6 @@ def save_config(path: str, cfg: dict) -> None:
         pass
 
 
-def _run_search(cfg: dict, config_path: str, demo: bool = False, query: str | None = None, showcase: str | None = None,
-                screenshot: str | None = None, after_update: bool = False, selftest: str | None = None) -> int:
-    from .aion2api import Api
-    from .search_ui import SearchWindow
-    from .updater import Updater
-
-    from .desktop import SingleInstance, folder_size
-    from .settings import migrate
-    from .settings_ui import SettingsServices
-
-    instance = None
-    if not (demo or screenshot):
-        instance = SingleInstance()
-        acquired = instance.acquire()
-        if not acquired and after_update:
-            # Started by the updater: the old version may still be finishing its shutdown.
-            for _ in range(40):
-                time.sleep(0.25)
-                if instance.acquire():
-                    acquired = True
-                    break
-        if not acquired:
-            # Already running (maybe hidden): bring that copy forward instead of opening a second one.
-            if instance.notify_running():
-                return 0
-            instance = None
-
-    migrate(cfg)
-    log = _file_logger()
-    log(f"Shugo Tracker v{__version__}" + (" (demo data)" if demo else ""))
-    if not demo and not screenshot:
-        try:                                    # "Start with Windows" is gone: undo it for anyone who had it on
-            from . import desktop
-            if desktop.autostart_supported() and desktop.get_autostart():
-                desktop.set_autostart(False)
-                log("startup: removed the Start with Windows entry")
-        except Exception:  # noqa: BLE001
-            pass
-    session = None
-    if demo:
-        from .demo import DemoSession, ShowcaseSession
-        session = ShowcaseSession(*showcase.split("=", 1)) if showcase else DemoSession()
-    cache_dir = None if (demo or screenshot) else CACHE
-    api = Api(db_path=os.path.join(cache_dir, "shugo.db") if cache_dir else None, session=session, log=log,
-              migrate_from=(None, None) if demo else (os.path.join(DATA, "character_cache.json"),
-                                                      os.path.join(cache_dir, "profiles") if cache_dir else None))
-    updater = Updater(repo=cfg.get("update_repo") or "CynicaGaming/Shugo-Tracker",
-                      enabled=bool(cfg.get("auto_update", True)) and not demo and not screenshot, log=log)
-    updater.start()
-
-    restart = {"pending": False}
-
-    def on_close():
-        """Everything shuts down here (✕, or Restart after an update)."""
-        if instance:
-            instance.release()          # free the single-instance port before the new copy starts
-        nearby.stop()
-        updater.stop()
-        api.close()
-        if not screenshot:
-            save_config(config_path, cfg)
-        if restart["pending"]:
-            args = [a for a in sys.argv[1:] if a != "--after-update"] + ["--after-update"]
-            log(f"update: restarting into v{updater.latest}")
-            updater.relaunch(args)
-        elif updater.state == "ready":
-            updater.apply(restart=False)  # next launch runs the new version
-
-    def on_update() -> bool:
-        """Restart clicked: install now; on_close launches the new version once this copy has let go."""
-        if not updater.apply(restart=False):
-            return False
-        restart["pending"] = True
-        return True
-
-    from .nearby import NO_ADMIN, NearbyService
-    nearby_find = None
-    if demo:
-        from .demo import find_nearby
-        nearby_find = find_nearby(session)
-    from .profiles import MyCharacters
-    MyCharacters(cfg)                                # Nearby starts as your active character (Set Profile)
-    nearby = NearbyService(api, cfg, log=log, data_dir=LOGS, find=nearby_find)
-
-    from .favorites import Favorites
-    favorites = Favorites(None if (demo or screenshot) else os.path.join(DATA, "favorites.json"), log=log)
-    log(f"app folder: {ROOT}  ·  {len(favorites)} favorites")
-    if screenshot:
-        cfg = {**cfg, "window_pos": [40, 40], "window_size": [600, 720], "regions": [],
-               "factions": [], "classes": [], "level_min": None, "level_max": None, "nearby_enabled": False}
-    win = SearchWindow(api, cfg, on_close=on_close, favorites=favorites, updater=updater,
-                       on_update=on_update,
-                       version=__version__, initial_query=query, screenshot=screenshot, cache_dir=cache_dir)
-    post = win.inbox.put
-    if not screenshot:
-        win.save_cfg = lambda: save_config(config_path, cfg)
-
-    def cache_size() -> int:
-        return folder_size(cache_dir) if cache_dir and os.path.isdir(cache_dir) else 0
-
-    def clear_cache() -> int:
-        before = cache_size()
-        api.clear_caches()                       # the database empties itself; the image files go here
-        images = os.path.join(cache_dir, "images") if cache_dir else None
-        if images and os.path.isdir(images):
-            for root, _dirs, files in os.walk(images):
-                for f in files:
-                    try:
-                        os.remove(os.path.join(root, f))
-                    except OSError:
-                        pass
-        return max(0, before - cache_size())
-
-    win.settings_services = SettingsServices(clear_cache=clear_cache, cache_size=cache_size, data_dir=ROOT)
-    if instance:
-        instance.on_show = lambda: post(("show",))
-    def request_admin():
-        """Nearby needs administrator: start an elevated copy (Windows asks) and close this one. Declined, this
-        copy stays, and Nearby says why it can't run."""
-        from .desktop import relaunch_as_admin
-        args = [a for a in sys.argv[1:] if a != "--after-update"] + ["--after-update"]
-        if relaunch_as_admin(args):
-            log("nearby: restarting as administrator")
-            win.close()
-        else:
-            log("nearby: administrator declined")
-
-    def set_nearby_enabled(on: bool):
-        cfg["nearby_enabled"] = bool(on)
-        if on:
-            if demo:
-                from .demo import feed_nearby
-                nearby.start_demo(feed_nearby)
-            else:
-                nearby.start()
-        else:
-            nearby.stop()
-        if not screenshot:
-            save_config(config_path, cfg)
-        win._refresh_nearby(force=True)
-        if on and not (demo or screenshot) and nearby.state == NO_ADMIN:
-            win.root.after(300, request_admin)
-
-    def remember_region(region: str):
-        cfg["nearby_region"] = region
-        if not screenshot:
-            save_config(config_path, cfg)
-    nearby.on_region = remember_region
-
-    # Your character is whoever you set (Set Profile); what the game's traffic says never changes it.
-    if demo:
-        from .demo import feed_teleport
-        win.demo_teleport = lambda: feed_teleport(nearby)
-    win.nearby = nearby
-    win.set_nearby_enabled = set_nearby_enabled
-    win.request_admin = request_admin
-    if cfg.get("nearby_enabled"):
-        set_nearby_enabled(True)
-
-    if selftest:
-        def check():
-            if len(favorites):
-                result = f"loaded {len(favorites)}"
-            elif win._view:
-                win.toggle_favorite(win._view[0])
-                result = "added" if os.path.exists(os.path.join(DATA, "favorites.json")) else \
-                    f"add failed: {favorites.last_error}"
-            else:
-                result = "no search results"
-            with open(selftest, "w", encoding="utf-8") as f:
-                f.write(f"{result} | {DATA}")
-            win.root.after(500, win.close)
-        win.root.after(9000, check)
-    win.run()
-    return 0
-
-
 def _search_cli(name: str) -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -451,46 +276,6 @@ def _bench(name: str) -> int:
     return 0
 
 
-def _file_logger():
-    try:
-        os.makedirs(LOGS, exist_ok=True)
-        f = open(os.path.join(LOGS, "shugo-tracker.log"), "w", encoding="utf-8")
-    except OSError:
-        f = None
-
-    def log(msg: str) -> None:
-        line = time.strftime("%H:%M:%S ") + msg
-        if sys.stdout is not None:
-            print(line, flush=True)
-        if f:
-            try:
-                f.write(line + "\n")
-                f.flush()
-            except (OSError, ValueError):
-                pass
-    return log
-
-
-def _selftest_relaunch(path: str, child: bool) -> int:
-    """
-    Release-build check of the updater's Restart: the exe starts a new copy of itself exactly like the updater
-    does and exits at once; the new copy must still be able to start Tk after the old one is gone.
-    """
-    from .updater import Updater
-    if child:
-        time.sleep(3)                       # the parent (and its unpacked runtime folder) is gone by now
-        import tkinter
-        root = tkinter.Tk()
-        root.withdraw()
-        root.update()
-        root.destroy()
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("OK")
-        return 0
-    Updater.relaunch(["--selftest-relaunch", path, "--selftest-child"])
-    return 0
-
-
 def _replay_bin(path: str) -> int:
     """Print every event the decoder finds in a Nearby recording, then the resulting player list."""
     from collections import Counter
@@ -522,47 +307,21 @@ def _replay_bin(path: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Shugo Tracker: AION 2 character search with gear score & combat power")
+    ap = argparse.ArgumentParser(description="Shugo Tracker command-line tools (the app is the Electron window)")
     ap.add_argument("--config", default=os.path.join(DATA, "config.json"))
     ap.add_argument("--search-cli", metavar="NAME", help="search from the command line and print results")
-    ap.add_argument("--query", metavar="NAME", help="start the search window with this search")
     ap.add_argument("--bench", metavar="NAME", help="time cold vs cached search/profile loading and exit")
-    ap.add_argument("--showcase", metavar="REAL=ALIAS",
-                    help="demo data, plus one real character shown under another name (README screenshots)")
-    ap.add_argument("--screenshot", metavar="PNG", help="save screenshots of the search window, then exit")
-    ap.add_argument("--demo", action="store_true", help="made-up characters and players (no game, no network)")
-    ap.add_argument("--version", action="version", version=f"Shugo Tracker {__version__}")
-    ap.add_argument("--after-update", action="store_true", help=argparse.SUPPRESS)
-    ap.add_argument("--selftest-relaunch", metavar="FILE", help=argparse.SUPPRESS)
-    ap.add_argument("--selftest-child", action="store_true", help=argparse.SUPPRESS)
-    ap.add_argument("--selftest-favorites", metavar="FILE", help=argparse.SUPPRESS)
     ap.add_argument("--replay-bin", metavar="FILE", help="decode a Nearby troubleshooting recording and print it")
+    ap.add_argument("--version", action="version", version=f"Shugo Tracker {__version__}")
     args = ap.parse_args(argv)
     if args.replay_bin:
         return _replay_bin(args.replay_bin)
-    if args.selftest_relaunch:
-        return _selftest_relaunch(args.selftest_relaunch, child=args.selftest_child)
-
-    if args.config == os.path.join(DATA, "config.json"):
-        try:
-            os.makedirs(DATA, exist_ok=True)
-            migrate_to_app_folder()
-        except OSError:
-            pass
-    cfg = load_config(args.config)
-    if not os.path.exists(args.config):
-        save_config(args.config, cfg)  # first run: write the defaults so they can be edited
-
     if args.search_cli:
         return _search_cli(args.search_cli)
     if args.bench:
         return _bench(args.bench)
-    code = _run_search(cfg, args.config, demo=args.demo or bool(args.showcase), showcase=args.showcase,
-                       query=args.query or ("Luna" if args.selftest_favorites else None), screenshot=args.screenshot,
-                       after_update=args.after_update, selftest=args.selftest_favorites)
-    if FROZEN:
-        os._exit(code)                  # don't let a leftover background thread keep the process alive
-    return code
+    ap.print_help()
+    return 0
 
 
 if __name__ == "__main__":
