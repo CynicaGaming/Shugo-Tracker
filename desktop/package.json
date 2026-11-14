@@ -1,0 +1,30 @@
+{
+  "name": "shugo-tracker",
+  "productName": "Shugo Tracker",
+  "version": "0.0.0-dev",
+  "description": "AION 2 character search, profiles and Nearby players",
+  "main": "main.js",
+  "author": "CynicaGaming",
+  "license": "GPL-3.0",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "demo": "electron . --demo",
+    "dist": "electron-builder --win portable --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.cynicagaming.shugotracker",
+    "productName": "Shugo Tracker",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "preload.js", "updater.js", "renderer/**", "build/icon.ico"],
+    "extraResources": [{ "from": "../dist/shugo-core.exe", "to": "core/shugo-core.exe" }],
+    "asar": true,
+    "win": { "target": "portable", "icon": "build/icon.ico", "requestedExecutionLevel": "asInvoker" },
+    "portable": { "artifactName": "ShugoTracker.exe", "unpackDirName": "ShugoTracker" },
+    "electronLanguages": ["en-US"]
+  }
+}

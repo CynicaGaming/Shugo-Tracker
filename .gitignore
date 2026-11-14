@@ -12,3 +12,6 @@ data/
 !shugotracker/data/
 cache/
 logs/
+desktop/node_modules/
+desktop/dist/
+.dev-app/
