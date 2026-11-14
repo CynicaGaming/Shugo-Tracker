@@ -1,7 +1,7 @@
 // Shugo Tracker (Electron): the window, and the Python core running behind it.
 //
 // Portable: everything lives in folders next to ShugoTracker.exe (data, cache, logs), Chromium's own cache too.
-const { app, BrowserWindow, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, screen, shell } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -22,6 +22,14 @@ if (!DEMO && !app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 let win = null;
 let core = null;
 let quitting = false;
+let opacity = 1;
+
+/* Window events go to logs\shugo-window.log, so a window that vanishes can be explained afterwards. */
+const winLog = (() => {
+  let f = null;
+  try { fs.mkdirSync(path.join(ROOT, "logs"), { recursive: true }); f = fs.openSync(path.join(ROOT, "logs", "shugo-window.log"), "w"); } catch { /* read-only folder */ }
+  return (m) => { if (f != null) try { fs.writeSync(f, `${new Date().toTimeString().slice(0, 8)} ${m}\n`); } catch { /* ignore */ } };
+})();
 const updater = new Updater({ exe: EXE, dir: ROOT, version: app.getVersion(), dev: DEV,
   onChange: (s) => win?.webContents.send("update", s) });
 
@@ -54,11 +62,23 @@ function createWindow() {
     alwaysOnTop: cfg.always_on_top !== false, icon: path.join(__dirname, "build", "icon.ico"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false },
   });
-  if (cfg.window_opacity) win.setOpacity(Math.max(0.3, Math.min(1, cfg.window_opacity)));
+  opacity = Math.max(0.3, Math.min(1, Number(cfg.window_opacity) || 1));
+  if (opacity < 1) win.setOpacity(opacity);
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
-  win.once("ready-to-show", () => win.show());
+  win.once("ready-to-show", () => { onScreen(); win.show(); });
+  for (const ev of ["minimize", "restore", "hide", "show", "maximize", "unmaximize", "unresponsive", "responsive"]) {
+    win.on(ev, () => winLog(`window ${ev}`));
+  }
+  // A see-through window (opacity below 100%) can come back from minimize without repainting, so it stays
+  // invisible: set the opacity again and redraw whenever it is restored.
+  win.on("restore", () => setTimeout(() => repaint(), 50));
+  win.on("maximize", () => win.unmaximize());          // (a double-click on the title bar): keep the overlay size
+  win.webContents.on("render-process-gone", (_e, d) => {
+    winLog(`renderer gone: ${d.reason}`);
+    if (!quitting && win) win.reload();                // a crashed page would leave an empty window
+  });
   win.on("close", () => {
-    const b = win.getBounds();
+    const b = win.getNormalBounds();                   // (a minimized window's bounds are far off screen)
     toCore({ id: 0, method: "config.set", params: { key: "window_size", value: [b.width, b.height] } });
     toCore({ id: 0, method: "config.set", params: { key: "window_pos", value: [b.x, b.y] } });
   });
@@ -66,15 +86,45 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
 }
 
-app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } });
+/** Make sure the window is on a screen: monitors change, and a saved position can be off every one of them. */
+function onScreen() {
+  if (!win) return;
+  const b = win.getBounds();
+  const area = screen.getDisplayMatching(b).workArea;
+  const visible = b.x + b.width > area.x + 60 && b.x < area.x + area.width - 60 && b.y >= area.y - 10 && b.y < area.y + area.height - 60;
+  if (!visible) {
+    const w = Math.min(b.width, area.width), h = Math.min(b.height, area.height);
+    win.setBounds({ x: area.x + Math.round((area.width - w) / 2), y: area.y + Math.round((area.height - h) / 2), width: w, height: h });
+    winLog(`moved on screen from ${b.x},${b.y}`);
+  }
+}
+function repaint() {
+  if (!win) return;
+  win.setOpacity(opacity);
+  win.webContents.invalidate();
+}
+/** Bring the window back whatever state it is in (starting ShugoTracker.exe again does this). */
+function reveal() {
+  if (!win) return;
+  winLog("reveal");
+  if (win.isMinimized()) win.restore();
+  onScreen();
+  win.show();
+  repaint();
+  win.setAlwaysOnTop(readConfig().always_on_top !== false);
+  win.moveTop();
+  win.focus();
+}
+
+app.on("second-instance", () => reveal());
 
 ipcMain.on("core", (_e, msg) => toCore(msg));
 ipcMain.handle("win", async (_e, action, arg) => {
   switch (action) {
-    case "minimize": win?.minimize(); break;
+    case "minimize": winLog("minimize button"); win?.minimize(); break;
     case "close": app.quit(); break;
     case "alwaysOnTop": win?.setAlwaysOnTop(!!arg); break;
-    case "opacity": win?.setOpacity(Math.max(0.3, Math.min(1, Number(arg) || 1))); break;
+    case "opacity": opacity = Math.max(0.3, Math.min(1, Number(arg) || 1)); win?.setOpacity(opacity); break;
     case "openFolder": shell.openPath(ROOT); break;
     case "openExternal": shell.openExternal(String(arg)); break;
     case "relaunchAsAdmin": return relaunchAsAdmin();
@@ -87,16 +137,22 @@ ipcMain.handle("win", async (_e, action, arg) => {
  *  (Windows asks), and close this one if it started. */
 function relaunchAsAdmin() {
   if (process.platform !== "win32") return false;
+  winLog("relaunch as administrator");
+  app.releaseSingleInstanceLock();                     // let the elevated copy take over the single-instance lock
   const ps = spawn("powershell.exe", ["-NoProfile", "-Command",
     `try { Start-Process -FilePath '${EXE.replace(/'/g, "''")}' -Verb RunAs -WorkingDirectory '${ROOT.replace(/'/g, "''")}'; exit 0 } catch { exit 1 }`],
   { windowsHide: true });
   return new Promise((resolve) => ps.on("exit", (code) => {
-    if (code === 0) { app.releaseSingleInstanceLock(); setTimeout(() => app.quit(), 200); }
+    winLog(`relaunch as administrator: ${code === 0 ? "started" : "declined"}`);
+    if (code === 0) setTimeout(() => app.quit(), 200);
+    else { app.requestSingleInstanceLock(); reveal(); }   // declined: this copy carries on
     resolve(code === 0);
   }));
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);                       // no hidden menu bar for Alt to wake up
+  winLog(`Shugo Tracker ${app.getVersion()} started`);
   startCore();
   createWindow();
   updater.start(readConfig().auto_update !== false && !DEMO);
