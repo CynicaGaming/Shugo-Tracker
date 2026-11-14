@@ -344,7 +344,7 @@ const list = (() => {
         const now = S.nearby.rows.some((x) => x.char.key === c.key);
         return h("div.c", { style: { ...style, color: now ? "var(--green)" : "var(--dim)" } },
           r?.fought ? h("span", { style: { color: "var(--red)", marginRight: "4px" } }, "⚔") : null,
-          h("span", {}, now ? "Nearby now" : r ? ago(r.seen) : ""));
+          h("span", {}, now ? "Here now" : r ? ago(r.seen) : ""));
       }
     }
     return null;
