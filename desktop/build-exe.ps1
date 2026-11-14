@@ -7,17 +7,18 @@ Set-Location $PSScriptRoot
 npx electron-builder --win dir --publish never
 if ($LASTEXITCODE -ne 0) { throw "electron-builder failed" }
 
-$work = "dist\launcher"
+$work = Join-Path $PSScriptRoot "dist\launcher"
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $work | Out-Null
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path "dist\win-unpacked").Path, "$PWD\$work\app.zip",
+[IO.Compression.ZipFile]::CreateFromDirectory((Resolve-Path "dist\win-unpacked").Path, "$work\app.zip",
     [IO.Compression.CompressionLevel]::Optimal, $false)
 
 # The unpacked folder is named after the version plus the zip's hash, so every build unpacks fresh exactly once.
 $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
 $hash = (Get-FileHash "$work\app.zip" -Algorithm SHA256).Hash.Substring(0, 8).ToLower()
-Set-Content -NoNewline "$work\build.txt" "$version-$hash"
+[IO.File]::WriteAllText("$work\build.txt", "$version-$hash")
+Get-ChildItem $work | ForEach-Object { Write-Output "$($_.Name) $($_.Length)" }
 
 $csc = Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 $fw = Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319"
