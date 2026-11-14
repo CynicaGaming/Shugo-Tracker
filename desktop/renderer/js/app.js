@@ -185,7 +185,9 @@ on("card", (c) => {
 });
 
 on("nearby", (d) => {
+  const toggled = d.enabled !== S.nearby.enabled;
   S.nearby = d;
+  if (toggled && S.screen === "list") { render(); return; }      // filters and headers come and go with it
   for (const r of [...d.rows, ...d.recent]) S.chars.set(r.char.key, r.char);
   if (S.screen === "list") paintTitlebar();
   if (S.mode === "nearby" || S.mode === "recent") { list.render(); paintFooter(); }
