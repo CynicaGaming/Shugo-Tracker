@@ -14,6 +14,5 @@ cache/
 logs/
 desktop/node_modules/
 desktop/dist/
-desktop/dist-store/
 .dev-app/
 !desktop/build/

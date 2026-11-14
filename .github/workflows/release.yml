@@ -60,9 +60,13 @@ jobs:
       - name: Build the core (dist/shugo-core)
         run: python -m PyInstaller --noconfirm --clean ShugoCore.spec
 
-      - name: Build ShugoTracker.exe (portable Electron app)
-        working-directory: desktop
-        run: npm install --no-audit --no-fund && npx electron-builder --win portable --publish never
+      - name: Build ShugoTracker.exe (Electron app inside a one-file launcher)
+        shell: pwsh
+        run: |
+          Push-Location desktop
+          npm install --no-audit --no-fund
+          Pop-Location
+          desktop\build-exe.ps1
 
       - name: Package
         shell: pwsh

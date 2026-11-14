@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "demo": "electron . --demo",
-    "dist": "electron-builder --win portable --publish never"
+    "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File build-exe.ps1"
   },
   "devDependencies": {
     "electron": "33.2.1",
@@ -23,8 +23,7 @@
     "files": ["main.js", "preload.js", "updater.js", "renderer/**", "build/icon.ico"],
     "extraResources": [{ "from": "../dist/shugo-core", "to": "core" }],
     "asar": true,
-    "win": { "target": "portable", "icon": "build/icon.ico", "requestedExecutionLevel": "asInvoker" },
-    "portable": { "artifactName": "ShugoTracker.exe", "unpackDirName": "ShugoTracker" },
+    "win": { "target": "dir", "icon": "build/icon.ico", "requestedExecutionLevel": "asInvoker" },
     "electronLanguages": ["en-US"]
   }
 }
