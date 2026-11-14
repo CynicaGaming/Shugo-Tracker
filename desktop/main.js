@@ -11,7 +11,8 @@ const { Updater } = require("./updater");
 const DEV = !app.isPackaged;
 const EXE = process.env.PORTABLE_EXECUTABLE_FILE || app.getPath("exe");     // the file the user started
 const ROOT = DEV ? path.join(__dirname, "..", ".dev-app") : path.dirname(EXE);
-const DEMO = process.argv.includes("--demo");
+const SHOWCASE = (process.argv.find((a) => a.startsWith("--showcase=")) || "").slice(11);   // README screenshots
+const DEMO = process.argv.includes("--demo") || !!SHOWCASE;
 fs.mkdirSync(path.join(ROOT, "cache", "electron"), { recursive: true });
 app.setPath("userData", path.join(ROOT, "cache", "electron"));
 app.setPath("sessionData", path.join(ROOT, "cache", "electron"));
@@ -30,7 +31,7 @@ function readConfig() {
 
 /* ───── the Python core ───── */
 function startCore() {
-  const args = ["--root", ROOT, ...(DEMO ? ["--demo"] : [])];
+  const args = ["--root", ROOT, ...(DEMO ? ["--demo"] : []), ...(SHOWCASE ? ["--showcase", SHOWCASE] : [])];
   const cmd = DEV ? (process.env.PYTHON || (process.platform === "win32" ? "python" : "python3")) : path.join(process.resourcesPath, "core", "shugo-core.exe");
   const full = DEV ? ["-m", "shugotracker.core", ...args] : args;
   core = spawn(cmd, full, { cwd: DEV ? path.join(__dirname, "..") : ROOT, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });

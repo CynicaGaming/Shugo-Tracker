@@ -46,7 +46,8 @@ def to_json(o):
 
 
 class Core:
-    def __init__(self, root: str, emit: Callable[[dict], None], demo: bool = False, log=None):
+    def __init__(self, root: str, emit: Callable[[dict], None], demo: bool = False, log=None,
+                 showcase: str | None = None):
         """root: the app folder (data, cache, logs live next to the exe). emit: sends one message to the UI."""
         from .app import DEFAULT_CONFIG, load_config, migrate_to_app_folder, save_config
         from .favorites import Favorites
@@ -68,7 +69,10 @@ class Core:
         self.cfg = {**DEFAULT_CONFIG, **load_config(self.config_path)} if not demo else dict(DEFAULT_CONFIG)
         migrate(self.cfg)
         session = None
-        if demo:
+        if showcase:                                     # README screenshots: demo data plus one real character
+            from .demo import ShowcaseSession
+            session = ShowcaseSession(*showcase.split("=", 1))
+        elif demo:
             from .demo import DemoSession
             session = DemoSession()
         self.api = Api(db_path=None if demo else os.path.join(self.cache, "shugo.db"), session=session, log=self.log)
@@ -355,7 +359,7 @@ class Core:
         return {str(k): v for k, v in sv.SERVER_NAMES.items()}
 
 
-def serve_stdio(root: str, demo: bool = False) -> int:
+def serve_stdio(root: str, demo: bool = False, showcase: str | None = None) -> int:
     """Electron's child process: requests on stdin, answers and events on stdout."""
     out_lock = threading.Lock()
     stdout = sys.stdout
@@ -373,7 +377,7 @@ def serve_stdio(root: str, demo: bool = False) -> int:
         logf.write(time.strftime("%H:%M:%S ") + m + "\n")
         logf.flush()
     log(f"Shugo Tracker core v{__version__}" + (" (demo)" if demo else ""))
-    core = Core(root, write, demo=demo, log=log)
+    core = Core(root, write, demo=demo or bool(showcase), log=log, showcase=showcase)
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -394,8 +398,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Shugo Tracker core (started by the Electron app)")
     ap.add_argument("--root", required=True, help="the app folder: data, cache and logs live here")
     ap.add_argument("--demo", action="store_true", help="made-up characters and players (no network)")
+    ap.add_argument("--showcase", metavar="REAL=ALIAS", help="demo data plus one real character under another name")
     a = ap.parse_args(argv)
-    return serve_stdio(a.root, a.demo)
+    return serve_stdio(a.root, a.demo, a.showcase)
 
 
 if __name__ == "__main__":

@@ -76,6 +76,13 @@ jobs:
           PYTHON: python
         run: node test/shots.js
 
+      - name: README screenshots (demo data plus one live character)
+        continue-on-error: true
+        working-directory: desktop
+        env:
+          PYTHON: python
+        run: node test/readme.js
+
       - name: Build ShugoTracker.exe
         working-directory: desktop
         run: npx electron-builder --win portable --publish never
