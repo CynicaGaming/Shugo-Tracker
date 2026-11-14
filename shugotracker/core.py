@@ -332,6 +332,14 @@ class Core:
             except Exception as e:  # noqa: BLE001
                 self.log(f"core: nearby watch: {e}")
 
+    def rpc_demo_teleport(self) -> bool:
+        """Demo only: you load into a new area, so the crowd moves to Recent (README screenshots)."""
+        if not self.demo:
+            return False
+        from .demo import feed_teleport
+        feed_teleport(self.nearby)
+        return True
+
     def rpc_nearby_clear(self, which: str = "nearby") -> bool:
         (self.nearby.clear_recent if which == "recent" else self.nearby.clear_nearby)()
         return True

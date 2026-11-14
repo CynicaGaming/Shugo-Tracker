@@ -36,7 +36,7 @@
 .itile.empty { --g: #39404d; background: #0d1219; }
 .itile.empty::after { content: ""; position: absolute; inset: 14px; border: 1px dashed #2b313c; border-radius: 3px; }
 
-.gear { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.gear { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 14px; }
 .slot { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 5px; min-width: 0; cursor: default; }
 .slot:hover { background: var(--hover); }
 .slot .txt { min-width: 0; flex: 1; }
@@ -107,7 +107,7 @@
 .stip .head { padding: 11px 12px 8px; display: flex; gap: 10px; }
 .stip .head .t { flex: 1; min-width: 0; }
 .stip .head .nm { font-size: 15px; font-weight: 600; color: #fff; }
-.stip .head .lvl { font-size: 12.5px; color: var(--gold); font-weight: 600; margin-top: 2px; }
+.stip .head .slv { font-size: 12.5px; color: var(--gold); font-weight: 600; margin-top: 2px; }
 .stip .head .tags { display: flex; gap: 3px; margin-top: 5px; }
 .stip .head .tags span { font-size: 10.5px; padding: 0 4px; border-radius: 2px; color: #fff; }
 .stip .head img { width: 44px; height: 44px; border-radius: 4px; }

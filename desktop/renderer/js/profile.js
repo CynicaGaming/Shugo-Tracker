@@ -130,7 +130,7 @@ export class ProfileView {
     const wait = this.profile ? "—" : "…";
     clear(this.head).append(
       h("div.phead", {},
-        portrait ? h("img.portrait", { src: portrait }) : h("div.portrait"),
+        portrait ? h("img.portrait", { src: portrait, onError: (e) => e.target.replaceWith(h("div.portrait")) }) : h("div.portrait"),
         h("div.who", {},
           h("div.name", {}, p.name || c.name, legion ? h("span.legion", {}, `<${legion}>`) : null),
           p.title ? h("div.title", {}, p.title) : null,
@@ -522,7 +522,7 @@ function skillTip(s, info) {
   const t = h("div.stip");
   const kind = { Active: ["Active", "#a3342c"], Passive: ["Passive", "#2e6e4c"], Dp: ["Stigma", "#7a3a9a"] }[s.category] || [s.category, "#444"];
   t.append(h("div.head", {}, h("div.t", {}, h("div.nm", {}, s.name),
-    s.level || s.category === "Dp" ? h("div.lvl", { style: { color: s.level ? "var(--gold)" : "var(--dim)" } }, `Level ${s.level}`) : null,
+    s.level || s.category === "Dp" ? h("div.slv", { style: { color: s.level ? "var(--gold)" : "var(--dim)" } }, `Level ${s.level}`) : null,
     h("div.tags", {}, h("span", { style: { background: kind[1] } }, kind[0]))),
     s.icon ? h("img", { src: s.icon }) : null));
   if (info) {

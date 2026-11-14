@@ -166,6 +166,13 @@ def _item(d: dict | None, slot: str | None = None) -> Item | None:
                 level=int(d["level"]) if d.get("level") is not None else None, slot_pos=int(d.get("slotPos") or 0))
 
 
+def _portrait(img):
+    """profileImage is sometimes a path on NCSOFT's image host rather than a full URL."""
+    if not img:
+        return None
+    return ("https://profileimg.plaync.com" + img) if img.startswith("/") else img
+
+
 def parse_profile(info: dict, equipment: dict | None) -> Profile:
     prof = info.get("profile") or {}
     p = Profile(
@@ -179,7 +186,7 @@ def parse_profile(info: dict, equipment: dict | None) -> Profile:
         title=prof.get("titleName") or None,
         gender=prof.get("genderName") or None,
         combat_power=int(prof["combatPower"]) if prof.get("combatPower") is not None else None,
-        portrait=prof.get("profileImage") or None,
+        portrait=_portrait(prof.get("profileImage")),
     )
     if p.class_name == "Elementalist":
         p.class_name = "Spiritmaster"
