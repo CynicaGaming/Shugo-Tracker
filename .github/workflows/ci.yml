@@ -56,13 +56,13 @@ jobs:
           Get-Content rawsock.txt | ForEach-Object { Write-Output "::notice title=rawsock::$_" }
           exit $code
 
-      - name: Build the core (shugo-core.exe)
+      - name: Build the core (dist/shugo-core)
         run: python -m PyInstaller --noconfirm --clean ShugoCore.spec
 
       - name: Core answers over stdin / stdout
         shell: pwsh
         run: |
-          $out = '{"id":1,"method":"init","params":{}}' + "`n" + '{"method":"quit"}' | .\dist\shugo-core.exe --root $env:RUNNER_TEMP\coretest --demo
+          $out = '{"id":1,"method":"init","params":{}}' + "`n" + '{"method":"quit"}' | .\dist\shugo-core\shugo-core.exe --root $env:RUNNER_TEMP\coretest --demo
           Write-Output "::notice title=core::$(($out | Select-Object -First 1).Substring(0, 120))"
           if (-not ($out -match '"result"')) { exit 1 }
 
@@ -87,30 +87,42 @@ jobs:
         working-directory: desktop
         run: npx electron-builder --win portable --publish never
 
-      - name: Exe icon as Windows shows it, start-up time, size
+      - name: Exe icon as Windows shows it, size and start-up time
         shell: pwsh
+        working-directory: desktop
         run: |
+          # The same app built three ways, to see what start-up costs: unpacked folder, portable (compressed), portable (stored).
+          npx electron-builder --win portable --publish never -c.compression=store -c.directories.output=dist-store *> ..\shots\build-store.txt
           Add-Type -AssemblyName System.Drawing
-          $exe = (Resolve-Path desktop\dist\ShugoTracker.exe).Path
-          [System.Drawing.Icon]::ExtractAssociatedIcon($exe).ToBitmap().Save("$PWD\shots\exe-icon.png")
-          $dir = Join-Path $env:RUNNER_TEMP "portable"
-          foreach ($i in 1, 2) {
-            Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
-            New-Item -ItemType Directory -Force $dir | Out-Null
-            Copy-Item $exe $dir
-            $sw = [Diagnostics.Stopwatch]::StartNew()
-            $p = Start-Process (Join-Path $dir "ShugoTracker.exe") -ArgumentList "--demo" -PassThru
-            while (-not (Test-Path (Join-Path $dir "logs\shugo-core.log")) -and $sw.Elapsed.TotalSeconds -lt 60) { Start-Sleep -Milliseconds 100 }
-            $t = [math]::Round($sw.Elapsed.TotalSeconds, 1)
-            Write-Output "::notice title=startup::run ${i}: backend running after $t s"
-            "startup run ${i}: $t s" | Add-Content shots\log.txt
-            Get-Process | Where-Object { $_.Path -and ($_.Path -like "*ShugoTracker*" -or $_.Path -like "*shugo-core*") } | Stop-Process -Force -ErrorAction SilentlyContinue
-            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-            Start-Sleep 2
+          $exe = (Resolve-Path dist\ShugoTracker.exe).Path
+          [System.Drawing.Icon]::ExtractAssociatedIcon($exe).ToBitmap().Save("$PWD\..\shots\exe-icon.png")
+          function Time-Start($label, $src, $name) {
+            foreach ($i in 1, 2) {
+              $dir = Join-Path $env:RUNNER_TEMP "start-$label"
+              Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+              if ((Get-Item $src) -is [IO.DirectoryInfo]) { Copy-Item $src $dir -Recurse } else { New-Item -ItemType Directory $dir | Out-Null; Copy-Item $src $dir }
+              Remove-Item (Join-Path $env:LOCALAPPDATA "Temp\ShugoTracker") -Recurse -Force -ErrorAction SilentlyContinue
+              $sw = [Diagnostics.Stopwatch]::StartNew()
+              $p = Start-Process (Join-Path $dir $name) -ArgumentList "--demo" -PassThru
+              $log = Join-Path $dir "logs\shugo-core.log"
+              while (-not (Test-Path $log) -and $sw.Elapsed.TotalSeconds -lt 60) { Start-Sleep -Milliseconds 50 }
+              $t = [math]::Round($sw.Elapsed.TotalSeconds, 2)
+              Write-Output "::notice title=startup::${label} run ${i}: $t s"
+              "startup ${label} run ${i}: $t s" | Add-Content ..\shots\log.txt
+              Get-Process | Where-Object { $_.Path -and ($_.Path -like "*ShugoTracker*" -or $_.Path -like "*shugo-core*" -or $_.Path -like "*start-*") } | Stop-Process -Force -ErrorAction SilentlyContinue
+              Start-Sleep 2
+            }
           }
-          $mb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
-          Write-Output "::notice title=exe::ShugoTracker.exe is $mb MB"
-          "exe: $mb MB" | Add-Content shots\log.txt
+          Time-Start "folder" "dist\win-unpacked" "Shugo Tracker.exe"
+          Time-Start "portable" "dist\ShugoTracker.exe" "ShugoTracker.exe"
+          Time-Start "stored" "dist-store\ShugoTracker.exe" "ShugoTracker.exe"
+          foreach ($f in "dist\ShugoTracker.exe", "dist-store\ShugoTracker.exe") {
+            $mb = [math]::Round((Get-Item $f).Length / 1MB, 1)
+            Write-Output "::notice title=size::$f is $mb MB"
+            "size ${f}: $mb MB" | Add-Content ..\shots\log.txt
+          }
+          $mb = [math]::Round(((Get-ChildItem dist\win-unpacked -Recurse | Measure-Object Length -Sum).Sum) / 1MB, 1)
+          "size folder: $mb MB" | Add-Content ..\shots\log.txt
 
       - name: Publish screenshots to the ci-screenshots branch
         if: always() && github.event_name != 'pull_request'

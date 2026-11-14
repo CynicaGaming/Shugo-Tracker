@@ -19,9 +19,9 @@
   "build": {
     "appId": "com.cynicagaming.shugotracker",
     "productName": "Shugo Tracker",
-    "directories": { "output": "dist" },
+    "directories": { "output": "dist", "buildResources": "build" },
     "files": ["main.js", "preload.js", "updater.js", "renderer/**", "build/icon.ico"],
-    "extraResources": [{ "from": "../dist/shugo-core.exe", "to": "core/shugo-core.exe" }],
+    "extraResources": [{ "from": "../dist/shugo-core", "to": "core" }],
     "asar": true,
     "win": { "target": "portable", "icon": "build/icon.ico", "requestedExecutionLevel": "asInvoker" },
     "portable": { "artifactName": "ShugoTracker.exe", "unpackDirName": "ShugoTracker" },

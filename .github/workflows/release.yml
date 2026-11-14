@@ -57,7 +57,7 @@ jobs:
           npm version $v --no-git-tag-version --allow-same-version
           Pop-Location
 
-      - name: Build the core (shugo-core.exe)
+      - name: Build the core (dist/shugo-core)
         run: python -m PyInstaller --noconfirm --clean ShugoCore.spec
 
       - name: Build ShugoTracker.exe (portable Electron app)
