@@ -387,7 +387,7 @@ export class ProfileView {
     const NAMES = { Attack: "Offensive", Defense: "Defensive", Etc: "Other" };
     for (const cat of ["Offensive", "Defensive", "Other"]) {        // always the game's three slots, in its order
       const t = (p.titles || []).find((x) => (NAMES[x.category] || x.category) === cat);
-      const head = h("div.cat", {}, h("span", {}, cat), t?.total ? h("span.cnt", {}, `${t.owned}/${t.total}`) : null);
+      const head = h("div.cat", {}, cat);
       if (!t) { cards.append(h("div.tcard.none", {}, head, h("div.nm", {}, "None"))); continue; }
       cards.append(h("div.tcard", {}, head, h("div.nm", {}, t.name),
         t.effects?.length ? h("ul", {}, t.effects.map((e) => h("li", {}, e))) : null,
