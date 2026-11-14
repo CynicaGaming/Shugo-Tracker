@@ -415,8 +415,11 @@ function wheel(by, deity) {
     const st = by[t], [x, y] = pt(r, a), v = st ? st.value : 0;
     s += `<text class="pn" x="${x}" y="${y - 2}">${esc(name)}</text><text class="pv ${v ? "" : "zero"}" x="${x}" y="${y + 13}">${v}</text>`;
   }
+  // The game's ring, clockwise from just right of the top: Destruction at -72°, then every 36°.
+  const RING = ["Destruction", "Death", "Wisdom", "Destiny", "Space", "Time", "Life", "Illusion", "Freedom", "Justice"];
   deity.forEach((d, i) => {
-    const a = -90 - 360 / deity.length * 2.5 + i * (360 / deity.length) + 360 / deity.length / 2;
+    const k = RING.indexOf(d.type);
+    const a = k >= 0 ? -72 + k * 36 : -90 + i * (360 / deity.length);
     const [x, y] = pt(R, a);
     const nm = d.name.replace(/\s*\[.*\]/, "");
     s += `<text class="dv ${d.value ? "" : "zero"}" x="${x}" y="${y + 1}">${d.value}</text><text class="dn" x="${x}" y="${y + 14}">${esc(nm)}</text>`;
