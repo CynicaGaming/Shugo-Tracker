@@ -43,6 +43,28 @@ jobs:
       - name: Build ShugoTracker.exe
         working-directory: desktop
         run: npx electron-builder --win portable --publish never
+      - name: Exe icon as Windows shows it, and start-up time
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          New-Item -ItemType Directory -Force shots | Out-Null
+          $exe = (Resolve-Path desktop\dist\ShugoTracker.exe).Path
+          [System.Drawing.Icon]::ExtractAssociatedIcon($exe).ToBitmap().Save("$PWD\shots\exe-icon.png")
+          $dir = Join-Path $env:RUNNER_TEMP "portable"
+          foreach ($i in 1, 2) {
+            Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force $dir | Out-Null
+            Copy-Item $exe $dir
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $p = Start-Process (Join-Path $dir "ShugoTracker.exe") -ArgumentList "--demo" -PassThru
+            while (-not (Test-Path (Join-Path $dir "logs\shugo-core.log")) -and $sw.Elapsed.TotalSeconds -lt 60) { Start-Sleep -Milliseconds 100 }
+            $t = [math]::Round($sw.Elapsed.TotalSeconds, 1)
+            Write-Output "::notice title=startup::run $i: backend running after $t s"
+            "startup run ${i}: $t s" | Add-Content shots\log.txt
+            Get-Process | Where-Object { $_.Path -and ($_.Path -like "*ShugoTracker*" -or $_.Path -like "*shugo-core*") } | Stop-Process -Force -ErrorAction SilentlyContinue
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+            Start-Sleep 2
+          }
       - name: Size
         shell: pwsh
         run: |
