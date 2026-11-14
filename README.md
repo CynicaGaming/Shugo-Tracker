@@ -57,6 +57,11 @@ level in gold like the game. Skill info is provided by <a href="https://metabot.
 </tr>
 </table>
 
+<p align="center">
+  <img src="docs/images/skills.png" alt="Skills with a skill tooltip" width="48%">
+  <img src="docs/images/daevanion.png" alt="A Daevanion board" width="48%">
+</p>
+
 ## Nearby <sup><code>BETA</code></sup>
 
 <table>
@@ -106,7 +111,7 @@ Results stream in as they arrive; people you've met before load instantly.
 <td valign="top">
 
 **🧳 Portable**<br>
-One exe and its folder. Copy the folder anywhere and everything comes with it.
+One exe, nothing to install. It keeps everything in the folder beside it; copy the folder anywhere and everything comes with it.
 
 </td>
 <td valign="top">
@@ -159,8 +164,9 @@ and every release is built automatically from it.
 <details>
 <summary><b>Where are my settings and favorites?</b></summary>
 <br>
-In the <code>data</code>, <code>cache</code> and <code>logs</code> folders next to the exe. Updates only replace
-the exe, so nothing is lost; move or copy the whole folder to take everything with you.
+In the <code>data</code>, <code>cache</code> and <code>logs</code> folders next to the exe (the <code>app</code> folder
+is the program itself, unpacked the first time each version starts). Updates only replace the exe, so nothing is lost;
+move or copy the whole folder to take everything with you.
 </details>
 
 <details>

@@ -61,32 +61,24 @@ d.text((294, 196), "Every AION 2 player's gear, power and build, a glance away."
 d.text((294, 246), "A fast, free overlay for Windows", font=ImageFont.truetype(REG, 24), fill=GOLD)
 c.convert("RGB").save(OUT + "banner.png", optimize=True)
 
-# hero: the list + a profile with an item tooltip beside it
-win = Image.open(S + "ui-show.png").convert("RGB")
-prof = Image.open(S + "ui-show-profile-gear-tip.png").convert("RGB")
-pwin, tip = prof.crop((0, 0, 600, 720)), Image.open(S + "ui-show-profile-gear-tip-only.png").convert("RGB")
+# hero: the list, and a profile with an item tooltip, side by side
+win = Image.open(S + "show-search.png").convert("RGB")
+prof = Image.open(S + "show-profile-gear-tip.png").convert("RGB")
 W, H = 1440, 900
 c = bg(W, H).convert("RGBA")
-drop(c, win.resize((540, 648)), (90, 150))
-drop(c, pwin, (560, 90))
-k = min(1.25, 700 / tip.size[1])
-tip = tip.resize((int(tip.size[0] * k), int(tip.size[1] * k)))
-drop(c, tip, (W - tip.size[0] - 60, (H - tip.size[1]) // 2 + 20), r=10)
+drop(c, win, (110, (H - win.size[1]) // 2 + 40))
+drop(c, prof, (W - prof.size[0] - 110, (H - prof.size[1]) // 2 - 40))
 c.convert("RGB").save(OUT + "hero.png", optimize=True)
 
-framed("ui-show.png", "search.png")
-framed("ui-show-filters.png", "filters.png")
-framed("ui-show-nearby.png", "nearby.png")
-framed("ui-show-nearby-recent.png", "recent.png")
-framed("ui-show-favorites-drag.png", "favorites.png", crop=(0, 0, 600, 320))
-framed("ui-show-columns-menu.png", "columns.png", crop=(0, 0, 600, 470))
-# gear: the profile's gear list with an item tooltip over its right side
-tip = Image.open(S + "ui-show-profile-gear-tip-only.png").convert("RGB")
-W, H = 720 + 120, max(720, tip.size[1]) + 120
-c = bg(W, H).convert("RGBA")
-drop(c, pwin.crop((0, 0, 600, 720)), (60, (H - 720) // 2))
-drop(c, tip, (W - tip.size[0] - 40, (H - tip.size[1]) // 2), r=10)
-c.convert("RGB").save(OUT + "gear.png", optimize=True)
+framed("show-search.png", "search.png")
+framed("show-filters.png", "filters.png")
+framed("show-nearby.png", "nearby.png")
+framed("show-recent.png", "recent.png", crop=(0, 0, 560, 480))
+framed("show-favorites.png", "favorites.png", crop=(0, 0, 560, 320))
+framed("show-columns-menu.png", "columns.png", crop=(0, 0, 560, 470))
+framed("show-profile-gear-tip.png", "gear.png")
+framed("show-profile-skills-tip.png", "skills.png")
+framed("show-profile-daevanion.png", "daevanion.png")
 
 # download button (self-hosted, so it never depends on a badge service)
 f = ImageFont.truetype(BOLD, 30)

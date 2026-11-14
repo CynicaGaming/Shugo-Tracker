@@ -252,7 +252,7 @@ function visible() {
   if (S.cfg.level_max != null) out = out.filter((c) => c.level <= S.cfg.level_max);
   const [key, rev] = (S.cfg.sorts || {})[S.mode] || ["default", false];
   const grouped = S.mode === "nearby" || S.mode === "recent";
-  const sideOf = grouped ? Object.fromEntries([...S.nearby.recent, ...S.nearby.rows].map((r) => [r.char.name, r.side])) : null;
+  const sideOf = grouped ? Object.fromEntries((S.mode === "recent" ? S.nearby.recent : S.nearby.rows).map((r) => [r.char.name, r.side])) : null;
   const when = S.mode === "recent" ? Object.fromEntries(S.nearby.recent.map((r) => [r.char.key, r.seen])) : null;
   return sortChars(out, key, rev, sideOf, when);
 }
@@ -297,7 +297,7 @@ const list = (() => {
     const grouped = S.mode === "nearby" || S.mode === "recent";
     const items = [];                                     // [y, kind, payload]
     let y = 0, lastSide = null;
-    const sideOf = grouped ? Object.fromEntries([...S.nearby.recent, ...S.nearby.rows].map((r) => [r.char.name, r.side])) : {};
+    const sideOf = grouped ? Object.fromEntries((S.mode === "recent" ? S.nearby.recent : S.nearby.rows).map((r) => [r.char.name, r.side])) : {};
     for (const c of rows) {
       const side = sideOf[c.name];
       if (grouped && side && side !== lastSide) { items.push([y, "group", side]); y += 28; lastSide = side; }
