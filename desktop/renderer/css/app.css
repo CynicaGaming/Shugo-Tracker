@@ -284,3 +284,22 @@ input[type=range] { accent-color: var(--gold-2); }
 .fspin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--panel-3); border-top-color: var(--gold);
   animation: fspin 0.9s linear infinite; }
 @keyframes fspin { to { transform: rotate(360deg); } }
+
+/* ───── Settings: the Updates card ───── */
+.ucard { margin: 8px 10px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); overflow: hidden; }
+.uhead { position: relative; display: flex; align-items: center; gap: 11px; padding: 11px 12px; }
+.ulogo { flex: none; width: 34px; height: 34px; }
+.ulogo svg { width: 100%; height: 100%; }
+.uhead .ut { color: #fff; font-weight: 700; font-size: 13.5px; }
+.uhead .us { color: var(--dim); font-size: 12px; margin-top: 1px; }
+.uhead .us.bad { color: var(--red); }
+.ubar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--panel-3); }
+.ubar i { display: block; height: 100%; background: var(--gold); transition: width 0.2s; }
+.unotes { margin: 0 10px 10px; padding: 8px 11px 9px; border-radius: 5px;
+  background: linear-gradient(180deg, rgba(232, 196, 106, 0.08), rgba(232, 196, 106, 0.03));
+  box-shadow: inset 0 0 0 1px rgba(232, 196, 106, 0.22); }
+.unt { color: var(--gold); font-weight: 700; font-size: 12px; margin-bottom: 4px; }
+.unotes ul { margin: 0; padding-left: 16px; color: var(--text-2); font-size: 11.5px; line-height: 1.5; }
+.unotes li::marker { color: rgba(232, 196, 106, 0.6); }
+.btn svg { width: 13px; height: 13px; margin-right: 5px; vertical-align: -2px; }
+.btn:disabled { opacity: 0.6; cursor: default; }

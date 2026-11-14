@@ -12,12 +12,16 @@ const EXE_ASSET = "ShugoTracker.exe";
 const CHECK_EVERY = 30 * 60 * 1000;
 
 const parse = (v) => { const m = /^v?(\d+)\.(\d+)(?:\.(\d+))?$/.exec(String(v).trim()); return m ? [+m[1], +m[2], +(m[3] || 0)] : null; };
+/** The release's "what's new" bullets: its "- " lines, plain text (links and bold markers dropped). */
+const bullets = (body) => String(body || "").split(/\r?\n/).map((l) => l.trim())
+  .filter((l) => /^[-*] /.test(l) && !/Full Changelog|by @\S+ in /i.test(l))
+  .map((l) => l.slice(2).replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/\*\*|__|`/g, "").trim()).filter(Boolean).slice(0, 12);
 const newer = (a, b) => { const x = parse(a), y = parse(b); if (!x || !y) return false; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
 
 class Updater {
   constructor({ exe, dir, version, dev, onChange }) {
     Object.assign(this, { exe, dir, version, dev, onChange });
-    this.state = { state: "idle", latest: null, progress: 0, error: null };
+    this.state = { state: "idle", current: version, latest: null, progress: 0, error: null, notes: [], checkedAt: null };
     this.staged = path.join(dir, `${EXE_ASSET}.new`);
     try { fs.rmSync(`${exe}.old`, { force: true }); } catch { /* still locked: next time */ }
   }
@@ -40,14 +44,17 @@ class Updater {
 
   async check() {
     if (this.dev) return;
-    this.set({ state: "checking", error: null });
+    const was = this.state.state;
+    if (was === "downloading") return;
+    this.set({ state: was === "ready" ? "ready" : "checking", error: null });
     try {
       const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { "User-Agent": "ShugoTracker" } });
       if (!r.ok) throw new Error(`GitHub ${r.status}`);
       const rel = await r.json();
       this.release = rel;
       const latest = String(rel.tag_name || "").replace(/^v/, "");
-      this.set({ latest, state: newer(latest, this.version) ? "available" : "uptodate" });
+      this.set({ latest, notes: bullets(rel.body), checkedAt: Date.now(),
+        state: this.state.state === "ready" && latest === this.state.latest ? "ready" : newer(latest, this.version) ? "available" : "uptodate" });
     } catch (e) { this.set({ state: "error", error: String(e.message || e) }); }
   }
 
@@ -100,4 +107,4 @@ class Updater {
   }
 }
 
-module.exports = { Updater };
+module.exports = { Updater, bullets };

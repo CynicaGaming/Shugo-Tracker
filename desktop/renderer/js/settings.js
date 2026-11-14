@@ -1,10 +1,15 @@
 // Settings, in the game's style: header bars per group, one setting per row.
 import { win } from "./bridge.js";
-import { h } from "./dom.js";
+import { ICONS, LOGO, clear, h } from "./dom.js";
 
 const RECENT = [[50, "50"], [100, "100"], [250, "250"], [500, "500"], [1000, "1,000"], [0, "Unlimited"]];
 const AUTOCLEAR = [[0, "Never"], [60, "1m"], [300, "5m"], [900, "15m"], [1800, "30m"], [3600, "60m"]];
 
+const fmtWhen = (t) => {
+  const d = new Date(t), today = new Date().toDateString() === d.toDateString();
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return today ? `today, ${time}` : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`;
+};
 const fmtBytes = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 
 export class SettingsView {
@@ -14,13 +19,41 @@ export class SettingsView {
     this.build();
   }
 
+  /** The Updates card: version and status, what's new, check / download / restart, automatic checks. */
   paintUpdate() {
-    const u = this.app.S.update;
-    const label = { available: `Download update (v${u.latest})`, downloading: `Downloading ${Math.round((u.progress || 0) * 100)}%`,
-      ready: "Restart to update", checking: "Checking…", uptodate: "Up to date", dev: "Development build",
-      error: "Check for updates" }[u.state] || "Check for updates";
-    this.upBtn.textContent = label;
-    this.upBtn.classList.toggle("gold", u.state === "available" || u.state === "ready");
+    const u = this.app.S.update, box = this.upBox;
+    if (!box) return;
+    const cur = u.current || this.app.S.version, next = u.latest;
+    const pct = Math.round((u.progress || 0) * 100);
+    const status = {
+      checking: "Checking for updates…", uptodate: "You're on the latest version.",
+      available: `Version ${next} is available.`, downloading: `Downloading version ${next}… ${pct}%`,
+      ready: `Version ${next} is ready. Restart Shugo Tracker to finish.`,
+      error: `Couldn't update${u.error ? `: ${u.error}` : ""}.`, dev: "Development build: updates are off.",
+    }[u.state] || "Not checked yet.";
+    const head = h("div.uhead", {}, h("span.ulogo", { html: LOGO }),
+      h("div.grow", {}, h("div.ut", {}, `Shugo Tracker v${cur}`), h("div.us", { class: u.state === "error" ? "bad" : "" }, status)));
+    if (u.state === "downloading") head.append(h("div.ubar", {}, h("i", { style: { width: `${pct}%` } })));
+    const notesFor = ["available", "downloading", "ready"].includes(u.state) ? next : next === cur ? cur : null;
+    const notes = notesFor && u.notes?.length
+      ? h("div.unotes", {}, h("div.unt", {}, `What's new in ${notesFor}`), h("ul", {}, u.notes.map((n) => h("li", {}, n))))
+      : null;
+    const label = { available: "Download update", downloading: `Downloading ${pct}%`, ready: "Restart to update",
+      checking: "Checking…" }[u.state] || "Check now";
+    const act = h("button.btn", { class: ["available", "ready"].includes(u.state) ? "gold" : "",
+      disabled: ["downloading", "checking", "dev"].includes(u.state), onClick: () => this.updateAction() },
+      u.state === "ready" ? h("span", { html: ICONS.refresh, style: { display: "contents" } }) : null, label);
+    const when = u.checkedAt ? fmtWhen(u.checkedAt) : "never";
+    clear(box).append(h("div.ucard", {}, head, notes),
+      h("div.setting", {}, h("div.grow", {}, "Check for updates", h("div.sub", {}, `Last checked ${when}`)), act));
+  }
+
+  async updateAction() {
+    const { S } = this.app;
+    const st = S.update.state;
+    if (st === "available" || st === "ready") await this.app.updateClick();
+    else S.update = { ...(await win.update("check")) };
+    this.paintUpdate();
   }
 
   build() {
@@ -58,14 +91,10 @@ export class SettingsView {
       h("button.btn", { onClick: () => call("nearby.clear", { which: "recent" }) }, "Clear")));
 
     el.append(h("div.bar", {}, "Updates"));
-    el.append(row("Automatic updates", toggle(cfg.auto_update !== false, (v) => save("auto_update", v))));
-    this.upBtn = h("button.btn", { onClick: async () => {
-      const st = S.update.state;
-      if (st === "available" || st === "ready") await this.app.updateClick();
-      else if (st !== "downloading" && st !== "checking") S.update = { ...(await win.update("check")) };
-      this.paintUpdate();
-    } });
-    el.append(row(h("span", {}, `Version ${S.version}`), this.upBtn));
+    this.upBox = h("div");
+    el.append(this.upBox);
+    el.append(row(h("div", {}, "Check automatically", h("div.sub", {}, "Looks for new versions every 30 minutes. Nothing downloads until you click.")),
+      toggle(cfg.auto_update !== false, (v) => save("auto_update", v))));
     this.paintUpdate();
 
     el.append(h("div.bar", {}, "Data"));
