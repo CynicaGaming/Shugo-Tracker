@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.17
+- Changed: Clear Nearby works like it used to: anyone still around comes back on their next move, and those who left stay on Recent
+
 ## 2.3.16
 - Fixed: Nearby froze (looked slow or missing people) whenever someone nearby had a Chinese, Korean or other non-Latin name
 - Fixed: searching for a non-Latin name works the same way

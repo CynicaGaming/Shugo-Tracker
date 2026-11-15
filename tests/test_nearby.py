@@ -386,15 +386,14 @@ class ComingBackTests(unittest.TestCase):
         self.assertEqual(self.names(svc), ["Pal"])
         self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Pal"])
 
-    def test_cleared_players_stay_cleared_while_they_move_around(self):
+    def test_cleared_players_still_around_come_back(self):
         from shugotracker.protocol import encode_varint
         svc, feed = self.make()
         feed(self_record(100, "Mine", 1101), other_record(200, "Foe"), other_record(300, "Pal"))
         svc.clear_nearby()
         self.assertEqual(self.names(svc), [])
-        feed(b"\x1d\x37" + encode_varint(300) + b"\x00" * 12)       # Pal moves about: still cleared
-        feed(damage(300, 200))                                     # Pal fights Foe (not you): still cleared
-        self.assertEqual(self.names(svc), [])
+        feed(b"\x1d\x37" + encode_varint(300) + b"\x00" * 12)       # Pal moves about: still here
+        self.assertEqual(self.names(svc), ["Pal"])
         self.assertEqual(sorted(c.name for _s, c, _t, _f in svc.recent()), ["Foe", "Pal"])
 
     def test_left_behind_players_dont_come_back_on_an_id_match(self):
