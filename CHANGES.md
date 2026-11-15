@@ -9,6 +9,11 @@ Each release's notes come from its section here (shown in Settings → Updates).
 - New look for the filters: one region switch, Elyos and Asmodians toggles, and a Filters button (with a count) for class and level
 - Region names tidied up: NA East, NA West, Europe, Latin America, Asia
 
+## 2.3.6
+- Daevanion: hover a skill node, or a skill under Skill Effect, for that skill's tooltip at the character's level
+- Stats: bonuses read "Attack +5.6%" instead of "Attack increase +5.6%"
+- Skill tooltips no longer carry a credit line
+
 ## 2.3.5
 - Fixed: restarting for an update starts the new version again (the administrator restart from 2.3.1 is undone)
 - An update now shows as a small arrow beside the logo; click it for Settings → Updates

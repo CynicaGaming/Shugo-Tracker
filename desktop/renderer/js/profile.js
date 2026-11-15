@@ -293,7 +293,8 @@ export class ProfileView {
   tabStats(p) {
     const by = Object.fromEntries((p.stats || []).map((st) => [st.type, st]));
     const tip = (el, title, desc, st) => {
-      el.addEventListener("mouseenter", (e) => showTip(smallTip(title, desc ? [desc] : [], (st?.effects || []).join("  ·  ") || null), e.clientX, e.clientY));
+      const fx = (st?.effects || []).map((x) => x.replace(/ increase(?= [+-])/i, ""));      // "Attack increase +5%" -> "Attack +5%"
+      el.addEventListener("mouseenter", (e) => showTip(smallTip(title, desc ? [desc] : [], fx.join("  ·  ") || null), e.clientX, e.clientY));
       el.addEventListener("mouseleave", hideTip);
       return el;
     };
@@ -330,13 +331,7 @@ export class ProfileView {
         const t = h("div.stile", { class: [stigmaOn && "on", !s.level && "unlearned"].filter(Boolean).join(" ") },
           s.icon ? h("img", { src: s.icon, loading: "lazy" }) : null,
           s.level || cat === "Dp" ? h("span.lv", {}, `Lv. ${s.level}`) : null);
-        t.addEventListener("mouseenter", async (e) => {
-          const pos = { x: e.clientX, y: e.clientY };
-          t._hover = true;
-          const info = await call("skill", { skill_id: s.skill_id, level: s.level || 1, name: s.name, cls: p.class_name });
-          if (t._hover) showTip(skillTip(s, info), pos.x, pos.y);
-        });
-        t.addEventListener("mouseleave", () => { t._hover = false; hideTip(); });
+        this.skillHover(t, () => s);
         grid.append(t);
       }
       out.append(grid);
@@ -361,14 +356,16 @@ export class ProfileView {
     const draw = (d) => {
       clear(area);
       if (!d) { area.append(h("div.empty", {}, "Couldn't load this board")); return; }
-      area.append(boardEl(d));
+      area.append(boardEl(d, (el, n) => this.skillHover(el, () => this.skillNamed(n.effects[0] || n.name))));
       // Board Effect, like the game's: what the opened nodes add to skills, then to stats ("Pummel +1").
       const list = (title, lines, cls) => {
         if (!lines.length) return;
         area.append(h("div.bar", {}, title));
         area.append(h("div.fxlist", { class: cls }, lines.map((e) => {
           const m = e.match(/^(.*?)\s*([+-]\s?\d[\d.,]*%?)$/);
-          return h("div", {}, h("span", {}, m ? m[1] : e), m ? h("b", {}, m[2].replace(/\s/g, "")) : null);
+          const row = h("div", {}, h("span", {}, m ? m[1] : e), m ? h("b", {}, m[2].replace(/\s/g, "")) : null);
+          if (cls === "skills") this.skillHover(row, () => this.skillNamed(e));
+          return row;
         })));
       };
       list("Skill Effect", d.skill_effects, "skills");
@@ -399,6 +396,26 @@ export class ProfileView {
     if (p.skins?.length) out.append(h("div.bar", {}, "Closet", h("span.extra", {}, `${p.skins.length} items`)),
       h("div.cgrid", {}, p.skins.map((it) => item(it, slotName(it.slot)))));
     return out;
+  }
+
+  /** Hovering `el` shows a skill's tooltip (what it does at this character's level), the same everywhere:
+   *  the Skills tab, Daevanion's skill nodes and its Skill Effect list. `get` returns the skill. */
+  skillHover(el, get) {
+    const p = this.profile;
+    el.addEventListener("mouseenter", async (e) => {
+      const s = get(), pos = { x: e.clientX, y: e.clientY };
+      if (!s) return;
+      el._hover = true;
+      const info = await call("skill", { skill_id: s.skill_id || 0, level: s.level || 1, name: s.name, cls: p.class_name }).catch(() => null);
+      if (el._hover) showTip(skillTip(s, info), pos.x, pos.y);
+    });
+    el.addEventListener("mouseleave", () => { el._hover = false; hideTip(); });
+  }
+
+  /** The character's skill called `name` ("Skill Level Up - Annihilate", "Annihilate +1" and "Annihilate" all work). */
+  skillNamed(name) {
+    const n = String(name || "").replace(/^Skill Level Up - /, "").replace(/\s*[+-]\d+$/, "").trim();
+    return (this.profile.skills || []).find((s) => s.name === n) || (n ? { name: n, category: "", level: 0 } : null);
   }
 
   /* ───── Titles: the Progression tab's title cards ───── */
@@ -505,7 +522,7 @@ function skillTip(s, info) {
   const kind = { Active: ["Active", "#a3342c"], Passive: ["Passive", "#2e6e4c"], Dp: ["Stigma", "#7a3a9a"] }[s.category] || [s.category, "#444"];
   t.append(h("div.head", {}, h("div.t", {}, h("div.nm", {}, s.name),
     s.level || s.category === "Dp" ? h("div.slv", { style: { color: s.level ? "var(--gold)" : "var(--dim)" } }, `Level ${s.level}`) : null,
-    h("div.tags", {}, h("span", { style: { background: kind[1] } }, kind[0]))),
+    kind[0] ? h("div.tags", {}, h("span", { style: { background: kind[1] } }, kind[0])) : null),
     s.icon ? h("img", { src: s.icon }) : null));
   if (info) {
     const desc = h("div.desc");
@@ -515,7 +532,6 @@ function skillTip(s, info) {
     t.append(desc);
     const rows = [["Cooldown", info.cooldown], ["MP Cost", info.mp]].filter(([, v]) => v);
     if (rows.length) t.append(h("div.rows", {}, rows.map(([k, v]) => h("div.itip", {}, h("div.r", {}, h("span", {}, k), h("span.v", {}, v))))));
-    t.append(h("div.credit", {}, "Info provided by MetaBot.GG"));
   }
   return t;
 }
@@ -523,7 +539,7 @@ function skillTip(s, info) {
 // node colours as the game's board draws them (Unique corners are orange there, not item gold)
 const NODE_COLORS = { Common: "#a39d84", Rare: GRADE_COLORS.Rare, Legend: GRADE_COLORS.Legend, Unique: "#e8792b" };
 
-function boardEl(d) {
+function boardEl(d, skillHover) {
   const rows = d.nodes.map((n) => n.row), cols = d.nodes.map((n) => n.col);
   const r0 = Math.min(...rows), c0 = Math.min(...cols), nr = Math.max(...rows) - r0 + 1, nc = Math.max(...cols) - c0 + 1;
   const wrap = h("div", { style: { width: "100%" } });
@@ -550,8 +566,11 @@ function boardEl(d) {
     const g = n.grade.toLowerCase();
     const node = h("div.node", { class: [n.kind === "Start" ? "start" : n.kind === "SkillLevel" ? "skill" : "", n.opened ? "open" : "closed", `g-${g}`].join(" "),
       style: { "--g": NODE_COLORS[n.grade] || "#8d8a7c" } });
-    node.addEventListener("mouseenter", (e) => showTip(smallTip(n.name || n.kind, n.effects), e.clientX, e.clientY));
-    node.addEventListener("mouseleave", hideTip);
+    if (n.kind === "SkillLevel" && skillHover) skillHover(node, n);      // the skill itself, at this character's level
+    else {
+      node.addEventListener("mouseenter", (e) => showTip(smallTip(n.name || n.kind, n.effects), e.clientX, e.clientY));
+      node.addEventListener("mouseleave", hideTip);
+    }
     nodes.push([n, node]);
     el.append(node);
   }

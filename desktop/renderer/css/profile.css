@@ -126,7 +126,6 @@
 .stip .desc { padding: 0 12px 8px; white-space: pre-wrap; font-size: 12.5px; line-height: 1.5; color: var(--text); }
 .stip .desc b { color: #f2b84b; font-weight: 600; }
 .stip .rows { padding: 6px 12px 8px; border-top: 1px solid var(--line-2); }
-.stip .credit { padding: 6px 12px 9px; border-top: 1px solid var(--line-2); color: var(--faint); font-size: 11px; }
 
 /* ───── Daevanion: board tabs and framed node tiles ───── */
 .btabs { display: flex; gap: 2px; overflow-x: auto; margin: 4px -4px 8px; border-bottom: 1px solid var(--line); }
