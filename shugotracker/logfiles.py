@@ -1,4 +1,6 @@
-"""Log files named by when they started (shugo-core_2026-11-14_22-51-03.log), keeping only the newest few."""
+"""Log files, one per day (shugo-core_2026-11-15.log): every start that day adds to the same file, and files older
+than a set number of days are deleted. A day's file is easy to find ("it broke on Saturday") and holds the whole
+day, restarts included."""
 from __future__ import annotations
 
 import glob
@@ -6,8 +8,12 @@ import os
 import re
 import time
 
-STAMP = "%Y-%m-%d_%H-%M-%S"          # local time; sorts by name in the order they were written
-MAX_AGE_DAYS = 14                    # and nothing older than this is kept, however few there are
+TEXT_KEEP_DAYS = 14                  # shugo-core_*.log, shugo-window_*.log
+_DAY = re.compile(r"_(\d{4}-\d\d-\d\d)")
+
+
+def today() -> str:
+    return time.strftime("%Y-%m-%d")
 
 
 def line_time() -> str:
@@ -16,33 +22,43 @@ def line_time() -> str:
     return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(t)) + f".{int(t % 1 * 1000):03d}"
 
 
-def new_log_path(folder: str, prefix: str, ext: str, keep: int) -> str:
-    """A fresh path for `prefix_<time>.<ext>` in `folder`. Older ones beyond the newest `keep - 1` are deleted,
-    so with the new one there are at most `keep`, and so is any older than MAX_AGE_DAYS."""
+def daily_log_path(folder: str, prefix: str, ext: str, keep_days: int) -> str:
+    """Today's `prefix_YYYY-MM-DD.ext` in `folder`. Files of this kind from more than `keep_days` days ago are
+    deleted (older per-start names like prefix_2026-11-14_22-51-03.ext count by their date too)."""
     os.makedirs(folder, exist_ok=True)
-    old = sorted(glob.glob(os.path.join(glob.escape(folder), f"{prefix}_*.{ext}")), key=_order)
-    stamp = time.strftime(STAMP)
-    same = [p for p in old if _order(p)[0] == stamp]        # started this same second (a quick rollover)
-    n = max([_order(p)[1] for p in same], default=0) + 1
-    path = os.path.join(folder, f"{prefix}_{stamp}" + (f"-{n}" if n > 1 else "") + f".{ext}")
-    cutoff = time.time() - MAX_AGE_DAYS * 86400
-    stale = old[:max(0, len(old) - (keep - 1))] + [p for p in old if _mtime(p) < cutoff]
-    for p in dict.fromkeys(stale):
+    cutoff = time.strftime("%Y-%m-%d", time.localtime(time.time() - keep_days * 86400))
+    for path in glob.glob(os.path.join(glob.escape(folder), f"{prefix}_*.{ext}")):
+        m = _DAY.search(os.path.basename(path)[len(prefix):])
+        if m and m.group(1) <= cutoff:
+            try:
+                os.remove(path)
+            except OSError:
+                pass                  # still open somewhere: next time
+    return os.path.join(folder, f"{prefix}_{today()}.{ext}")
+
+
+class DailyText:
+    """A text log that writes to today's file and moves on to the next day's at midnight."""
+
+    def __init__(self, folder: str, prefix: str, keep_days: int = TEXT_KEEP_DAYS):
+        self.folder, self.prefix, self.keep = folder, prefix, keep_days
+        self.day, self.f = None, None
+
+    def write(self, msg: str) -> None:
+        if self.day != today():
+            self._open()
+        if self.f:
+            try:
+                self.f.write(f"{line_time()} {msg}\n")
+                self.f.flush()
+            except (OSError, ValueError):
+                pass
+
+    def _open(self) -> None:
+        if self.f:
+            self.f.close()
+        self.day = today()
         try:
-            os.remove(p)
+            self.f = open(daily_log_path(self.folder, self.prefix, "log", self.keep), "a", encoding="utf-8")
         except OSError:
-            pass                      # still open somewhere: next time
-    return path
-
-
-def _order(path: str) -> tuple:
-    """Oldest first: by the start time in the name, then by the -2, -3… of files started in the same second."""
-    m = re.search(r"_(\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d)(?:-(\d+))?\.[^.]+$", path)
-    return (m.group(1), int(m.group(2) or 1)) if m else ("", 0)
-
-
-def _mtime(path: str) -> float:
-    try:
-        return os.path.getmtime(path)
-    except OSError:
-        return float("inf")
+            self.f = None

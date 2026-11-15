@@ -85,6 +85,9 @@ class Core:
             find = find_nearby(session)
         self.nearby = NearbyService(self.api, self.cfg, log=self.log, data_dir=self.logs, find=find)
         self.nearby.on_region = lambda r: self.set_config("nearby_region", r)
+        mine = self.my.active()
+        if mine and not demo:                            # your character, before the game says so (mid-match starts)
+            self.nearby.set_me(mine["name"], mine.get("server_id") or 0)
         self._nearby_seen = None
         self._stop = threading.Event()
         threading.Thread(target=self._watch_nearby, name="nearby-watch", daemon=True).start()
@@ -381,14 +384,14 @@ def serve_stdio(root: str, demo: bool = False, showcase: str | None = None) -> i
         with out_lock:
             stdout.write(line + "\n")
             stdout.flush()
-    from .logfiles import line_time, new_log_path
-    log_path = new_log_path(os.path.join(root, "logs"), "shugo-core", "log", 10)   # one per start, newest 10 kept
-    logf = open(log_path, "w", encoding="utf-8")
+    from .logfiles import DailyText
+    daily = DailyText(os.path.join(root, "logs"), "shugo-core")      # logs\shugo-core_<day>.log, 14 days kept
+    log_lock = threading.Lock()
 
     def log(m: str) -> None:
-        logf.write(f"{line_time()} {m}\n")
-        logf.flush()
-    log(f"Shugo Tracker core v{__version__}" + (" (demo)" if demo else ""))
+        with log_lock:
+            daily.write(m)
+    log(f"──── Shugo Tracker core v{__version__} started" + (" (demo)" if demo else ""))
     core = Core(root, write, demo=demo or bool(showcase), log=log, showcase=showcase)
     # Requests run on a small pool (some wait on the network; most are instant), not a new thread each.
     from concurrent.futures import ThreadPoolExecutor

@@ -150,27 +150,24 @@ class NearbyServiceTests(unittest.TestCase):
         time.sleep(0.2)
         self.assertNotIn(("Mine", "nae"), find2.calls)              # remembered: no region hunt
 
-    def test_running_log_roundtrip_rollover_and_rotation(self):
+    def test_running_log_is_one_file_a_day_with_every_session(self):
         import glob
         svc, _ = self.make({})
         with tempfile.TemporaryDirectory() as d:
             svc.data_dir = d
             path = svc.start_running_log()
-            self.assertRegex(os.path.basename(path), r"^nearby_\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d(-\d+)?\.bin$")
+            self.assertRegex(os.path.basename(path), r"^nearby_\d{4}-\d\d-\d\d\.bin$")
             self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Foe"))
             svc.stop_running_log()
-            got = []
-            self.assertEqual(nb.replay_recording(path, lambda flow, data, gap: got.append((flow, data, gap))), 1)
-            self.assertEqual(got[0][0], ("1.2.3.4", "7777", "10.0.0.2", "5000"))
-            old, nb.RUNNING_LOG_MAX = nb.RUNNING_LOG_MAX, 10
-            self.addCleanup(setattr, nb, "RUNNING_LOG_MAX", old)
-            svc.start_running_log()
-            for i in range(8):                                        # each chunk passes the limit: a new file
-                self.feed(svc, other_record(300 + i, f"P{i}"))
+            self.assertEqual(svc.start_running_log(), path)              # a second start the same day: same file
+            self.feed(svc, other_record(300, "Pal"))
             svc.stop_running_log()
-            files = sorted(glob.glob(os.path.join(d, "diagnostics", "nearby_*.bin")))
-            self.assertEqual(len(files), nb.RUNNING_LOG_KEEP)           # only the newest few kept
-            self.assertNotIn(path, files)
+            with open(path, "ab") as f:
+                f.write(b"\x00" * 7)                                   # a record cut off by a crash
+            got = []
+            self.assertEqual(nb.replay_recording(path, lambda flow, data, gap: got.append(flow)), 2)
+            self.assertEqual(got[0], ("1.2.3.4", "7777", "10.0.0.2", "5000"))
+            self.assertEqual(len(glob.glob(os.path.join(d, "diagnostics", "*.bin"))), 1)
 
     def test_start_without_administrator(self):
         if nb.is_admin():
@@ -427,16 +424,68 @@ class CaptureFilterTests(unittest.TestCase):
 
 
 class LogFileTests(unittest.TestCase):
-    def test_old_logs_go_by_age_too(self):
+    def test_daily_files_and_age_limit(self):
         from shugotracker import logfiles
         with tempfile.TemporaryDirectory() as d:
-            old = os.path.join(d, "x_2026-01-01_00-00-00.log")
-            open(old, "w").close()
-            os.utime(old, (time.time() - 30 * 86400,) * 2)               # a month old
-            path = logfiles.new_log_path(d, "x", "log", keep=10)
-            self.assertFalse(os.path.exists(old))
-            self.assertRegex(os.path.basename(path), r"^x_\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d\.log$")
+            for old in ("x_2020-01-01.log", "x_2020-01-02_10-00-00.log"):     # a day file, an older per-start file
+                open(os.path.join(d, old), "w").close()
+            keep = os.path.join(d, f"x_{logfiles.today()}.log")
+            open(keep, "w").close()
+            path = logfiles.daily_log_path(d, "x", "log", keep_days=14)
+            self.assertEqual(path, keep)
+            self.assertEqual(os.listdir(d), [os.path.basename(keep)])
             self.assertRegex(logfiles.line_time(), r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$")
+            log = logfiles.DailyText(d, "y")
+            log.write("one")
+            log.write("two")
+            with open(os.path.join(d, f"y_{logfiles.today()}.log"), encoding="utf-8") as f:
+                self.assertEqual([ln.split(" ", 2)[2] for ln in f.read().splitlines()], ["one", "two"])
+
+
+
+# A Shugo Festival scoreboard as the game sent it (Nov 2026): Fatkid1000 (1105), you, Talethia (1102), Clemont (1104).
+SHUGO_SCOREBOARD = bytes.fromhex(
+    "0360000095dc0607cc0a4edfa101000004000164000000510418880400000051040a4661746b6964313030300301320000005004ce2e04"
+    "00000050040643796e6963610745636c6970736501000003320000004e04035d040000004e040854616c65746869610003320000005004"
+    "125906000000500407436c656d6f6e74")
+
+
+class InstanceTests(unittest.TestCase):
+    def make(self):
+        svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae"})
+        feed = lambda *b: svc.on_bytes(("a", 1, "b", 2), b"".join(frame(x) for x in b), False)  # noqa: E731
+        return svc, feed
+
+    def names(self, svc):
+        return sorted(c.name for _s, c, _p in svc.snapshot())
+
+    def test_scoreboard_lists_everyone_even_when_started_mid_match(self):
+        svc, feed = self.make()
+        svc.set_me("Cynica", 1104)
+        feed(SHUGO_SCOREBOARD)                                      # no spawns seen at all
+        self.assertEqual(self.names(svc), ["Clemont", "Fatkid1000", "Talethia"])
+        servers = {p.name: (p.server, p.server_source) for p in svc.tracker.players.values()}
+        self.assertEqual(servers["Fatkid1000"], (1105, "record"))
+        self.assertEqual(servers["Talethia"], (1102, "record"))
+
+    def test_entering_an_instance_without_a_map_load_moves_the_town_to_recent(self):
+        from tests.test_scout import map_load
+        svc, feed = self.make()
+        feed(map_load(1010), self_record(100, "Mine", 1104), other_record(200, "Townie"))
+        for dec in svc._decoders.values():
+            dec._self_at.clear()
+        feed(self_record(900, "Mine", 1104), other_record(901, "Partner"))   # instance: new id for you, no map load
+        self.assertEqual(self.names(svc), ["Partner"])
+        self.assertEqual([c.name for _s, c, _t, _f in svc.recent()], ["Townie"])
+
+    def test_respawn_after_a_same_map_load_keeps_everyone_even_with_a_new_id(self):
+        from tests.test_scout import map_load
+        svc, feed = self.make()
+        feed(map_load(61), self_record(100, "Mine", 1104), other_record(200, "Foe"))
+        for dec in svc._decoders.values():
+            dec._self_at.clear()
+        feed(map_load(61, count=2), self_record(101, "Mine", 1104))
+        self.assertEqual(self.names(svc), ["Foe"])
 
 
 if __name__ == "__main__":

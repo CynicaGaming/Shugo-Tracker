@@ -86,7 +86,14 @@ class EntityActive:
     entity_id: int
 
 
-Event = SelfSeen | PlayerSeen | OwnerRecord | Hit | EntityGone | MapLoaded | EntityActive
+@dataclass(frozen=True)
+class RosterSeen:
+    """A match's scoreboard (Shugo Festival sends it every 2 s): everyone taking part, with their exact
+    server, whether or not their spawn was seen (e.g. Nearby started mid-match)."""
+    players: tuple[tuple[str, int], ...]      # (name, server)
+
+
+Event = SelfSeen | PlayerSeen | OwnerRecord | Hit | EntityGone | MapLoaded | EntityActive | RosterSeen
 SPAWN_DEDUPE_S = 2.0     # the same spawn record repeated within this window is one sighting
 
 
@@ -101,13 +108,14 @@ class Opcodes:
     death: list[str] = field(default_factory=lambda: ["42 36"])          # id, varint, flag (1/3 = dead)
     object_gone: list[str] = field(default_factory=lambda: ["35 36"])    # id, reason: left view
     map_load: list[str] = field(default_factory=lambda: ["21 36"])       # u32 load count, u32 map id
+    roster: list[str] = field(default_factory=lambda: ["03 60"])         # a match scoreboard (Shugo Festival)
 
     def compiled(self) -> "CompiledOpcodes":
         def parse(codes: list[str]) -> tuple[bytes, ...]:
             return tuple(bytes(int(h, 16) for h in c.split()) for c in codes if c.strip())
         return CompiledOpcodes(parse(self.damage), parse(self.self_record),
                                parse(self.player_spawn), parse(self.ownership),
-                               parse(self.death), parse(self.object_gone), parse(self.map_load))
+                               parse(self.death), parse(self.object_gone), parse(self.map_load), parse(self.roster))
 
 
 @dataclass(frozen=True)
@@ -119,6 +127,7 @@ class CompiledOpcodes:
     death: tuple[bytes, ...]
     object_gone: tuple[bytes, ...]
     map_load: tuple[bytes, ...]
+    roster: tuple[bytes, ...] = ()
 
 
 def _at(data: bytes, i: int, codes: tuple[bytes, ...]) -> bool:
@@ -425,6 +434,29 @@ class StreamDecoder:
                 map_id = u32(packet, o + 6)
                 if 0 < map_id <= 9_999_999:
                     self.emit(MapLoaded(map_id))
+        elif _at(packet, o, self.op.roster):
+            self._parse_roster(packet, o + 2)
+
+    # ---- match scoreboard: per player ... <server u16> <u32> 00 00 <server u16> <len><name> ... ----
+    def _parse_roster(self, b: bytes, o: int) -> None:
+        """Each entry carries the player's server twice around a 4-byte number and two zero bytes, then the
+        name; that repeat is the signature (checked against Shugo Festival scoreboards, Nov 2026)."""
+        found: list[tuple[str, int]] = []
+        n = len(b)
+        k = o
+        while k + 11 <= n:
+            srv = u16(b, k)
+            if srv in self.known_servers and b[k + 6:k + 8] == b"\x00\x00" and u16(b, k + 8) == srv:
+                nlen = b[k + 10]
+                if 2 <= nlen <= 32 and k + 11 + nlen <= n:
+                    name = decode_name(b[k + 11:k + 11 + nlen])
+                    if name:
+                        found.append((name, srv))
+                        k += 11 + nlen
+                        continue
+            k += 1
+        if found:
+            self.emit(RosterSeen(tuple(found)))
 
     # ---- damage: 04 38 <target> <switch> <varint> <actor> <skill u32> ... ----
     def _parse_damage(self, packet: bytes, body_off: int) -> None:

@@ -28,25 +28,33 @@ let pinned = true;                                     // "Always on top" (the p
 /* Window events go to logs\shugo-window_<start time>.log (one per start, newest 10 kept), so a window that
    vanishes can be explained afterwards. Same naming as the core's logs (shugotracker/logfiles.py). */
 const winLog = (() => {
-  let f = null;
-  try {
-    const dir = path.join(ROOT, "logs");
-    fs.mkdirSync(dir, { recursive: true });
-    const p2 = (n) => String(n).padStart(2, "0"), d = new Date();
-    const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}`;
-    const old = fs.readdirSync(dir).filter((n) => /^shugo-window_.*\.log$/.test(n)).sort();
-    const cutoff = Date.now() - 14 * 86400e3;                            // and nothing older than 14 days
-    const age = (n) => { try { return fs.statSync(path.join(dir, n)).mtimeMs; } catch { return Infinity; } };
-    const stale = new Set([...old.slice(0, Math.max(0, old.length - 9)), ...old.filter((n) => age(n) < cutoff)]);
-    for (const n of stale) try { fs.rmSync(path.join(dir, n)); } catch { /* in use */ }
-    for (const n of ["shugo-window.log", "shugo-core.log", "shugo-core-stderr.log"]) try { fs.rmSync(path.join(dir, n)); } catch { /* none */ }
-    f = fs.openSync(path.join(dir, `shugo-window_${stamp}.log`), "a");
-  } catch { /* read-only folder */ }
-  const lineTime = () => {                                              // 2026-11-14 22:51:03.412
-    const d = new Date(), p = (n, w = 2) => String(n).padStart(w, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+  // logs\shugo-window_<day>.log: one file a day (every start that day adds to it), 14 days kept, the same as
+  // the core's logs (shugotracker/logfiles.py).
+  const dir = path.join(ROOT, "logs");
+  const p2 = (n, w = 2) => String(n).padStart(w, "0");
+  const day = (d = new Date()) => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+  let f = null, openDay = "";
+  const open = () => {
+    openDay = day();
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const cutoff = day(new Date(Date.now() - 14 * 86400e3));
+      for (const n of fs.readdirSync(dir)) {
+        const m = /^shugo-window_(\d{4}-\d\d-\d\d)/.exec(n);
+        if (m && m[1] <= cutoff) try { fs.rmSync(path.join(dir, n)); } catch { /* in use */ }
+      }
+      if (f != null) fs.closeSync(f);
+      f = fs.openSync(path.join(dir, `shugo-window_${openDay}.log`), "a");
+    } catch { f = null; /* read-only folder */ }
   };
-  return (m) => { if (f != null) try { fs.writeSync(f, `${lineTime()} ${m}\n`); } catch { /* ignore */ } };
+  const lineTime = () => {                                              // 2026-11-14 22:51:03.412
+    const d = new Date();
+    return `${day(d)} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}.${p2(d.getMilliseconds(), 3)}`;
+  };
+  return (m) => {
+    if (openDay !== day()) open();                                        // (midnight: the next day's file)
+    if (f != null) try { fs.writeSync(f, `${lineTime()} ${m}\n`); } catch { /* ignore */ }
+  };
 })();
 const updater = new Updater({ exe: EXE, dir: ROOT, version: app.getVersion(), dev: DEV,
   onChange: (s) => win?.webContents.send("update", s) });
@@ -183,7 +191,7 @@ function relaunchAsAdmin() {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);                       // no hidden menu bar for Alt to wake up
-  winLog(`Shugo Tracker ${app.getVersion()} started`);
+  winLog(`──── Shugo Tracker ${app.getVersion()} started${process.argv.includes("--after-update") ? " after an update" : ""}`);
   startCore();
   createWindow();
   const cfg = readConfig();

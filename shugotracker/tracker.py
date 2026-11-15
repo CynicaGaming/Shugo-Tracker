@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from . import servers as sv
-from .protocol import EntityGone, Event, Hit, MapLoaded, OwnerRecord, PlayerSeen, SelfSeen
+from .protocol import EntityGone, Event, Hit, MapLoaded, OwnerRecord, PlayerSeen, RosterSeen, SelfSeen
 
 # Lookup priorities (lower = sooner)
 PRIO_COMBAT, PRIO_ENEMY, PRIO_UNKNOWN, PRIO_ALLY = 0, 1, 2, 3
@@ -99,6 +99,9 @@ class Tracker:
             if self.me.name and ev.name == self.me.name:
                 self.me.entity_ids.add(ev.entity_id)
                 return
+            if ev.name not in self.players:
+                self.log(f"seen {ev.name} ({ev.class_name or '?'}"
+                         + (f", {sv.label(ev.server)} by {ev.server_source}" if ev.server else "") + f", id {ev.entity_id})")
             p = self._player(ev.name, now)
             self._bind(p, ev.entity_id)
             p.dead = False
@@ -125,6 +128,18 @@ class Tracker:
             if p.server_source != "record":
                 p.server, p.server_source = ev.server, "owner"
             self._consider(p)
+        elif isinstance(ev, RosterSeen):
+            # a match scoreboard: everyone in it is here, with their exact server (even if their spawn was
+            # missed, e.g. Nearby started mid-match); it repeats, which keeps them from being forgotten
+            for name, server in ev.players:
+                if name == self.me.name:
+                    continue
+                p = self._player(name, now)
+                if p.server != server or p.server_source != "record":
+                    p.server, p.server_source = server, "record"
+                if not p.race and sv.race_of(server) in (1, 2):
+                    p.race = sv.race_of(server)
+                self._consider(p)
         elif isinstance(ev, Hit):
             self._on_hit(ev, now)
         elif isinstance(ev, EntityGone):

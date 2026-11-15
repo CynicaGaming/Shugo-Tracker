@@ -9,6 +9,12 @@ Each release's notes come from its section here (shown in Settings → Updates).
 - New look for the filters: one region switch, Elyos and Asmodians toggles, and a Filters button (with a count) for class and level
 - Region names tidied up: NA East, NA West, Europe, Latin America, Asia
 
+## 2.3.7
+- Fixed: Nearby in Shugo Festival lists the match's players (from its scoreboard), even when Nearby starts mid-match
+- Fixed: entering an instance moves the town crowd to Recent, even when the game sends no map change
+- Logs are one file a day (shugo-core_2026-11-15.log, nearby_2026-11-15.bin): every start that day adds to it;
+  text logs are kept 14 days, Nearby's traffic 7 days; the logs also note each player seen and every area change
+
 ## 2.3.6
 - Daevanion: hover a skill node, or a skill under Skill Effect, for that skill's tooltip at the character's level
 - Stats: bonuses read "Attack +5.6%" instead of "Attack increase +5.6%"

@@ -16,12 +16,12 @@ from typing import Callable
 
 from . import servers as sv
 from .aion2api import Api, Character, class_pc_ids
-from .protocol import EntityActive, Hit, MapLoaded, Opcodes, SelfSeen, StreamDecoder
+from .protocol import EntityActive, Hit, MapLoaded, Opcodes, RosterSeen, SelfSeen, StreamDecoder
 from .tracker import ALLY, ENEMY, UNKNOWN, Lookup, Player, Tracker
 
 RECORD_MAGIC = b"SHUGOCAP1\n"
-RUNNING_LOG_MAX = 16 * 1024 * 1024          # the running log starts a new file past this size
-RUNNING_LOG_KEEP = 5                         # and keeps this many
+RUNNING_LOG_MAX = 512 * 1024 * 1024         # a day's traffic file stops growing past this (a normal day is far less)
+RUNNING_LOG_DAYS = 7                         # days of traffic files kept
 
 # states the UI shows
 OFF, STARTING, NO_ADMIN, NO_LIBS, WAITING, CAPTURING, ERROR = (
@@ -85,6 +85,9 @@ class NearbyService:
         self._parked: dict[int, str] = {}
         self._dismissed: set[int] = set()            # cleared by hand: back only if they re-appear or fight you
         self._map_loads_seen = False
+        self._loaded_since_self = False               # a map load came in since your last own record
+        self._self_eid: int | None = None             # your id in the last record of your own
+        self._last_roster: tuple = ()
         self._my_region: str | None = cfg.get("nearby_region") or None
         self.on_region: Callable[[str], None] = lambda r: None   # remember it (set by the app)
         self.on_me: Callable[[str, int], None] = lambda n, s: None  # remember your character (set by the app)
@@ -102,6 +105,8 @@ class NearbyService:
         self.stats = {"bytes": 0, "players_seen": 0, "events": 0}
         self._record_file = None
         self._record_size = 0
+        self._record_writes = 0
+        self._record_day = ""
         self.record_path: str | None = None
         self._last_expire = 0.0
         self._v = 0
@@ -206,14 +211,19 @@ class NearbyService:
             return
         if isinstance(ev, MapLoaded):
             self._map_loads_seen = True
+            self._loaded_since_self = True
             if ev.map_id != self.tracker.map_id:
                 self._parked.clear()                # a new area: those ids mean other things now
                 self._dismissed.clear()
-        elif isinstance(ev, SelfSeen) and self.tracker.players and not self._map_loads_seen:
-            # Fallback when map-load records aren't coming through: your own record is sent on every area
-            # load. (With map loads seen, those decide: same map = respawn, keep everyone.)
+        elif isinstance(ev, SelfSeen) and self._new_area(ev) and self.tracker.players:
+            self.log(f"nearby: new area (your id changed to {ev.entity_id}): {len(self.tracker.players)} players to Recent")
             self._to_recent(list(self.tracker.players.values()))
             self.tracker.clear()
+        elif isinstance(ev, RosterSeen):
+            names = tuple(sorted(n for n, _s in ev.players))
+            if names != self._last_roster:
+                self._last_roster = names
+                self.log("nearby: match scoreboard: " + ", ".join(f"{n}@{s}" for n, s in ev.players))
         elif isinstance(ev, Hit):
             # someone on the Recent list is fighting right next to you: they never left
             with_me = bool({ev.actor_id, ev.target_id} & self.tracker.me.entity_ids)
@@ -239,6 +249,16 @@ class NearbyService:
         for n in set(self.tracker.players) - before_names:
             self._recent_players.pop(n, None)           # back in range (they stay on Recent as history)
         self._last_players.update(self.tracker.players)
+
+    def _new_area(self, ev: SelfSeen) -> bool:
+        """Your own record arriving means a new area when map-load records aren't coming through at all, or
+        when it carries a new id for you: entering an instance (Shugo, a rift) can come with no map load, but
+        your character always gets a new id there. A respawn (same id, or after a same-map load) isn't."""
+        if not self._map_loads_seen:
+            return True
+        last, self._self_eid = self._self_eid, ev.entity_id
+        respawn, self._loaded_since_self = self._loaded_since_self, False   # (a new map already cleared the list)
+        return last is not None and ev.entity_id != last and not respawn
 
     def _to_recent(self, players: list[Player], park: bool = False) -> None:
         now = time.time()
@@ -487,24 +507,25 @@ class NearbyService:
         with self._lock:
             return self.tracker.me.name, self.tracker.me.server
 
+    # ───── running log of the game's traffic ─────
+    # While Nearby runs, the traffic it reads is always saved to logs\diagnostics\nearby_<day>.bin: every start
+    # that day adds to the same file (each start begins with a marker), a new file starts at midnight, and only
+    # the last RUNNING_LOG_DAYS days are kept. A day's file stops growing at RUNNING_LOG_MAX.
     def start_running_log(self) -> str | None:
         if not self.data_dir:
             return None
-        from .logfiles import new_log_path
+        from .logfiles import daily_log_path, today
         self.stop_running_log()
-        for legacy in ("nearby-current.bin", "nearby-previous.bin"):          # (v2.2.3's names)
-            try:
-                os.remove(os.path.join(self.data_dir, "diagnostics", legacy))
-            except OSError:
-                pass
         try:
-            path = new_log_path(os.path.join(self.data_dir, "diagnostics"), "nearby", "bin", RUNNING_LOG_KEEP)
-            f = open(path, "wb")
-            f.write(RECORD_MAGIC)
+            folder = os.path.join(self.data_dir, "diagnostics")
+            path = daily_log_path(folder, "nearby", "bin", RUNNING_LOG_DAYS)
+            f = open(path, "ab")
+            f.write(RECORD_MAGIC)                     # a session marker (the first one makes it a capture file)
+            size = f.tell()
         except OSError as e:
             self.log(f"nearby: running log unavailable: {e}")
             return None
-        self._record_file, self._record_size, self.record_path = f, len(RECORD_MAGIC), path
+        self._record_file, self._record_size, self._record_day, self.record_path = f, size, today(), path
         return path
 
     def stop_running_log(self) -> None:
@@ -519,6 +540,7 @@ class NearbyService:
         f = self._record_file
         if f is None:
             return
+        self._record_writes += 1
         key = "|".join(str(x) for x in flow).encode()
         head = struct.pack("<dBH", time.time(), 1 if gap else 0, len(key)) + key + struct.pack("<I", len(data))
         try:
@@ -529,7 +551,12 @@ class NearbyService:
             return
         self._record_size += len(head) + len(data)
         if self._record_size > RUNNING_LOG_MAX:
-            self.start_running_log()
+            self.log("nearby: today's log is full; no more traffic saved until tomorrow")
+            self.stop_running_log()
+        elif self._record_writes % 500 == 0:
+            from .logfiles import today
+            if today() != self._record_day:            # midnight: on to the next day's file
+                self.start_running_log()
 
 
 def choose(cands: list[Character], hint: int | None, seen_servers: set[int], my_faction: int | None,
@@ -559,18 +586,28 @@ def choose(cands: list[Character], hint: int | None, seen_servers: set[int], my_
 
 
 def replay_recording(path: str, on_bytes: Callable[[tuple, bytes, bool], None]) -> int:
-    """Feed a file saved by the running log back through on_bytes. Returns chunks read."""
-    n = 0
+    """Feed a Nearby log (logs\\diagnostics\\nearby_*.bin) back through on_bytes. A day's file holds several
+    sessions, each starting with RECORD_MAGIC; a record cut off by a crash is skipped to the next session.
+    Returns chunks read."""
     with open(path, "rb") as f:
-        if f.read(len(RECORD_MAGIC)) != RECORD_MAGIC:
-            raise ValueError("not a Shugo Tracker capture")
-        while True:
-            head = f.read(11)
-            if len(head) < 11:
+        blob = f.read()
+    if not blob.startswith(RECORD_MAGIC):
+        raise ValueError("not a Shugo Tracker capture")
+    n = 0
+    for chunk in blob.split(RECORD_MAGIC)[1:]:
+        o = 0
+        while o + 11 <= len(chunk):
+            _ts, gap, klen = struct.unpack_from("<dBH", chunk, o)
+            o += 11
+            if klen > 200 or o + klen + 4 > len(chunk):
+                break                                  # cut off (or not a record): on to the next session
+            key = tuple(chunk[o:o + klen].decode(errors="replace").split("|"))
+            o += klen
+            (dlen,) = struct.unpack_from("<I", chunk, o)
+            o += 4
+            if o + dlen > len(chunk):
                 break
-            _ts, gap, klen = struct.unpack("<dBH", head)
-            key = tuple(f.read(klen).decode().split("|"))
-            (dlen,) = struct.unpack("<I", f.read(4))
-            on_bytes(key, f.read(dlen), bool(gap))
+            on_bytes(key, chunk[o:o + dlen], bool(gap))
+            o += dlen
             n += 1
     return n
