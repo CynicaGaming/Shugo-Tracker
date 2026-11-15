@@ -62,3 +62,8 @@ class DailyText:
             self.f = open(daily_log_path(self.folder, self.prefix, "log", self.keep), "a", encoding="utf-8")
         except OSError:
             self.f = None
+
+    def close(self) -> None:
+        if self.f:
+            self.f.close()
+            self.f = None

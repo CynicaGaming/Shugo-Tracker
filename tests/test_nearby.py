@@ -438,6 +438,7 @@ class LogFileTests(unittest.TestCase):
             log = logfiles.DailyText(d, "y")
             log.write("one")
             log.write("two")
+            log.close()                                                     # (Windows can't delete open files)
             with open(os.path.join(d, f"y_{logfiles.today()}.log"), encoding="utf-8") as f:
                 self.assertEqual([ln.split(" ", 2)[2] for ln in f.read().splitlines()], ["one", "two"])
 
