@@ -91,6 +91,9 @@ class Core:
         self._nearby_seen = None
         self._stop = threading.Event()
         threading.Thread(target=self._watch_nearby, name="nearby-watch", daemon=True).start()
+        self._nearby_saved = os.path.join(self.cache, "nearby_state.json")
+        if not demo:
+            self.nearby.load_state(self._nearby_saved)     # the list from before a restart (an update, say)
         if self.cfg.get("nearby_enabled"):
             self._nearby_on(True)
 
@@ -143,6 +146,8 @@ class Core:
 
     def close(self) -> None:
         self._stop.set()
+        if not self.demo and self.cfg.get("nearby_enabled"):
+            self.nearby.save_state(self._nearby_saved)
         self.nearby.stop()
         self.api.close()
         self.save()

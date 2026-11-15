@@ -336,6 +336,70 @@ class NearbyService:
                 out.append((side, c, left_at, fought))
             return out
 
+    # ───── surviving an app restart ─────
+    # The game announces each player once, as they come into view, so a restart (an update, say) would leave
+    # the list empty until you change area. The list is saved on the way out and restored on the next start
+    # when it is recent; a map load since then clears it as usual. Recent is kept the same way, for longer.
+    def save_state(self, path: str) -> None:
+        import json
+        from dataclasses import asdict
+        with self._lock:
+            players = [{"name": p.name, "ids": sorted(p.entity_ids), "server": p.server, "source": p.server_source,
+                        "cls": p.class_name, "race": p.race, "pc_id": p.pc_id, "first": p.first_seen,
+                        "last": p.last_seen, "combat": p.last_combat} for p in self.tracker.players.values()]
+            recent = [{"side": side, "char": asdict(self._chars.get(name, c)), "left": left, "fought": fought}
+                      for name, (side, c, left, fought) in self._recent.items()]
+            data = {"saved_at": time.time(), "map_id": self.tracker.map_id, "whole_area": self.whole_area,
+                    "self_eid": self._self_eid, "me_ids": sorted(self.tracker.me.entity_ids),
+                    "map_loads_seen": self._map_loads_seen, "players": players, "recent": recent}
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, separators=(",", ":"))
+        except OSError as e:
+            self.log(f"nearby: couldn't save the list: {e}")
+
+    def load_state(self, path: str, keep_s: float = 300.0, recent_keep_s: float = 86400.0) -> int:
+        """Restore what save_state wrote (the list only if saved within keep_s). Returns players restored."""
+        import json
+        from .aion2api import character_from_dict
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            return 0
+        age = time.time() - float(data.get("saved_at") or 0)
+        restored = 0
+        with self._lock:
+            if age <= recent_keep_s:
+                for r in data.get("recent") or []:
+                    try:
+                        c = character_from_dict(r["char"])
+                    except (KeyError, TypeError):
+                        continue
+                    self._recent[c.name] = (r.get("side"), c, float(r.get("left") or 0), bool(r.get("fought")))
+                self._trim_recent()
+            if age <= keep_s:
+                for d in data.get("players") or []:
+                    p = self.tracker._player(d["name"], float(d.get("last") or time.time()))
+                    p.first_seen = float(d.get("first") or p.last_seen)
+                    p.server, p.server_source = d.get("server"), d.get("source")
+                    p.class_name, p.race, p.pc_id = d.get("cls"), d.get("race"), d.get("pc_id")
+                    p.last_combat = float(d.get("combat") or 0)
+                    for eid in d.get("ids") or []:
+                        self.tracker._bind(p, int(eid))
+                    self.tracker._consider(p)
+                    restored += 1
+                self.tracker.map_id = data.get("map_id")
+                self.tracker.me.entity_ids.update(int(e) for e in data.get("me_ids") or [])
+                self._self_eid = data.get("self_eid")
+                self._map_loads_seen = bool(data.get("map_loads_seen"))
+                self.whole_area = bool(data.get("whole_area"))
+            self.tracker.version += 1
+            self._v += 1
+        self.log(f"nearby: restored {restored} players from {round(age)} s ago" if restored else
+                 f"nearby: saved list too old to restore ({round(age)} s)")
+        return restored
+
     # ───── lookups ─────
     # Players are listed straight from the game's records; NCSOFT is only asked about cards on screen (want()),
     # with one search per player for the exact name across your region. NCSOFT's answer gives the real server

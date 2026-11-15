@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.12
+- Fixed: restarting the app (an update, say) no longer empties Nearby; its list comes back if you're still in the same area, and Recent is kept too
+
 ## 2.3.11
 - Nearby says when its list is partial: players already around when it started only appear once you change area
 

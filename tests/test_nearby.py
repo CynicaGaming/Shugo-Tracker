@@ -489,5 +489,29 @@ class InstanceTests(unittest.TestCase):
         self.assertEqual(self.names(svc), ["Foe"])
 
 
+class RestartTests(unittest.TestCase):
+    def make(self):
+        svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae"})
+        feed = lambda *b: svc.on_bytes(("a", 1, "b", 2), b"".join(frame(x) for x in b), False)  # noqa: E731
+        return svc, feed
+
+    def test_an_app_restart_keeps_the_list_and_recent(self):
+        from tests.test_scout import gone, map_load
+        svc, feed = self.make()
+        feed(map_load(1010), self_record(100, "Mine", 1104), other_record(200, "Foe"), other_record(300, "Pal"))
+        feed(gone(300))                                            # Pal walked off: on Recent
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "nearby_state.json")
+            svc.save_state(path)
+            again, feed2 = self.make()                             # the app restarts (an update)
+            self.assertEqual(again.load_state(path), 1)
+            self.assertEqual([c.name for _s, c, _p in again.snapshot()], ["Foe"])
+            self.assertEqual([c.name for _s, c, _t, _f in again.recent()], ["Pal"])
+            self.assertTrue(again.whole_area)
+            feed2(gone(200))                                       # the restored ids still work
+            self.assertEqual(again.snapshot(), [])
+            self.assertEqual(self.make()[0].load_state(path, keep_s=-1), 0)   # too old: not restored
+
+
 if __name__ == "__main__":
     unittest.main()
