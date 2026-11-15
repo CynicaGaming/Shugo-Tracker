@@ -395,12 +395,12 @@ def serve_stdio(root: str, demo: bool = False, showcase: str | None = None) -> i
         with out_lock:
             stdout.write(line + "\n")
             stdout.flush()
-    log_path = os.path.join(root, "logs", "shugo-core.log")
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    from .logfiles import line_time, new_log_path
+    log_path = new_log_path(os.path.join(root, "logs"), "shugo-core", "log", 10)   # one per start, newest 10 kept
     logf = open(log_path, "w", encoding="utf-8")
 
     def log(m: str) -> None:
-        logf.write(time.strftime("%H:%M:%S ") + m + "\n")
+        logf.write(f"{line_time()} {m}\n")
         logf.flush()
     log(f"Shugo Tracker core v{__version__}" + (" (demo)" if demo else ""))
     core = Core(root, write, demo=demo or bool(showcase), log=log, showcase=showcase)

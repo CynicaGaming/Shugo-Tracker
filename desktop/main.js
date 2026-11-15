@@ -25,11 +25,28 @@ let quitting = false;
 let opacity = 1;
 let pinned = true;                                     // "Always on top" (the pin)
 
-/* Window events go to logs\shugo-window.log, so a window that vanishes can be explained afterwards. */
+/* Window events go to logs\shugo-window_<start time>.log (one per start, newest 10 kept), so a window that
+   vanishes can be explained afterwards. Same naming as the core's logs (shugotracker/logfiles.py). */
 const winLog = (() => {
   let f = null;
-  try { fs.mkdirSync(path.join(ROOT, "logs"), { recursive: true }); f = fs.openSync(path.join(ROOT, "logs", "shugo-window.log"), "w"); } catch { /* read-only folder */ }
-  return (m) => { if (f != null) try { fs.writeSync(f, `${new Date().toTimeString().slice(0, 8)} ${m}\n`); } catch { /* ignore */ } };
+  try {
+    const dir = path.join(ROOT, "logs");
+    fs.mkdirSync(dir, { recursive: true });
+    const p2 = (n) => String(n).padStart(2, "0"), d = new Date();
+    const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}_${p2(d.getHours())}-${p2(d.getMinutes())}-${p2(d.getSeconds())}`;
+    const old = fs.readdirSync(dir).filter((n) => /^shugo-window_.*\.log$/.test(n)).sort();
+    const cutoff = Date.now() - 14 * 86400e3;                            // and nothing older than 14 days
+    const age = (n) => { try { return fs.statSync(path.join(dir, n)).mtimeMs; } catch { return Infinity; } };
+    const stale = new Set([...old.slice(0, Math.max(0, old.length - 9)), ...old.filter((n) => age(n) < cutoff)]);
+    for (const n of stale) try { fs.rmSync(path.join(dir, n)); } catch { /* in use */ }
+    for (const n of ["shugo-window.log", "shugo-core.log", "shugo-core-stderr.log"]) try { fs.rmSync(path.join(dir, n)); } catch { /* none */ }
+    f = fs.openSync(path.join(dir, `shugo-window_${stamp}.log`), "a");
+  } catch { /* read-only folder */ }
+  const lineTime = () => {                                              // 2026-11-14 22:51:03.412
+    const d = new Date(), p = (n, w = 2) => String(n).padStart(w, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+  };
+  return (m) => { if (f != null) try { fs.writeSync(f, `${lineTime()} ${m}\n`); } catch { /* ignore */ } };
 })();
 const updater = new Updater({ exe: EXE, dir: ROOT, version: app.getVersion(), dev: DEV,
   onChange: (s) => win?.webContents.send("update", s) });
@@ -47,7 +64,7 @@ function startCore() {
   readline.createInterface({ input: core.stdout }).on("line", (line) => {
     try { win?.webContents.send("core", JSON.parse(line)); } catch { /* not JSON: ignore */ }
   });
-  core.stderr.on("data", (d) => fs.appendFile(path.join(ROOT, "logs", "shugo-core-stderr.log"), d, () => {}));
+  core.stderr.on("data", (d) => winLog(`core stderr: ${String(d).trimEnd()}`));
   core.on("exit", (code) => { if (!quitting) win?.webContents.send("core", { event: "core_exit", data: code }); });
 }
 function toCore(msg) { if (core?.stdin.writable) core.stdin.write(JSON.stringify(msg) + "\n"); }

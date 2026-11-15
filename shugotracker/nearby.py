@@ -21,6 +21,7 @@ from .tracker import ALLY, ENEMY, UNKNOWN, Lookup, Player, Tracker
 
 RECORD_MAGIC = b"SHUGOCAP1\n"
 RUNNING_LOG_MAX = 16 * 1024 * 1024          # the running log starts a new file past this size
+RUNNING_LOG_KEEP = 5                         # and keeps this many
 
 # states the UI shows
 OFF, STARTING, NO_ADMIN, NO_LIBS, WAITING, CAPTURING, ERROR = (
@@ -498,26 +499,28 @@ class NearbyService:
             return {k: len(v) for k, v in g.items()}
 
     # ───── running log of the game's traffic ─────
-    # While Nearby runs, the traffic it reads is always saved to logs\diagnostics\nearby-current.bin; at
-    # RUNNING_LOG_MAX it becomes nearby-previous.bin and a new file starts (each start of Nearby does the same),
-    # so the last few minutes are always there to send when Nearby misreads something.
+    # While Nearby runs, the traffic it reads is always saved to logs\diagnostics\nearby_<start time>.bin. A new
+    # file starts each time Nearby starts and whenever one passes RUNNING_LOG_MAX; only the newest RUNNING_LOG_KEEP
+    # are kept, so the last stretches of play are always there to send when Nearby misreads something.
     def start_running_log(self) -> str | None:
         if not self.data_dir:
             return None
-        folder = os.path.join(self.data_dir, "diagnostics")
-        cur = os.path.join(folder, "nearby-current.bin")
+        from .logfiles import new_log_path
+        self.stop_running_log()
+        for legacy in ("nearby-current.bin", "nearby-previous.bin"):          # (v2.2.3's names)
+            try:
+                os.remove(os.path.join(self.data_dir, "diagnostics", legacy))
+            except OSError:
+                pass
         try:
-            os.makedirs(folder, exist_ok=True)
-            self.stop_running_log()
-            if os.path.exists(cur):
-                os.replace(cur, os.path.join(folder, "nearby-previous.bin"))
-            f = open(cur, "wb")
+            path = new_log_path(os.path.join(self.data_dir, "diagnostics"), "nearby", "bin", RUNNING_LOG_KEEP)
+            f = open(path, "wb")
             f.write(RECORD_MAGIC)
         except OSError as e:
             self.log(f"nearby: running log unavailable: {e}")
             return None
-        self._record_file, self._record_size, self.record_path = f, len(RECORD_MAGIC), cur
-        return cur
+        self._record_file, self._record_size, self.record_path = f, len(RECORD_MAGIC), path
+        return path
 
     def stop_running_log(self) -> None:
         f, self._record_file = self._record_file, None

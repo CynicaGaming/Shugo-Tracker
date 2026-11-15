@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.2.4
+- Logs are named by when they started (for example shugo-core_2026-11-14_22-51-03.log); the newest few are kept, none older than 14 days
+- Every log line starts with the full date and time, to the millisecond
+
 ## 2.2.3
 - Nearby groups players as Elyos and Asmodians (the enemy faction first), in the filters' colours
 - Nearby keeps a running log of what it reads, so there's nothing to record when something goes wrong

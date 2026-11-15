@@ -86,7 +86,7 @@ export class SettingsView {
       S.nearby = await call("nearby.enable", { on: v });
       if (v && S.nearby.state === "no_admin") win.relaunchAsAdmin();
     })));
-    // What Nearby is doing. Its log (logs\shugo-core.log, and the game traffic it read in logs\diagnostics)
+    // What Nearby is doing. Its logs (logs\shugo-core_<time>.log, and the game traffic it read in logs\diagnostics)
     // is always being written, so there's nothing to start when something goes wrong: just send the folder.
     const stat = h("div.sub", {}, "…");
     const STATES = { off: "Off", no_admin: "Needs administrator", no_libs: "Unavailable", starting: "Starting…",

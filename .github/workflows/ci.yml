@@ -100,7 +100,7 @@ jobs:
             Remove-Item (Join-Path $dir "logs") -Recurse -Force -ErrorAction SilentlyContinue
             $sw = [Diagnostics.Stopwatch]::StartNew()
             $p = Start-Process (Join-Path $dir "ShugoTracker.exe") -ArgumentList "--demo" -PassThru
-            while (-not (Test-Path (Join-Path $dir "logs\shugo-core.log")) -and $sw.Elapsed.TotalSeconds -lt 60) { Start-Sleep -Milliseconds 50 }
+            while (-not (Test-Path (Join-Path $dir "logs\shugo-core_*.log")) -and $sw.Elapsed.TotalSeconds -lt 60) { Start-Sleep -Milliseconds 50 }
             $t = [math]::Round($sw.Elapsed.TotalSeconds, 2)
             $what = if ($i -eq 1) { "first start (unpacks)" } else { "start $i" }
             Write-Output "::notice title=startup::${what}: $t s"

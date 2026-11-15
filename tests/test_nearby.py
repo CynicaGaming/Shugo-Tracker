@@ -150,11 +150,13 @@ class NearbyServiceTests(unittest.TestCase):
         time.sleep(0.2)
         self.assertNotIn(("Mine", "nae"), find2.calls)              # remembered: no region hunt
 
-    def test_running_log_roundtrip_and_rollover(self):
+    def test_running_log_roundtrip_rollover_and_rotation(self):
+        import glob
         svc, _ = self.make({})
         with tempfile.TemporaryDirectory() as d:
             svc.data_dir = d
             path = svc.start_running_log()
+            self.assertRegex(os.path.basename(path), r"^nearby_\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d(-\d+)?\.bin$")
             self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Foe"))
             svc.stop_running_log()
             got = []
@@ -162,12 +164,13 @@ class NearbyServiceTests(unittest.TestCase):
             self.assertEqual(got[0][0], ("1.2.3.4", "7777", "10.0.0.2", "5000"))
             old, nb.RUNNING_LOG_MAX = nb.RUNNING_LOG_MAX, 10
             self.addCleanup(setattr, nb, "RUNNING_LOG_MAX", old)
-            svc.start_running_log()                                   # last session's file -> previous
-            self.assertTrue(os.path.exists(os.path.join(d, "diagnostics", "nearby-previous.bin")))
-            self.feed(svc, other_record(300, "Pal"))                  # past the limit: rolls over again
+            svc.start_running_log()
+            for i in range(8):                                        # each chunk passes the limit: a new file
+                self.feed(svc, other_record(300 + i, f"P{i}"))
             svc.stop_running_log()
-            self.assertEqual(nb.replay_recording(os.path.join(d, "diagnostics", "nearby-previous.bin"),
-                                                 lambda *a: None), 1)
+            files = sorted(glob.glob(os.path.join(d, "diagnostics", "nearby_*.bin")))
+            self.assertEqual(len(files), nb.RUNNING_LOG_KEEP)           # only the newest few kept
+            self.assertNotIn(path, files)
 
     def test_start_without_administrator(self):
         if nb.is_admin():
@@ -203,9 +206,6 @@ class ChooseTests(unittest.TestCase):
         svc.on_bytes(("a", 1, "b", 2), frame(self_record(100, "Mine", 1101)) + frame(other_record(200, "Far")), False)
         self.assertTrue(wait_for(lambda: svc.snapshot()[0][1].char_id))                # never asked for by the UI
 
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class LiveLayoutTests(unittest.TestCase):
@@ -424,3 +424,20 @@ class CaptureFilterTests(unittest.TestCase):
         self.assertEqual(flt, PacketFilter({("10.0.0.2", 61217, "193.202.112.5", 13328),
                                             ("10.0.0.2", 50961, "193.202.112.39", 13328),
                                             ("10.0.0.2", 64951, "64.25.35.157", 443)}))
+
+
+class LogFileTests(unittest.TestCase):
+    def test_old_logs_go_by_age_too(self):
+        from shugotracker import logfiles
+        with tempfile.TemporaryDirectory() as d:
+            old = os.path.join(d, "x_2026-01-01_00-00-00.log")
+            open(old, "w").close()
+            os.utime(old, (time.time() - 30 * 86400,) * 2)               # a month old
+            path = logfiles.new_log_path(d, "x", "log", keep=10)
+            self.assertFalse(os.path.exists(old))
+            self.assertRegex(os.path.basename(path), r"^x_\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d\.log$")
+            self.assertRegex(logfiles.line_time(), r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$")
+
+
+if __name__ == "__main__":
+    unittest.main()
