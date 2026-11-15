@@ -402,13 +402,15 @@ export class ProfileView {
    *  the Skills tab, Daevanion's skill nodes and its Skill Effect list. `get` returns the skill. */
   skillHover(el, get) {
     const p = this.profile;
-    el.addEventListener("mouseenter", async (e) => {
+    const show = async (e) => {
       const s = get(), pos = { x: e.clientX, y: e.clientY };
       if (!s) return;
       el._hover = true;
       const info = await call("skill", { skill_id: s.skill_id || 0, level: s.level || 1, name: s.name, cls: p.class_name }).catch(() => null);
       if (el._hover) showTip(skillTip(s, info), pos.x, pos.y);
-    });
+    };
+    el.addEventListener("mouseenter", show);
+    el.addEventListener("click", show);                  // (a click shows it too, e.g. after the tip was dismissed)
     el.addEventListener("mouseleave", () => { el._hover = false; hideTip(); });
   }
 

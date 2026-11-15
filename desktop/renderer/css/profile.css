@@ -157,7 +157,8 @@
 .fxlist { padding: 4px 10px 8px; }
 .fxlist div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; font-size: 12.5px; color: var(--text); }
 .fxlist div + div { border-top: 1px solid rgba(150, 170, 210, 0.07); }
-.fxlist.skills span { color: var(--cyan); }
+.fxlist.skills span { color: var(--cyan); cursor: pointer; }
+.fxlist.skills div:hover span { text-decoration: underline; }
 .fxlist b { color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ───── Progression: title cards ───── */
