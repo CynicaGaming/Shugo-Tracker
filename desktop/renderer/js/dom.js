@@ -30,8 +30,6 @@ export const fmtInt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-U
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 export const REGION_NAMES = { nae: "NA East", naw: "NA West", eu: "Europe", la: "Latin America", as: "Asia" };
-/** Short region names for tight spots (the filter bar). */
-export const REGION_SHORT = { nae: "NA East", naw: "NA West", eu: "EU", la: "LATAM", as: "Asia" };
 export const CLASSES = ["Gladiator", "Templar", "Ranger", "Assassin", "Spiritmaster", "Sorcerer", "Cleric", "Chanter", "Brawler"];
 export const CLASS_COLORS = {
   Gladiator: "#e0864a", Templar: "#d8b44a", Ranger: "#7fc06a", Assassin: "#c96ad6", Spiritmaster: "#5fc4c4",

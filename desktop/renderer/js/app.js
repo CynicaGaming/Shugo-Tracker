@@ -1,7 +1,7 @@
 // The window: title bar, Search / Favorites / Nearby / Recent lists, menus, footer. Profile and Settings open
 // in place of the list (profile.js, settings.js).
 import { call, on, win } from "./bridge.js";
-import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, REGION_SHORT, ago, clear,
+import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, ago, clear,
   factionColor, fmtInt, h, layoutColumns, sortChars } from "./dom.js";
 import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
 import { ProfileView } from "./profile.js";
@@ -223,9 +223,9 @@ function filtersBar() {
     save(key, [...s]);
     filtersChanged();
   };
-  // Region: one segmented control ("All" or any mix of regions).
-  const seg = h("div.seg", {}, h("button", { class: regions.size ? "" : "on", onClick: () => { save("regions", []); filtersChanged(); } }, "All"));
-  for (const r of S.regions) seg.append(h("button", { class: regions.has(r) ? "on" : "", title: REGION_NAMES[r], onClick: () => toggle("regions", r) }, REGION_SHORT[r] || r));
+  // Region: one segmented control; none picked means every region.
+  const seg = h("div.seg");
+  for (const r of S.regions) seg.append(h("button", { class: regions.has(r) ? "on" : "", onClick: () => toggle("regions", r) }, REGION_NAMES[r] || r));
   box.append(seg);
 
   // Faction toggles, the Filters panel (class and level), and Reset when anything is set.
