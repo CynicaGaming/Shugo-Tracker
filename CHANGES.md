@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.10
+- Fixed: with a region, class or level filter on, Nearby no longer hides players whose details haven't loaded yet
+
 ## 2.3.9
 - Settings: Check Automatically without the note under it
 

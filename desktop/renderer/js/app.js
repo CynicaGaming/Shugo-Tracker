@@ -295,11 +295,13 @@ function source() {
 function visible() {
   let out = source().map((c) => S.chars.get(c.key) || c);
   const regions = fset("regions"), factions = fset("factions"), classes = fset("classes");
-  if (regions.size) out = out.filter((c) => regions.has(c.region));
-  if (factions.size) out = out.filter((c) => factions.has(String(c.race)));
-  if (classes.size) out = out.filter((c) => classes.has(c.class_name));
-  if (S.cfg.level_min != null) out = out.filter((c) => c.level >= S.cfg.level_min);
-  if (S.cfg.level_max != null) out = out.filter((c) => c.level <= S.cfg.level_max);
+  // A filter only hides players it knows don't match: someone on Nearby whose details haven't come in yet (or
+  // couldn't be found) has no region or level, and stays listed rather than vanishing.
+  if (regions.size) out = out.filter((c) => !c.region || regions.has(c.region));
+  if (factions.size) out = out.filter((c) => !c.race || factions.has(String(c.race)));
+  if (classes.size) out = out.filter((c) => !c.class_name || classes.has(c.class_name));
+  if (S.cfg.level_min != null) out = out.filter((c) => !c.level || c.level >= S.cfg.level_min);
+  if (S.cfg.level_max != null) out = out.filter((c) => !c.level || c.level <= S.cfg.level_max);
   const [key, rev] = (S.cfg.sorts || {})[S.mode] || ["default", false];
   const grouped = S.mode === "nearby" || S.mode === "recent";
   const sideOf = grouped ? Object.fromEntries((S.mode === "recent" ? S.nearby.recent : S.nearby.rows).map((r) => [r.char.name, r.side])) : null;
