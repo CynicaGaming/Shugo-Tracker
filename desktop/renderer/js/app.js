@@ -39,7 +39,11 @@ function paintTitlebar() {
   if (sig === titleSig) return;
   titleSig = sig;
   clear(titlebar);
+  // An update waiting: a small arrow beside the logo; clicking it opens Settings → Updates.
+  const up = updateItem();
   titlebar.append(h("span.logo", { html: LOGO }));
+  if (up) titlebar.append(h("button.upflag", { class: up.kind, title: up.label, html: ICONS.update,
+    onClick: () => { if (S.screen !== "settings") openSettings(); } }));
   const tabs = h("div.tabs");
   if (S.screen !== "list") {
     const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent" }[S.mode], settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
@@ -56,13 +60,9 @@ function paintTitlebar() {
   titlebar.append(h("button.iconbtn", { class: pinned ? "on" : "", html: ICONS.pin, title: "",
     onClick: () => { save("always_on_top", !pinned); win.setAlwaysOnTop(!pinned); paintTitlebar(); } }));
   const me = myChar();
-  // An update shows as a dot on your picture; the menu holds the button (and Settings → Updates the details).
-  const up = updateItem();
   const meBtn = h("button.mebtn", { onClick: (e) => { e.stopPropagation(); meMenu(meBtn); },
     onMousedown: (e) => e.stopPropagation() },
-    h("span.pic", {},
-      me?.portrait ? h("img", { src: me.portrait }) : h("span.ph", { html: ICONS.person, style: { color: "var(--dim)", padding: "3px" } }),
-      up ? h("i.udot", { class: up.kind }) : null),
+    me?.portrait ? h("img", { src: me.portrait }) : h("span.ph", { html: ICONS.person, style: { color: "var(--dim)", padding: "3px" } }),
     me ? h("span.nm", {}, `${me.name} · ${me.server_name}`) : null);
   titlebar.append(meBtn,
     h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
@@ -85,8 +85,6 @@ function meMenu(anchor) {
     onRemove: async () => { await setMy("my.delete", { slot: i }); refreshOpenSub(switchItems()); },
   }));
   const items = [];
-  const up = updateItem();
-  if (up) items.push({ label: up.label, disabled: up.kind === "busy", onClick: updateClick }, "-");
   if (me) items.push({ label: "My profile", onClick: async () => openProfile(await call("my.character")) });
   if (used.length) items.push({ label: "Switch Profile", submenu: switchItems });
   const free = S.my.slots.findIndex((d) => !d);

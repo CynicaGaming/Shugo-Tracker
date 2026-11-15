@@ -9,6 +9,11 @@ Each release's notes come from its section here (shown in Settings → Updates).
 - New look for the filters: one region switch, Elyos and Asmodians toggles, and a Filters button (with a count) for class and level
 - Region names tidied up: NA East, NA West, Europe, Latin America, Asia
 
+## 2.3.5
+- Fixed: restarting for an update starts the new version again (the administrator restart from 2.3.1 is undone)
+- An update now shows as a small arrow beside the logo; click it for Settings → Updates
+- Check automatically: Never, 30m, 1h, 6h, 12h or 24h; it also checks when the app starts and when Settings opens
+
 ## 2.3.4
 - Daevanion: every board fits the window without scrolling; Board Effect below it, split into Skill Effect and Stat Effect like the game
 - Daevanion node tooltips show just the node and what it gives

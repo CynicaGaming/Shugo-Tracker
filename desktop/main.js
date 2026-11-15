@@ -2,7 +2,7 @@
 //
 // Portable: everything lives in folders next to ShugoTracker.exe (data, cache, logs), Chromium's own cache too.
 const { app, BrowserWindow, Menu, ipcMain, screen, shell } = require("electron");
-const { spawn, spawnSync } = require("child_process");
+const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
@@ -48,26 +48,7 @@ const winLog = (() => {
   };
   return (m) => { if (f != null) try { fs.writeSync(f, `${lineTime()} ${m}\n`); } catch { /* ignore */ } };
 })();
-/** Whether this copy runs as administrator (Nearby needs it). `net session` only works for administrators. */
-const ELEVATED = process.platform === "win32" && spawnSync("net", ["session"], { windowsHide: true, stdio: "ignore" }).status === 0;
-
-/** Start ShugoTracker.exe again (after an update). With Nearby on it is started as administrator explicitly: no
- *  prompt when this copy already is one, Windows asks when it isn't. Only the exe's own environment goes along. */
-function startAgain(args) {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(ELECTRON_|CHROME_|PORTABLE_EXECUTABLE)/i.test(k)));
-  const nearby = !!readConfig().nearby_enabled;
-  winLog(`starting the new version (${nearby ? "as administrator, for Nearby" : "normally"}; this copy ${ELEVATED ? "is" : "isn't"} administrator)`);
-  if (nearby && process.platform === "win32") {
-    const q = (v) => `'${String(v).replace(/'/g, "''")}'`;
-    spawn("powershell.exe", ["-NoProfile", "-Command",
-      `Start-Process -FilePath ${q(EXE)} -ArgumentList ${args.map(q).join(",")} -Verb RunAs -WorkingDirectory ${q(ROOT)}`],
-    { windowsHide: true, detached: true, stdio: "ignore", env }).unref();
-  } else {
-    spawn(EXE, args, { detached: true, stdio: "ignore", cwd: ROOT, env }).unref();
-  }
-}
-
-const updater = new Updater({ exe: EXE, dir: ROOT, version: app.getVersion(), dev: DEV, launch: startAgain,
+const updater = new Updater({ exe: EXE, dir: ROOT, version: app.getVersion(), dev: DEV,
   onChange: (s) => win?.webContents.send("update", s) });
 
 function readConfig() {
@@ -202,11 +183,11 @@ function relaunchAsAdmin() {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);                       // no hidden menu bar for Alt to wake up
-  winLog(`Shugo Tracker ${app.getVersion()} started${process.argv.includes("--after-update") ? " after an update" : ""}` +
-    ` (${ELEVATED ? "administrator" : "not administrator"})`);
+  winLog(`Shugo Tracker ${app.getVersion()} started`);
   startCore();
   createWindow();
-  updater.start(readConfig().auto_update !== false && !DEMO);
+  const cfg = readConfig();
+  if (!DEMO) updater.start(cfg.update_check_s ?? (cfg.auto_update === false ? 0 : 1800));
 });
 
 app.on("before-quit", () => {

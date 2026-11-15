@@ -9,7 +9,6 @@ const { app } = require("electron");
 
 const REPO = "CynicaGaming/Shugo-Tracker";
 const EXE_ASSET = "ShugoTracker.exe";
-const CHECK_EVERY = 30 * 60 * 1000;
 
 const parse = (v) => { const m = /^v?(\d+)\.(\d+)(?:\.(\d+))?$/.exec(String(v).trim()); return m ? [+m[1], +m[2], +(m[3] || 0)] : null; };
 /** The release's "what's new" bullets: its "- " lines, plain text (links and bold markers dropped). */
@@ -19,9 +18,8 @@ const bullets = (body) => String(body || "").split(/\r?\n/).map((l) => l.trim())
 const newer = (a, b) => { const x = parse(a), y = parse(b); if (!x || !y) return false; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
 
 class Updater {
-  /** launch(args): starts the new exe (main.js decides how: as administrator when Nearby needs it). */
-  constructor({ exe, dir, version, dev, onChange, launch }) {
-    Object.assign(this, { exe, dir, version, dev, onChange, launch });
+  constructor({ exe, dir, version, dev, onChange }) {
+    Object.assign(this, { exe, dir, version, dev, onChange });
     this.state = { state: "idle", current: version, latest: null, progress: 0, error: null, notes: [], checkedAt: null };
     this.staged = path.join(dir, `${EXE_ASSET}.new`);
     try { fs.rmSync(`${exe}.old`, { force: true }); } catch { /* still locked: next time */ }
@@ -29,15 +27,29 @@ class Updater {
 
   set(patch) { this.state = { ...this.state, ...patch }; this.onChange?.(this.state); }
 
-  start(auto) {
+  /** Check now (at start-up), then every `everyS` seconds (Settings → Updates; 0 = only when asked). */
+  start(everyS) {
     if (this.dev) { this.set({ state: "dev" }); return; }
-    if (!auto) return;
     this.check();
-    this.timer = setInterval(() => { if (["idle", "uptodate", "error"].includes(this.state.state)) this.check(); }, CHECK_EVERY);
+    this.setInterval(everyS);
+  }
+
+  setInterval(everyS) {
+    clearInterval(this.timer);
+    if (this.dev || !(everyS > 0)) return;
+    this.timer = setInterval(() => { if (["idle", "uptodate", "error"].includes(this.state.state)) this.check(); }, everyS * 1000);
+  }
+
+  /** Opening Settings: check again unless the last check was in the last minute. */
+  async freshen() {
+    if (this.dev || ["checking", "downloading", "ready"].includes(this.state.state)) return;
+    if (!this.state.checkedAt || Date.now() - this.state.checkedAt > 60000) await this.check();
   }
 
   async act(action) {
     if (action === "check") await this.check();
+    else if (action === "freshen") await this.freshen();
+    else if (typeof action === "number") this.setInterval(action);   // a new check interval, in seconds
     else if (action === "download") await this.download();
     else if (action === "restart") return this.restart();
     return this.state;
@@ -86,9 +98,8 @@ class Updater {
   /** Swap in the new exe and start it; this copy then quits. */
   restart() {
     if (this.state.state !== "ready" || !this.swap()) return false;
-    app.releaseSingleInstanceLock();                     // the new copy takes over
-    if (this.launch) this.launch(["--after-update"]);
-    else spawn(this.exe, ["--after-update"], { detached: true, stdio: "ignore", cwd: this.dir }).unref();
+    spawn(this.exe, ["--after-update"], { detached: true, stdio: "ignore", cwd: this.dir }).unref();
+    app.releaseSingleInstanceLock();
     app.quit();
     return true;
   }

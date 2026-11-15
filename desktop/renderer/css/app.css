@@ -81,13 +81,14 @@ input { font: inherit; }
 .mebtn img, .mebtn .ph { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; object-position: top; flex: none;
   background: var(--panel-2); }
 .mebtn .nm { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.mebtn .pic { position: relative; display: flex; flex: none; }
-/* an update waiting: a dot on your picture (green: download / restart; gold, pulsing: installing; red: failed) */
-.udot { position: absolute; right: -2px; top: -2px; width: 9px; height: 9px; border-radius: 50%;
-  background: var(--green); box-shadow: 0 0 0 2px var(--bg), 0 0 6px var(--green); }
-.udot.busy { background: var(--gold); box-shadow: 0 0 0 2px var(--bg), 0 0 6px var(--gold); animation: upulse 1.2s ease-in-out infinite; }
-.udot.bad { background: var(--red); box-shadow: 0 0 0 2px var(--bg); }
-@keyframes upulse { 50% { opacity: 0.45; } }
+/* an update waiting: a small arrow beside the logo (green: download / restart; gold, pulsing: installing; red: failed) */
+.upflag { -webkit-app-region: no-drag; display: grid; place-items: center; width: 18px; height: 18px; margin-left: -4px;
+  padding: 0; border: 0; border-radius: 50%; background: rgba(95, 211, 138, 0.16); color: var(--green); cursor: pointer; }
+.upflag svg { width: 12px; height: 12px; }
+.upflag:hover { background: rgba(95, 211, 138, 0.3); }
+.upflag.busy { background: rgba(232, 196, 106, 0.16); color: var(--gold); animation: upulse 1.2s ease-in-out infinite; }
+.upflag.bad { background: rgba(255, 107, 107, 0.16); color: var(--red); }
+@keyframes upulse { 50% { opacity: 0.5; } }
 
 /* ───── tabs: the game's text tabs with a glowing underline ───── */
 .tabs { display: flex; align-items: stretch; gap: 2px; height: 100%; }

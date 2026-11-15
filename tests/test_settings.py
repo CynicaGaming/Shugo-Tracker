@@ -106,6 +106,15 @@ class AutoClearMigrationTests(unittest.TestCase):
         self.assertNotIn("layout", migrate({"layout": "compact"}))
 
 
+class UpdateIntervalTests(unittest.TestCase):
+    def test_old_switch_becomes_the_interval(self):
+        self.assertEqual(migrate({"auto_update": False})["update_check_s"], 0)
+        self.assertEqual(migrate({"auto_update": True})["update_check_s"], 1800)
+        self.assertNotIn("auto_update", migrate({"auto_update": True}))
+        self.assertEqual(migrate({"update_check_s": 21600})["update_check_s"], 21600)
+        self.assertEqual(migrate({"update_check_s": 5})["update_check_s"], 1800)
+
+
 class ConfigFileTests(unittest.TestCase):
     def test_broken_or_missing_file_gives_defaults_and_saves_atomically(self):
         with tempfile.TemporaryDirectory() as d:

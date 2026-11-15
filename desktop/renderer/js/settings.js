@@ -3,6 +3,7 @@ import { win } from "./bridge.js";
 import { LOGO, clear, h, icon } from "./dom.js";
 
 const RECENT = [[50, "50"], [100, "100"], [250, "250"], [500, "500"], [1000, "1,000"], [0, "Unlimited"]];
+const UPDATE_EVERY = [[0, "Never"], [1800, "30m"], [3600, "1h"], [21600, "6h"], [43200, "12h"], [86400, "24h"]];
 const AUTOCLEAR = [[0, "Never"], [60, "1m"], [300, "5m"], [900, "15m"], [1800, "30m"], [3600, "60m"]];
 
 const fmtWhen = (t) => {
@@ -75,9 +76,10 @@ export class SettingsView {
     el.append(h("div.bar", {}, "Updates"));
     this.upBox = h("div");
     el.append(this.upBox);
-    el.append(row(h("div", {}, "Check automatically", h("div.sub", {}, "Looks for new versions every 30 minutes. Nothing downloads until you click.")),
-      toggle(cfg.auto_update !== false, (v) => save("auto_update", v))));
+    el.append(row(h("div", {}, "Check automatically", h("div.sub", {}, "Also when the app starts. Nothing downloads until you click.")),
+      ...steps(UPDATE_EVERY, cfg.update_check_s ?? 1800, (v) => { save("update_check_s", v); win.update(v); })));
     this.paintUpdate();
+    win.update("freshen").then((u) => { if (u) { S.update = { ...S.update, ...u }; this.paintUpdate(); } });
 
     el.append(h("div.bar", {}, "Window"));
     const op = Math.round((cfg.window_opacity ?? 1) * 100);
