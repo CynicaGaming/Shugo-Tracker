@@ -73,9 +73,23 @@ function startCore() {
     try { win?.webContents.send("core", JSON.parse(line)); } catch { /* not JSON: ignore */ }
   });
   core.stderr.on("data", (d) => winLog(`core stderr: ${String(d).trimEnd()}`));
-  core.on("exit", (code) => { if (!quitting) win?.webContents.send("core", { event: "core_exit", data: code }); });
+  // A write to a core that has just exited fails later, on its own: catch it here so it can never become an
+  // "uncaught exception" dialog.
+  core.stdin.on("error", (e) => winLog(`core pipe: ${e.code || e.message}`));
+  core.on("exit", (code) => {
+    winLog(`core exited (${code})`);
+    if (!quitting) win?.webContents.send("core", { event: "core_exit", data: code });
+  });
 }
-function toCore(msg) { if (core?.stdin.writable) core.stdin.write(JSON.stringify(msg) + "\n"); }
+function toCore(msg) { if (core?.stdin.writable && !core.stdin.destroyed) core.stdin.write(JSON.stringify(msg) + "\n"); }
+
+/** Window size and place, saved through the core (data\\config.json). */
+function saveBounds() {
+  if (!win || win.isDestroyed()) return;
+  const b = win.getNormalBounds();                     // (a minimized window's bounds are far off screen)
+  toCore({ id: 0, method: "config.set", params: { key: "window_size", value: [b.width, b.height] } });
+  toCore({ id: 0, method: "config.set", params: { key: "window_pos", value: [b.x, b.y] } });
+}
 
 /* ───── the window ───── */
 function createWindow() {
@@ -110,11 +124,7 @@ function createWindow() {
     winLog(`renderer gone: ${d.reason}`);
     if (!quitting && win) win.reload();                // a crashed page would leave an empty window
   });
-  win.on("close", () => {
-    const b = win.getNormalBounds();                   // (a minimized window's bounds are far off screen)
-    toCore({ id: 0, method: "config.set", params: { key: "window_size", value: [b.width, b.height] } });
-    toCore({ id: 0, method: "config.set", params: { key: "window_pos", value: [b.x, b.y] } });
-  });
+  win.on("close", () => { if (!quitting) saveBounds(); });
   win.on("closed", () => { win = null; });
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
 }
@@ -199,6 +209,8 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  if (quitting) return;
+  saveBounds();                                        // first: the core is told to quit right after
   quitting = true;
   toCore({ method: "quit" });
   setTimeout(() => core?.kill(), 1500);

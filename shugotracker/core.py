@@ -410,6 +410,9 @@ def serve_stdio(root: str, demo: bool = False, showcase: str | None = None) -> i
             continue
         if msg.get("method") == "quit":
             break
+        if msg.get("method") == "config.set":
+            core.handle(msg, write)                        # at once and in order: the last ones arrive with "quit"
+            continue
         pool.submit(core.handle, msg, write)
     pool.shutdown(wait=False, cancel_futures=True)
     core.close()

@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.15
+- Fixed: closing the app could show "A JavaScript error occurred in the main process" (write EPIPE)
+- Fixed: the window's size and position are saved reliably when the app closes
+
 ## 2.3.14
 - Nearby's "showing arrivals" footer note is gone
 
