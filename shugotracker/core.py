@@ -148,8 +148,10 @@ class Core:
 
     # ───── start-up ─────
     def rpc_init(self) -> dict:
+        self._nearby_seen = None             # the window is (re)loaded: send it Nearby's state again
         return {"version": __version__, "demo": self.demo, "config": self.cfg, "regions": SUB_REGIONS,
-                "favorites": self._keep(self.favorites.characters()), "my": self._my_state()}
+                "favorites": self._keep(self.favorites.characters()), "my": self._my_state(),
+                "nearby": self._nearby_state()}
 
     def rpc_config_set(self, key: str, value=None) -> bool:
         self.set_config(key, value)
@@ -311,7 +313,7 @@ class Core:
         for _s, c, *_ in rows + recent:
             self.chars[c.key] = c
         return {"enabled": bool(self.cfg.get("nearby_enabled")), "state": nb.state, "detail": nb.detail,
-                "recording": nb.recording(), "record_path": nb.record_path,
+                "recording": nb.recording(), "record_path": nb.record_path, "stats": dict(nb.stats),
                 "rows": [{"side": s, "char": char_json(c), "first_seen": p.first_seen} for s, c, p in rows],
                 "recent": [{"side": s, "char": char_json(c), "seen": t, "fought": f} for s, c, t, f in recent]}
 
@@ -343,6 +345,10 @@ class Core:
     def rpc_nearby_clear(self, which: str = "nearby") -> bool:
         (self.nearby.clear_recent if which == "recent" else self.nearby.clear_nearby)()
         return True
+
+    def rpc_nearby_status(self) -> dict:
+        """Settings: what Nearby is doing right now (state, bytes read, players seen)."""
+        return self._nearby_state()
 
     def rpc_nearby_record(self) -> str | None:
         return self.nearby.start_recording(60)

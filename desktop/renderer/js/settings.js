@@ -86,6 +86,26 @@ export class SettingsView {
       S.nearby = await call("nearby.enable", { on: v });
       if (v && S.nearby.state === "no_admin") win.relaunchAsAdmin();
     })));
+    // What Nearby is doing, and a recording of the game's traffic to send when it doesn't work.
+    const stat = h("div.sub", {}, "…");
+    const recBtn = h("button.btn", { onClick: async () => { await call("nearby.record"); paintStatus(); } }, "Record 60 s");
+    const STATES = { off: "Off", no_admin: "Needs administrator", no_libs: "Unavailable", starting: "Starting…",
+      waiting: "Waiting for AION 2", capturing: "Running", error: "Stopped" };
+    const fmtMB = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round((n || 0) / 1024)} KB`);
+    const paintStatus = async () => {
+      if (!stat.isConnected && this.statusTimer) { clearInterval(this.statusTimer); return; }
+      const n = await call("nearby.status");
+      const st = n.stats || {};
+      const parts = [STATES[n.state] || n.state || "Off"];
+      if (n.state === "capturing") parts.push(`${fmtMB(st.bytes)} read`, `${st.players_seen || 0} players seen`);
+      else if (n.detail && n.state === "error") parts.push(n.detail);
+      stat.textContent = parts.join(" · ");
+      recBtn.disabled = !n.enabled || n.state !== "capturing" || n.recording > 0;
+      recBtn.textContent = n.recording > 0 ? `Recording ${Math.ceil(n.recording)} s` : n.record_path ? "Record again" : "Record 60 s";
+    };
+    el.append(row(h("div", {}, "Status", stat), recBtn));
+    paintStatus();
+    this.statusTimer = setInterval(paintStatus, 1000);
     el.append(row("Auto-clear", ...steps(AUTOCLEAR, cfg.nearby_autoclear_s ?? 0, (v) => save("nearby_autoclear_s", v))));
     el.append(row("Recent players", ...steps(RECENT, cfg.recent_max ?? 250, (v) => { cfg.recent_max = v; call("recent.max", { n: v }); }),
       h("button.btn", { onClick: () => call("nearby.clear", { which: "recent" }) }, "Clear")));

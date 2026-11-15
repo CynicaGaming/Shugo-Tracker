@@ -201,9 +201,13 @@ on("card", (c) => {
   if (myChar()?.key === c.key) paintTitlebar();
 });
 
+let askedAdmin = false;
 on("nearby", (d) => {
   const toggled = d.enabled !== S.nearby.enabled;
   S.nearby = d;
+  // Nearby is on but this copy isn't administrator (a normal start): restart as administrator once, like
+  // turning it on does. Declined: the Nearby tab offers the button.
+  if (d.enabled && d.state === "no_admin" && !askedAdmin && !S.demo) { askedAdmin = true; win.relaunchAsAdmin(); }
   if (toggled && S.screen === "list") { render(); return; }      // filters and headers come and go with it
   for (const r of [...d.rows, ...d.recent]) S.chars.set(r.char.key, r.char);
   if (S.screen === "list") paintTitlebar();
@@ -396,6 +400,12 @@ const list = (() => {
     else if (S.mode === "favorites") [t, sub] = ["No favorites yet", ""];
     else if (!S.nearby.enabled) return nearbyOptIn();
     else if (S.mode === "recent") t = S.nearby.recent.length ? "No results" : "No recent players";
+    else if (S.nearby.state === "no_admin") {
+      return h("div.empty", { style: { position: "absolute", left: 0, right: 0, top: "40px" } }, h("div", {},
+        h("b", {}, "Nearby needs administrator"),
+        h("div", { style: { margin: "0 auto 14px" } }, "Windows only lets administrators read the game's traffic."),
+        h("button.btn.gold", { onClick: () => win.relaunchAsAdmin() }, "Restart as administrator")));
+    }
     else t = { waiting: "Waiting for AION 2", starting: "Starting…", error: "Nearby stopped", capturing: S.nearby.rows.length ? "No results" : "No players nearby" }[S.nearby.state] || "";
     if (S.nearby.state === "error" && S.mode === "nearby") sub = S.nearby.detail || "";
     return h("div.empty", { style: { position: "absolute", left: 0, right: 0, top: "40px" } }, h("div", {}, h("b", {}, t), sub));
@@ -534,7 +544,7 @@ app.render = render;
 (async () => {
   const init = await call("init");
   Object.assign(S, { cfg: init.config, version: init.version, demo: init.demo, regions: init.regions,
-    favorites: init.favorites, my: init.my });
+    favorites: init.favorites, my: init.my, nearby: init.nearby || S.nearby });
   for (const c of init.favorites) S.chars.set(c.key, c);
   S.update = { ...(await win.update("state")) };
   win.setAlwaysOnTop(S.cfg.always_on_top !== false);

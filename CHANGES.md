@@ -2,6 +2,11 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.2.2
+- Fixed: Nearby works again after a normal start (it restarts as administrator by itself, as before)
+- New: Nearby's status in Settings, with a 60-second recording to send when it misbehaves
+- Titles no longer show how many players own them
+
 ## 2.2.1
 - Fixed: with the pin on, the window no longer slips under other apps or the game
 

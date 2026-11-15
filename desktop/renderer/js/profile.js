@@ -390,8 +390,7 @@ export class ProfileView {
       const head = h("div.cat", {}, cat);
       if (!t) { cards.append(h("div.tcard.none", {}, head, h("div.nm", {}, "None"))); continue; }
       cards.append(h("div.tcard", {}, head, h("div.nm", {}, t.name),
-        t.effects?.length ? h("ul", {}, t.effects.map((e) => h("li", {}, e))) : null,
-        t.owned_percent != null ? h("div.own", {}, `Owned by ${t.owned_percent}% of players`) : null));
+        t.effects?.length ? h("ul", {}, t.effects.map((e) => h("li", {}, e))) : null));
     }
     out.append(cards);
     return out;
