@@ -52,21 +52,18 @@ function paintTitlebar() {
     else tabs.append(t("nearby", "Nearby"));
   }
   titlebar.append(tabs, h("span.grow"));
-  const up = S.update;
-  if (["available", "downloading", "ready"].includes(up.state) || (up.state === "error" && up.clicked)) {
-    const look = { available: ["var(--green)", `Download v${up.latest}`], downloading: ["var(--gold)", `Installing v${up.latest}  ${Math.round((up.progress || 0) * 100)}%`],
-      ready: ["var(--green)", `Restart for v${up.latest}`], error: ["var(--red)", "Update failed · Retry"] }[up.state];
-    titlebar.append(h("button.iconbtn", { html: up.state === "ready" ? ICONS.refresh : ICONS.update, title: look[1],
-      style: { color: look[0] }, onClick: updateClick }));
-  }
   const pinned = S.cfg.always_on_top !== false;
   titlebar.append(h("button.iconbtn", { class: pinned ? "on" : "", html: ICONS.pin, title: "",
     onClick: () => { save("always_on_top", !pinned); win.setAlwaysOnTop(!pinned); paintTitlebar(); } }));
   const me = myChar();
+  // An update shows as a dot on your picture; the menu holds the button (and Settings → Updates the details).
+  const up = updateItem();
   const meBtn = h("button.mebtn", { onClick: (e) => { e.stopPropagation(); meMenu(meBtn); },
     onMousedown: (e) => e.stopPropagation() },
-    me?.portrait ? h("img", { src: me.portrait }) : h("span.ph", { html: ICONS.person, style: { color: "var(--dim)", padding: "3px" } }),
-    me ? h("span", {}, `${me.name} · ${me.server_name}`) : null);
+    h("span.pic", {},
+      me?.portrait ? h("img", { src: me.portrait }) : h("span.ph", { html: ICONS.person, style: { color: "var(--dim)", padding: "3px" } }),
+      up ? h("i.udot", { class: up.kind }) : null),
+    me ? h("span.nm", {}, `${me.name} · ${me.server_name}`) : null);
   titlebar.append(meBtn,
     h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
     h("button.iconbtn.close", { html: ICONS.close, onClick: () => win.close() }));
@@ -88,6 +85,8 @@ function meMenu(anchor) {
     onRemove: async () => { await setMy("my.delete", { slot: i }); refreshOpenSub(switchItems()); },
   }));
   const items = [];
+  const up = updateItem();
+  if (up) items.push({ label: up.label, disabled: up.kind === "busy", onClick: updateClick }, "-");
   if (me) items.push({ label: "My profile", onClick: async () => openProfile(await call("my.character")) });
   if (used.length) items.push({ label: "Switch Profile", submenu: switchItems });
   const free = S.my.slots.findIndex((d) => !d);
@@ -100,6 +99,16 @@ async function setMy(method, params) {
   S.my = await call(method, params);
   paintTitlebar();
   profile?.myChanged();
+}
+
+/** The update step to offer, if any: Download, Installing… (busy), Restart, or Retry after a failed click. */
+function updateItem() {
+  const u = S.update;
+  if (u.state === "available") return { kind: "new", label: `Download v${u.latest}` };
+  if (u.state === "downloading") return { kind: "busy", label: `Installing v${u.latest}… ${Math.round((u.progress || 0) * 100)}%` };
+  if (u.state === "ready") return { kind: "new", label: `Restart for v${u.latest}` };
+  if (u.state === "error" && u.clicked) return { kind: "bad", label: "Update failed · Retry" };
+  return null;
 }
 
 /** One button for every step: download when available, restart when downloaded, retry after an error. */

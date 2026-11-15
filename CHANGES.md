@@ -9,6 +9,9 @@ Each release's notes come from its section here (shown in Settings → Updates).
 - New look for the filters: one region switch, Elyos and Asmodians toggles, and a Filters button (with a count) for class and level
 - Region names tidied up: NA East, NA West, Europe, Latin America, Asia
 
+## 2.3.2
+- An update now shows as a dot on your profile picture (green: ready, gold: installing); its button is at the top of that menu
+
 ## 2.3.1
 - Fixed: with Nearby on, restarting for an update starts the new version as administrator, so Nearby keeps working
 
