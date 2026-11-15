@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.14
+- Nearby's "showing arrivals" footer note is gone
+
 ## 2.3.13
 - Nearby starts fresh again after a restart (2.3.12's saved list is undone)
 
