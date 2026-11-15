@@ -362,11 +362,17 @@ export class ProfileView {
       clear(area);
       if (!d) { area.append(h("div.empty", {}, "Couldn't load this board")); return; }
       area.append(boardEl(d));
-      area.append(h("div.bar", {}, "Board Effect", h("span.extra", {}, `${d.opened} nodes`)));
-      const fx = h("div.effects");
-      for (const e of [...d.stat_effects, ...d.skill_effects]) fx.append(h("div", {}, e));
-      if ((d.stat_effects.length + d.skill_effects.length) % 2) fx.append(h("div"));
-      area.append(fx);
+      // Board Effect, like the game's: what the opened nodes add to skills, then to stats ("Pummel +1").
+      const list = (title, lines, cls) => {
+        if (!lines.length) return;
+        area.append(h("div.bar", {}, title));
+        area.append(h("div.fxlist", { class: cls }, lines.map((e) => {
+          const m = e.match(/^(.*?)\s*([+-]\s?\d[\d.,]*%?)$/);
+          return h("div", {}, h("span", {}, m ? m[1] : e), m ? h("b", {}, m[2].replace(/\s/g, "")) : null);
+        })));
+      };
+      list("Skill Effect", d.skill_effects, "skills");
+      list("Stat Effect", d.stat_effects, "stats");
     };
     const have = this.boards.get(sel.board_id);
     if (have !== undefined) draw(have);
@@ -523,9 +529,16 @@ function boardEl(d) {
   const wrap = h("div", { style: { width: "100%" } });
   const el = h("div.board");
   wrap.append(el);
+  // The whole board fits in the window (width and height); Board Effect is below it, a scroll away.
   const layout = () => {
-    const w = Math.min(wrap.clientWidth || 560, 460);
-    const cell = Math.min(w / nc, 40);
+    const body = wrap.closest(".pbody");
+    const w = wrap.clientWidth || 560;
+    let hAvail = Infinity;
+    if (body) {
+      const top = wrap.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop;
+      hAvail = body.clientHeight - top - 10;
+    }
+    const cell = Math.max(14, Math.min(w / nc, hAvail / nr, 44));
     el.style.width = `${cell * nc}px`; el.style.height = `${cell * nr}px`;
     for (const [n, node] of nodes) {
       const k = n.kind === "Start" ? cell * 0.86 : cell * 0.84;
@@ -537,13 +550,13 @@ function boardEl(d) {
     const g = n.grade.toLowerCase();
     const node = h("div.node", { class: [n.kind === "Start" ? "start" : n.kind === "SkillLevel" ? "skill" : "", n.opened ? "open" : "closed", `g-${g}`].join(" "),
       style: { "--g": NODE_COLORS[n.grade] || "#8d8a7c" } });
-    node.addEventListener("mouseenter", (e) => showTip(smallTip(n.name || n.kind, n.effects,
-      n.kind === "Start" ? null : `${n.grade} · ${n.opened ? "Opened" : "Not opened"}`), e.clientX, e.clientY));
+    node.addEventListener("mouseenter", (e) => showTip(smallTip(n.name || n.kind, n.effects), e.clientX, e.clientY));
     node.addEventListener("mouseleave", hideTip);
     nodes.push([n, node]);
     el.append(node);
   }
-  new ResizeObserver(layout).observe(wrap);
-  requestAnimationFrame(layout);
+  const ro = new ResizeObserver(() => layout());
+  ro.observe(wrap);
+  requestAnimationFrame(() => { const body = wrap.closest(".pbody"); if (body) ro.observe(body); layout(); });
   return wrap;
 }
