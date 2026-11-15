@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.13
+- Nearby starts fresh again after a restart (2.3.12's saved list is undone)
+
 ## 2.3.12
 - Fixed: restarting the app (an update, say) no longer empties Nearby; its list comes back if you're still in the same area, and Recent is kept too
 
