@@ -26,7 +26,7 @@ export class SettingsView {
     const pct = Math.round((u.progress || 0) * 100);
     const status = {
       checking: "Checking for updates…", uptodate: "You're on the latest version.",
-      available: `Version ${next} is available.`, downloading: `Downloading version ${next}… ${pct}%`,
+      available: `Version ${next} is available.`, downloading: `Installing version ${next}… ${pct}%`,
       ready: `Version ${next} is ready. Restart Shugo Tracker to finish.`,
       error: `Couldn't update${u.error ? `: ${u.error}` : ""}.`, dev: "Development build: updates are off.",
     }[u.state] || "Not checked yet.";
@@ -37,7 +37,7 @@ export class SettingsView {
     const notes = notesFor && u.notes?.length
       ? h("div.unotes", {}, h("div.unt", {}, `What's new in ${notesFor}`), h("ul", {}, u.notes.map((n) => h("li", {}, n))))
       : null;
-    const label = { available: "Download update", downloading: `Downloading ${pct}%`, ready: "Restart to update",
+    const label = { available: "Download", downloading: "Installing…", ready: "Restart",
       checking: "Checking…" }[u.state] || "Check now";
     const act = h("button.btn", { class: ["available", "ready"].includes(u.state) ? "gold" : "",
       disabled: ["downloading", "checking", "dev"].includes(u.state), onClick: () => this.updateAction() },

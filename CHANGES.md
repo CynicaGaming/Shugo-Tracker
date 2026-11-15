@@ -3,7 +3,7 @@
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
 ## 2.2.6
-- Updates is now first in Settings
+- Updates is now first in Settings, with simpler buttons: Download, Installing…, Restart
 
 ## 2.2.5
 - Settings is shorter: no Data section or Nearby status

@@ -47,8 +47,8 @@ function paintTitlebar() {
   titlebar.append(tabs, h("span.grow"));
   const up = S.update;
   if (["available", "downloading", "ready"].includes(up.state) || (up.state === "error" && up.clicked)) {
-    const look = { available: ["var(--green)", `Update to v${up.latest}`], downloading: ["var(--gold)", `Downloading v${up.latest}  ${Math.round((up.progress || 0) * 100)}%`],
-      ready: ["var(--green)", `Restart to update to v${up.latest}`], error: ["var(--red)", "Update failed · Retry"] }[up.state];
+    const look = { available: ["var(--green)", `Download v${up.latest}`], downloading: ["var(--gold)", `Installing v${up.latest}  ${Math.round((up.progress || 0) * 100)}%`],
+      ready: ["var(--green)", `Restart for v${up.latest}`], error: ["var(--red)", "Update failed · Retry"] }[up.state];
     titlebar.append(h("button.iconbtn", { html: up.state === "ready" ? ICONS.refresh : ICONS.update, title: look[1],
       style: { color: look[0] }, onClick: updateClick }));
   }
