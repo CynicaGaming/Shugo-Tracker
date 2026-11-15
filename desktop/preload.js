@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld("shugo", {
     close: () => ipcRenderer.invoke("win", "close"),
     setAlwaysOnTop: (on) => ipcRenderer.invoke("win", "alwaysOnTop", on),
     setOpacity: (v) => ipcRenderer.invoke("win", "opacity", v),
-    openFolder: () => ipcRenderer.invoke("win", "openFolder"),
+    openFolder: (which) => ipcRenderer.invoke("win", "openFolder", which),
     openExternal: (url) => ipcRenderer.invoke("win", "openExternal", url),
     relaunchAsAdmin: () => ipcRenderer.invoke("win", "relaunchAsAdmin"),
     update: (action) => ipcRenderer.invoke("win", "update", action),

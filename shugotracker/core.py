@@ -313,7 +313,7 @@ class Core:
         for _s, c, *_ in rows + recent:
             self.chars[c.key] = c
         return {"enabled": bool(self.cfg.get("nearby_enabled")), "state": nb.state, "detail": nb.detail,
-                "recording": nb.recording(), "record_path": nb.record_path, "stats": dict(nb.stats),
+                "stats": dict(nb.stats),
                 "rows": [{"side": s, "char": char_json(c), "first_seen": p.first_seen} for s, c, p in rows],
                 "recent": [{"side": s, "char": char_json(c), "seen": t, "fought": f} for s, c, t, f in recent]}
 
@@ -349,9 +349,6 @@ class Core:
     def rpc_nearby_status(self) -> dict:
         """Settings: what Nearby is doing right now (state, bytes read, players seen)."""
         return self._nearby_state()
-
-    def rpc_nearby_record(self) -> str | None:
-        return self.nearby.start_recording(60)
 
     # ───── settings ─────
     def rpc_cache_size(self) -> int:

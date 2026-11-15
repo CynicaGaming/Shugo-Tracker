@@ -150,16 +150,24 @@ class NearbyServiceTests(unittest.TestCase):
         time.sleep(0.2)
         self.assertNotIn(("Mine", "nae"), find2.calls)              # remembered: no region hunt
 
-    def test_recording_roundtrip(self):
+    def test_running_log_roundtrip_and_rollover(self):
         svc, _ = self.make({})
-        path = svc.start_recording(5)
-        self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Foe"))
-        svc.stop_recording()
-        got = []
-        n = nb.replay_recording(path, lambda flow, data, gap: got.append((flow, data, gap)))
-        self.assertEqual(n, 1)
-        self.assertEqual(got[0][0], ("1.2.3.4", "7777", "10.0.0.2", "5000"))
-        self.assertTrue(os.path.getsize(path) > 20)
+        with tempfile.TemporaryDirectory() as d:
+            svc.data_dir = d
+            path = svc.start_running_log()
+            self.feed(svc, self_record(100, "Mine", 1101), other_record(200, "Foe"))
+            svc.stop_running_log()
+            got = []
+            self.assertEqual(nb.replay_recording(path, lambda flow, data, gap: got.append((flow, data, gap))), 1)
+            self.assertEqual(got[0][0], ("1.2.3.4", "7777", "10.0.0.2", "5000"))
+            old, nb.RUNNING_LOG_MAX = nb.RUNNING_LOG_MAX, 10
+            self.addCleanup(setattr, nb, "RUNNING_LOG_MAX", old)
+            svc.start_running_log()                                   # last session's file -> previous
+            self.assertTrue(os.path.exists(os.path.join(d, "diagnostics", "nearby-previous.bin")))
+            self.feed(svc, other_record(300, "Pal"))                  # past the limit: rolls over again
+            svc.stop_running_log()
+            self.assertEqual(nb.replay_recording(os.path.join(d, "diagnostics", "nearby-previous.bin"),
+                                                 lambda *a: None), 1)
 
     def test_start_without_administrator(self):
         if nb.is_admin():

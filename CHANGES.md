@@ -2,9 +2,14 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.2.3
+- Nearby groups players as Elyos and Asmodians (the enemy faction first), in the filters' colours
+- Nearby keeps a running log of what it reads, so there's nothing to record when something goes wrong
+- Fixed: turning on Nearby from its tab shows the filters straight away
+
 ## 2.2.2
 - Fixed: Nearby works again after a normal start (it restarts as administrator by itself, as before)
-- New: Nearby's status in Settings, with a 60-second recording to send when it misbehaves
+- New: Nearby's status in Settings
 - Titles no longer show how many players own them
 
 ## 2.2.1

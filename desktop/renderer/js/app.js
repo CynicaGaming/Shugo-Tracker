@@ -332,7 +332,11 @@ const list = (() => {
     const want = [];
     for (const [iy, kind, p] of items) {
       if (iy + ROW < top - 200 || iy > top + height + 200) continue;
-      if (kind === "group") spacer.append(h("div.group", { class: p, style: { top: `${iy + 2}px` } }, p === "enemy" ? "Enemies" : "Allies"));
+      if (kind === "group") {
+        const race = sideRace(p);
+        spacer.append(h("div.group", { class: p, style: { top: `${iy + 2}px`, ...(race ? { color: factionColor(race) } : {}) } },
+          race === 1 ? "Elyos" : race === 2 ? "Asmodians" : p === "enemy" ? "Enemies" : "Allies"));
+      }
       else if (kind === "skel") spacer.append(skeletonRow(iy));
       else { spacer.append(rowEl(p, iy, sideOf[p.name])); if (p.status === "none" || !p.status || p.stale) want.push(p.key); }
     }
@@ -378,7 +382,7 @@ const list = (() => {
     const el = h("div.row", { style: { top: `${y}px` },
       onClick: (e) => { if (!e.target.closest(".star") && !e.target.closest(".grip")) openProfile(c); },
       onContextmenu: (e) => { e.preventDefault(); rowMenu(c, e.clientX, e.clientY); } });
-    if (side) el.append(h("span.side", { style: { background: side === "enemy" ? "#ff6b6b" : "#6ab8ff" } }));
+    if (side) { const race = sideRace(side); el.append(h("span.side", { style: { background: race ? factionColor(race) : side === "enemy" ? "#ff6b6b" : "#6ab8ff" } })); }
     for (const k of Object.keys(layout.spans)) el.append(cell(k, c));
     el.append(h("div.c.star", { class: fav ? "on" : "", style: { left: `${layout.star - 10}px`, width: "20px" },
       html: fav ? ICONS.starFill : ICONS.star, onClick: () => toggleFavorite(c) }));
@@ -392,6 +396,19 @@ const list = (() => {
       el.append(h("div.c", { style: { left: `${x0}px`, width: `${x1 - x0}px` } }, h("i", { style: { width: k === "name" ? "60%" : "70%" } })));
     }
     return el;
+  }
+
+  /** Which faction a Nearby side is (enemies are listed first): from the players on it, else from your
+   *  character's faction. 0 when nobody's faction is known yet. */
+  function sideRace(side) {
+    if (side !== "enemy" && side !== "ally") return 0;
+    for (const r of [...S.nearby.rows, ...S.nearby.recent]) {
+      const race = r.char?.race;
+      if ((race === 1 || race === 2) && (r.side === "enemy" || r.side === "ally")) return r.side === side ? race : 3 - race;
+    }
+    const me = myChar();
+    if (me?.race === 1 || me?.race === 2) return side === "ally" ? me.race : 3 - me.race;
+    return 0;
   }
 
   function emptyState() {
@@ -415,7 +432,7 @@ const list = (() => {
     return h("div.empty", { style: { position: "absolute", left: 0, right: 0, top: "30px" } }, h("div", {},
       h("b", {}, "Nearby"),
       h("div", { style: { maxWidth: "330px", margin: "0 auto 14px" } }, "The players around your character, with their combat power and gear score."),
-      h("button.btn.gold", { onClick: async () => { S.nearby = await call("nearby.enable", { on: true }); if (S.nearby.state === "no_admin") win.relaunchAsAdmin(); render(); } }, "Turn on Nearby")));
+      h("button.btn.gold", { onClick: async () => { S.nearby = await call("nearby.enable", { on: true }); if (S.nearby.state === "no_admin") win.relaunchAsAdmin(); app.render(); } }, "Turn on Nearby")));
   }
 
   let drag = null;
@@ -516,7 +533,6 @@ function paintFooter() {
       const total = Object.values(S.regionState).reduce((a, st) => a + (st.total || 0), 0);
       t = total ? `${n} shown of ${fmtInt(total)} matches` : "";
     } else if (S.mode === "favorites") t = `${n} of ${S.favorites.length} favorites`;
-    else if (S.mode === "nearby" && S.nearby.recording) t = `● Recording  ·  ${Math.round(S.nearby.recording)} s`;
   }
   status.textContent = t;
 }

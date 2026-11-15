@@ -86,9 +86,9 @@ export class SettingsView {
       S.nearby = await call("nearby.enable", { on: v });
       if (v && S.nearby.state === "no_admin") win.relaunchAsAdmin();
     })));
-    // What Nearby is doing, and a recording of the game's traffic to send when it doesn't work.
+    // What Nearby is doing. Its log (logs\shugo-core.log, and the game traffic it read in logs\diagnostics)
+    // is always being written, so there's nothing to start when something goes wrong: just send the folder.
     const stat = h("div.sub", {}, "…");
-    const recBtn = h("button.btn", { onClick: async () => { await call("nearby.record"); paintStatus(); } }, "Record 60 s");
     const STATES = { off: "Off", no_admin: "Needs administrator", no_libs: "Unavailable", starting: "Starting…",
       waiting: "Waiting for AION 2", capturing: "Running", error: "Stopped" };
     const fmtMB = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round((n || 0) / 1024)} KB`);
@@ -100,10 +100,8 @@ export class SettingsView {
       if (n.state === "capturing") parts.push(`${fmtMB(st.bytes)} read`, `${st.players_seen || 0} players seen`);
       else if (n.detail && n.state === "error") parts.push(n.detail);
       stat.textContent = parts.join(" · ");
-      recBtn.disabled = !n.enabled || n.state !== "capturing" || n.recording > 0;
-      recBtn.textContent = n.recording > 0 ? `Recording ${Math.ceil(n.recording)} s` : n.record_path ? "Record again" : "Record 60 s";
     };
-    el.append(row(h("div", {}, "Status", stat), recBtn));
+    el.append(row(h("div", {}, "Status", stat), h("button.btn", { onClick: () => win.openFolder("logs") }, "Open logs")));
     paintStatus();
     this.statusTimer = setInterval(paintStatus, 1000);
     el.append(row("Auto-clear", ...steps(AUTOCLEAR, cfg.nearby_autoclear_s ?? 0, (v) => save("nearby_autoclear_s", v))));

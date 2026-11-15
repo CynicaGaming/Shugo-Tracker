@@ -20,6 +20,7 @@ from .protocol import EntityActive, Hit, MapLoaded, Opcodes, SelfSeen, StreamDec
 from .tracker import ALLY, ENEMY, UNKNOWN, Lookup, Player, Tracker
 
 RECORD_MAGIC = b"SHUGOCAP1\n"
+RUNNING_LOG_MAX = 16 * 1024 * 1024          # the running log starts a new file past this size
 
 # states the UI shows
 OFF, STARTING, NO_ADMIN, NO_LIBS, WAITING, CAPTURING, ERROR = (
@@ -99,7 +100,7 @@ class NearbyService:
         self.detail = ""
         self.stats = {"bytes": 0, "players_seen": 0, "events": 0}
         self._record_file = None
-        self._record_until = 0.0
+        self._record_size = 0
         self.record_path: str | None = None
         self._last_expire = 0.0
         self._v = 0
@@ -123,6 +124,7 @@ class NearbyService:
             return
         self._set_state(STARTING, "starting capture")
         self.start_lookups()
+        self.start_running_log()
         self.capture = GameCapture(self.on_bytes, log=self._capture_log)
         self.capture.start()
 
@@ -141,7 +143,7 @@ class NearbyService:
         if self.capture is not None:
             self.capture.stop()
             self.capture = None
-        self.stop_recording()
+        self.stop_running_log()
         with self._lock:
             self.tracker.clear()
             self._decoders.clear()
@@ -495,28 +497,30 @@ class NearbyService:
             g = self.tracker.groups()
             return {k: len(v) for k, v in g.items()}
 
-    # ───── troubleshooting recording ─────
-    def start_recording(self, seconds: float = 60.0) -> str | None:
-        """Save the next `seconds` of decoded-ready game traffic to a file (for fixing the decoder)."""
+    # ───── running log of the game's traffic ─────
+    # While Nearby runs, the traffic it reads is always saved to logs\diagnostics\nearby-current.bin; at
+    # RUNNING_LOG_MAX it becomes nearby-previous.bin and a new file starts (each start of Nearby does the same),
+    # so the last few minutes are always there to send when Nearby misreads something.
+    def start_running_log(self) -> str | None:
         if not self.data_dir:
             return None
         folder = os.path.join(self.data_dir, "diagnostics")
-        os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, time.strftime("nearby-%Y%m%d-%H%M%S.bin"))
-        f = open(path, "wb")
-        f.write(RECORD_MAGIC)
-        with self._lock:
-            self._record_file, self._record_until, self.record_path = f, time.time() + seconds, path
-        self.log(f"nearby: recording to {path}")
-        return path
+        cur = os.path.join(folder, "nearby-current.bin")
+        try:
+            os.makedirs(folder, exist_ok=True)
+            self.stop_running_log()
+            if os.path.exists(cur):
+                os.replace(cur, os.path.join(folder, "nearby-previous.bin"))
+            f = open(cur, "wb")
+            f.write(RECORD_MAGIC)
+        except OSError as e:
+            self.log(f"nearby: running log unavailable: {e}")
+            return None
+        self._record_file, self._record_size, self.record_path = f, len(RECORD_MAGIC), cur
+        return cur
 
-    def recording(self) -> float:
-        """Seconds of recording left (0 when not recording)."""
-        return max(0.0, self._record_until - time.time()) if self._record_file else 0.0
-
-    def stop_recording(self) -> None:
-        with self._lock:
-            f, self._record_file = self._record_file, None
+    def stop_running_log(self) -> None:
+        f, self._record_file = self._record_file, None
         if f:
             try:
                 f.close()
@@ -527,16 +531,17 @@ class NearbyService:
         f = self._record_file
         if f is None:
             return
-        if time.time() > self._record_until:
-            self.stop_recording()
-            self._v += 1
-            return
         key = "|".join(str(x) for x in flow).encode()
+        head = struct.pack("<dBH", time.time(), 1 if gap else 0, len(key)) + key + struct.pack("<I", len(data))
         try:
-            f.write(struct.pack("<dBH", time.time(), 1 if gap else 0, len(key)) + key + struct.pack("<I", len(data)))
+            f.write(head)
             f.write(data)
         except (OSError, ValueError):
-            self.stop_recording()
+            self.stop_running_log()
+            return
+        self._record_size += len(head) + len(data)
+        if self._record_size > RUNNING_LOG_MAX:
+            self.start_running_log()
 
 
 def choose(cands: list[Character], hint: int | None, seen_servers: set[int], my_faction: int | None,
@@ -566,7 +571,7 @@ def choose(cands: list[Character], hint: int | None, seen_servers: set[int], my_
 
 
 def replay_recording(path: str, on_bytes: Callable[[tuple, bytes, bool], None]) -> int:
-    """Feed a file saved by start_recording() back through on_bytes. Returns chunks read."""
+    """Feed a file saved by the running log back through on_bytes. Returns chunks read."""
     n = 0
     with open(path, "rb") as f:
         if f.read(len(RECORD_MAGIC)) != RECORD_MAGIC:
