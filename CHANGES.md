@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.16
+- Fixed: Nearby froze (looked slow or missing people) whenever someone nearby had a Chinese, Korean or other non-Latin name
+- Fixed: searching for a non-Latin name works the same way
+
 ## 2.3.15
 - Fixed: closing the app could show "A JavaScript error occurred in the main process" (write EPIPE)
 - Fixed: the window's size and position are saved reliably when the app closes

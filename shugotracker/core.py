@@ -336,8 +336,8 @@ class Core:
                     self.nearby.clear_nearby()
                 v = (self.nearby.version(), bool(self.cfg.get("nearby_enabled")), self.nearby.state)
                 if v != self._nearby_seen:
-                    self._nearby_seen = v
                     self.emit("nearby", self._nearby_state())
+                    self._nearby_seen = v                   # (only once sent: a failed send is tried again)
             except Exception as e:  # noqa: BLE001
                 self.log(f"core: nearby watch: {e}")
 
@@ -381,10 +381,18 @@ class Core:
 def serve_stdio(root: str, demo: bool = False, showcase: str | None = None) -> int:
     """Electron's child process: requests on stdin, answers and events on stdout."""
     out_lock = threading.Lock()
+    # The pipe to Electron is UTF-8 both ways. Windows would otherwise use its old ANSI code page (cp1252), and
+    # one player named in Chinese or Korean made every message about Nearby fail to send ("'charmap' codec
+    # can't encode"); output is also kept pure ASCII (\uXXXX escapes), so no encoding can trip it again.
+    for stream in (sys.stdin, sys.stdout):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     stdout = sys.stdout
 
     def write(obj: dict) -> None:
-        line = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+        line = json.dumps(obj, ensure_ascii=True, separators=(",", ":"))
         with out_lock:
             stdout.write(line + "\n")
             stdout.flush()
