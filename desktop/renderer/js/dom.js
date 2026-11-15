@@ -64,7 +64,7 @@ export const LOGO = `<svg viewBox="0 0 32 32"><defs><linearGradient id="lg" x1="
 /** Lay out the table columns for a list `width` px wide. */
 const SPEC = [["name", 130, 1e6, 3, "w", 0], ["legion", 56, 170, 2, "w", 2], ["class", 70, 112, 1, "w", 3],
   ["level", 24, 24, 0, "e", 0], ["server", 90, 200, 2, "w", 1], ["gs", 44, 52, 0, "e", 0], ["cp", 60, 72, 0, "e", 0],
-  ["seen", 64, 96, 0, "w", 2]];
+  ["seen", 76, 96, 0, "w", 2]];
 export const COL_LABELS = { name: "Name", legion: "Legion", class: "Class", level: "Lv", server: "Server", gs: "GS", cp: "CP", seen: "Last seen" };
 export const COL_MENU = { ...COL_LABELS, level: "Level", gs: "Gear score", cp: "Combat power" };
 export const DEFAULT_COLUMNS = ["legion", "class", "level", "server", "gs", "cp", "seen"];
