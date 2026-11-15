@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.2.1
+- Fixed: with the pin on, the window no longer slips under other apps or the game
+
 ## 2.2.0
 - New: Settings → Updates shows your version, what's new, and when it last checked
 - New: find your character on first start (region, server, name), or Add character from your name

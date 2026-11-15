@@ -23,6 +23,7 @@ let win = null;
 let core = null;
 let quitting = false;
 let opacity = 1;
+let pinned = true;                                     // "Always on top" (the pin)
 
 /* Window events go to logs\shugo-window.log, so a window that vanishes can be explained afterwards. */
 const winLog = (() => {
@@ -59,9 +60,16 @@ function createWindow() {
   win = new BrowserWindow({
     width: Math.max(380, w), height: Math.max(420, h), ...pos, minWidth: 380, minHeight: 420,
     frame: false, backgroundColor: "#0a0d13", show: false, title: "Shugo Tracker",
-    alwaysOnTop: cfg.always_on_top !== false, icon: path.join(__dirname, "build", "icon.ico"),
+    icon: path.join(__dirname, "build", "icon.ico"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false },
   });
+  pinned = cfg.always_on_top !== false;
+  pin(pinned);
+  // Windows quietly drops a window's always-on-top place now and then (another topmost window, the game going
+  // borderless/fullscreen, dragging the window): put it back whenever focus leaves it, it moves or comes back,
+  // and every few seconds while pinned.
+  for (const ev of ["blur", "moved", "show", "restore"]) win.on(ev, () => { if (pinned) setTimeout(() => pin(true, true), 60); });
+  setInterval(() => { if (pinned && win && !win.isMinimized() && win.isVisible()) pin(true); }, 3000);
   opacity = Math.max(0.3, Math.min(1, Number(cfg.window_opacity) || 1));
   if (opacity < 1) win.setOpacity(opacity);
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
@@ -98,6 +106,14 @@ function onScreen() {
     winLog(`moved on screen from ${b.x},${b.y}`);
   }
 }
+/** Always on top, at the highest level ("screen-saver" stays above borderless games); `force` re-applies it by
+ *  switching it off and on, which Windows needs when it has silently dropped it. */
+function pin(on, force = false) {
+  if (!win) return;
+  if (!on) { win.setAlwaysOnTop(false); return; }
+  if (force) win.setAlwaysOnTop(false);
+  win.setAlwaysOnTop(true, "screen-saver");
+}
 function repaint() {
   if (!win) return;
   win.setOpacity(opacity);
@@ -111,7 +127,7 @@ function reveal() {
   onScreen();
   win.show();
   repaint();
-  win.setAlwaysOnTop(readConfig().always_on_top !== false);
+  pin(pinned, true);
   win.moveTop();
   win.focus();
 }
@@ -123,7 +139,7 @@ ipcMain.handle("win", async (_e, action, arg) => {
   switch (action) {
     case "minimize": winLog("minimize button"); win?.minimize(); break;
     case "close": app.quit(); break;
-    case "alwaysOnTop": win?.setAlwaysOnTop(!!arg); break;
+    case "alwaysOnTop": pinned = !!arg; pin(pinned, true); winLog(`always on top: ${pinned}`); break;
     case "opacity": opacity = Math.max(0.3, Math.min(1, Number(arg) || 1)); win?.setOpacity(opacity); break;
     case "openFolder": shell.openPath(ROOT); break;
     case "openExternal": shell.openExternal(String(arg)); break;
