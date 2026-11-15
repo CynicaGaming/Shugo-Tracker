@@ -82,13 +82,24 @@
 .up { color: #6fd38a; } .down { color: var(--red); }
 .itip .hint { padding: 0 12px 8px; color: var(--faint); font-size: 11px; }
 
-/* ───── Stat Info: the deity wheel ───── */
-.wheel { display: block; margin: 4px auto 0; width: 100%; max-width: 380px; }
-.wheel .pn { fill: var(--cyan); font-size: 12.5px; font-weight: 600; text-anchor: middle; }
-.wheel .pv { fill: #fff; font-size: 12px; text-anchor: middle; }
-.wheel .dn { fill: var(--text-2); font-size: 10.5px; text-anchor: middle; }
-.wheel .dv { fill: #fff; font-size: 14px; font-weight: 700; text-anchor: middle; }
-.wheel .zero { fill: var(--faint); }
+/* ───── Stats: main stats as tiles, the ten deity stats as meters ───── */
+.statspage { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.mstats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.mstat { display: flex; flex-direction: column; gap: 2px; padding: 9px 11px; border-radius: 7px; cursor: default;
+  background: linear-gradient(180deg, #151d2b, #10161f); box-shadow: inset 0 0 0 1px var(--line); }
+.mstat .n { color: var(--cyan); font-size: 12px; font-weight: 600; }
+.mstat b { color: #fff; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dstats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.dstat { padding: 6px 2px 7px; border-bottom: 1px solid var(--line); cursor: default; }
+.dstat .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.dstat .n { color: var(--text); font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dstat .n i { font-style: normal; color: var(--faint); font-weight: 400; font-size: 11.5px; margin-left: 6px; }
+.dstat b { color: var(--gold); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.meter { height: 4px; margin-top: 6px; border-radius: 2px; background: var(--panel-3); overflow: hidden; }
+.meter span { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #a8822e, var(--gold)); }
+.mstat:hover, .dstat:hover { background: var(--hover); }
+.mstat.zero b, .dstat.zero b { color: var(--faint); }
+.dstat.zero .n { color: var(--dim); }
 
 /* ───── Skill window: icon grids ───── */
 .sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 6px; padding: 2px 2px 6px; }

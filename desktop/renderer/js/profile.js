@@ -1,7 +1,7 @@
 // A character's profile, laid out like the game's windows. The whole profile (info, gear, every item's details)
 // is loaded before it's shown, so tabs and tooltips never wait.
 import { call, on } from "./bridge.js";
-import { CLASS_COLORS, GRADE_COLORS, ICONS, REGION_NAMES, clear, esc, fmtDelta, fmtInt, gradeColor, h, num, statDeltas } from "./dom.js";
+import { CLASS_COLORS, GRADE_COLORS, ICONS, REGION_NAMES, clear, fmtDelta, fmtInt, gradeColor, h, num, statDeltas } from "./dom.js";
 import { closeMenus } from "./menu.js";
 
 const TABS = ["Gear", "Skills", "Daevanion", "Stats", "Cosmetics", "Titles"];
@@ -12,7 +12,20 @@ const SLOT_NAMES = { MainHand: "Main hand", SubHand: "Off hand", Earring1: "Earr
   Ring2: "Ring", Bracelet1: "Bracelet", Bracelet2: "Bracelet", Rune1: "Rune", Rune2: "Rune", Cape: "Cloak", Torso: "Chest",
   Pants: "Legs" };
 const slotName = (s) => SLOT_NAMES[s] || (s.startsWith("Arcana") ? "Arcana" : s);
-const PRIMARY = ["STR", "DEX", "INT", "CON", "AGI", "WIS"];
+// Main stats, in the game's names; the deity stats with the game's own descriptions (shown on hover).
+const PRIMARY = [["STR", "Might"], ["DEX", "Dexterity"], ["AGI", "Precision"], ["CON", "Constitution"], ["INT", "Intelligence"], ["WIS", "Willpower"]];
+const DEITY = [
+  ["Destruction", "Zikel", "Increase Attack and Perfect Resist."],
+  ["Death", "Triniel", "Increase Critical Hit and Regeneration Penetration."],
+  ["Wisdom", "Lumiel", "Reduce MP Consumption and increase Double Chance."],
+  ["Destiny", "Marchutan", "Increase MP and Endurance Chance."],
+  ["Space", "Israphel", "Increase Move Speed and Block Chance."],
+  ["Time", "Siel", "Increase Combat Speed and Double Resist."],
+  ["Life", "Yustiel", "Increase HP and Regeneration Activation Chance."],
+  ["Illusion", "Kaisinel", "Reduce Cooldown and increase Endurance Penetration."],
+  ["Freedom", "Vaizel", "Increase Accuracy and Evasion."],
+  ["Justice", "Nezekan", "Increase Defense and Perfect activation chance."],
+];
 const SKILL_CATS = [["Active", "Active"], ["Passive", "Passive"], ["Dp", "Stigma"]];
 const dkey = (it) => `${it.slot}|${it.item_id}|${it.enchant}`;
 const worn = (p) => [...GEAR_MAIN, ...GEAR_ACC, ...GEAR_ARCANA].map((s) => p.gear?.[s]).filter((it) => it && it.slot_pos && it.item_id);
@@ -278,26 +291,29 @@ export class ProfileView {
 
   /* ───── Stats: the Stat Info window's Main Stats ───── */
   tabStats(p) {
-    const out = h("div");
-    const by = Object.fromEntries((p.stats || []).map((s) => [s.type, s]));
-    const deity = (p.stats || []).filter((s) => !PRIMARY.includes(s.type) && s.type !== "ItemLevel");
-    out.append(h("div.bar", {}, "Main Stats"), wheel(by, deity));
-    const rows = [];
-    for (const s of [...PRIMARY.map((t) => by[t]).filter(Boolean), ...deity]) {
-      for (const e of s.effects || []) {
-        const m = e.match(/^(.*?)\s*([+-]?\d[\d.,]*%?)$/);
-        rows.push(m ? [m[1], m[2]] : [e, ""]);
-      }
+    const by = Object.fromEntries((p.stats || []).map((st) => [st.type, st]));
+    const tip = (el, title, desc, st) => {
+      el.addEventListener("mouseenter", (e) => showTip(smallTip(title, desc ? [desc] : [], (st?.effects || []).join("  ·  ") || null), e.clientX, e.clientY));
+      el.addEventListener("mouseleave", hideTip);
+      return el;
+    };
+    const prim = h("div.mstats");
+    for (const [type, name] of PRIMARY) {
+      const st = by[type], v = st?.value || 0;
+      prim.append(tip(h("div.mstat", { class: v ? "" : "zero" }, h("span.n", {}, name), h("b", {}, fmtInt(v))), name, null, st));
     }
-    if (rows.length) {
-      out.append(h("div.bar", {}, "Stat Effects"));
-      const kv = h("div.kv");
-      for (const [k, v] of rows) kv.append(h("div", {}, h("span", {}, k), h("b", {}, v)));
-      if (rows.length % 2) kv.append(h("div"));
-      out.append(kv);
+    const top = Math.max(1, ...DEITY.map(([t]) => by[t]?.value || 0));
+    const gods = h("div.dstats");
+    for (const [type, god, desc] of DEITY) {
+      const v = by[type]?.value || 0;
+      gods.append(tip(h("div.dstat", { class: v ? "" : "zero" },
+        h("div.top", {}, h("span.n", {}, type, h("i", {}, god)), h("b", {}, fmtInt(v))),
+        h("div.meter", {}, h("span", { style: { width: `${Math.round(100 * v / top)}%` } }))),
+      `${type} [${god}]`, desc, by[type]));
     }
-    return out;
+    return h("div.statspage", {}, prim, gods);
   }
+
 
   /* ───── Skills: the Skill window's Mastery / Stigma grids ───── */
   tabSkills(p) {
@@ -398,33 +414,6 @@ export class ProfileView {
 }
 
 /* ═════ pieces ═════ */
-
-function wheel(by, deity) {
-  const W = 380, cx = W / 2, cy = 175, R = 150, r = 74;
-  const prim = [["STR", "Might", -90], ["DEX", "Dexterity", -30], ["AGI", "Precision", 30], ["WIS", "Willpower", 90],
-    ["INT", "Intelligence", 150], ["CON", "Constitution", 210]];
-  const pt = (rad, a) => [cx + rad * Math.cos(a * Math.PI / 180), cy + rad * Math.sin(a * Math.PI / 180)];
-  let s = `<svg class="wheel" viewBox="0 0 ${W} 350">
-    <defs><radialGradient id="wg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#1d2a3f"/><stop offset="1" stop-color="#0e141e"/></radialGradient></defs>
-    <circle cx="${cx}" cy="${cy}" r="${R + 22}" fill="url(#wg)" stroke="rgba(150,170,210,.18)"/>
-    <circle cx="${cx}" cy="${cy}" r="${r + 26}" fill="#0f1622" stroke="rgba(99,208,255,.25)"/>
-    <circle cx="${cx}" cy="${cy}" r="5" fill="#9fd8ff"/>`;
-  for (const [, , a] of prim) { const [x, y] = pt(r + 26, a); s += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="rgba(99,208,255,.12)"/>`; }
-  for (const [t, name, a] of prim) {
-    const st = by[t], [x, y] = pt(r, a), v = st ? st.value : 0;
-    s += `<text class="pn" x="${x}" y="${y - 2}">${esc(name)}</text><text class="pv ${v ? "" : "zero"}" x="${x}" y="${y + 13}">${v}</text>`;
-  }
-  // The game's ring, clockwise from just right of the top: Destruction at -72°, then every 36°.
-  const RING = ["Destruction", "Death", "Wisdom", "Destiny", "Space", "Time", "Life", "Illusion", "Freedom", "Justice"];
-  deity.forEach((d, i) => {
-    const k = RING.indexOf(d.type);
-    const a = k >= 0 ? -72 + k * 36 : -90 + i * (360 / deity.length);
-    const [x, y] = pt(R, a);
-    const nm = d.name.replace(/\s*\[.*\]/, "");
-    s += `<text class="dv ${d.value ? "" : "zero"}" x="${x}" y="${y + 1}">${d.value}</text><text class="dn" x="${x}" y="${y + 14}">${esc(nm)}</text>`;
-  });
-  return h("div", { html: s + "</svg>" });
-}
 
 const GRADE_HEAD = { Common: "#34373e", Rare: "#1e3d27", Legend: "#1b3350", Unique: "#4a3a16", Epic: "#4a2814", Special: "#163f3c", Mythic: "#4a1a2c" };
 

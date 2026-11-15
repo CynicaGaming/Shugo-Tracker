@@ -118,14 +118,6 @@ input { font: inherit; }
 .bar:first-child { margin-top: 2px; }
 .bar .extra { position: absolute; right: 10px; color: var(--dim); font-size: 11.5px; font-weight: 400; }
 .bar svg { width: 14px; height: 14px; }
-.kv { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1px; background: var(--line); }
-.kv > div {
-  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 7px 10px;
-  background: var(--bg-2); color: var(--text-2); min-width: 0;
-}
-.kv > div:nth-child(4n+1), .kv > div:nth-child(4n+2) { background: #111722; }
-.kv b { color: #fff; font-weight: 600; white-space: nowrap; }
-.kv span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty { display: grid; place-items: center; text-align: center; color: var(--dim); padding: 40px 20px; }
 .empty b { display: block; color: var(--text); font-size: 15px; font-weight: 600; margin-bottom: 4px; }
 

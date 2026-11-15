@@ -9,6 +9,9 @@ Each release's notes come from its section here (shown in Settings → Updates).
 - New look for the filters: one region switch, Elyos and Asmodians toggles, and a Filters button (with a count) for class and level
 - Region names tidied up: NA East, NA West, Europe, Latin America, Asia
 
+## 2.3.3
+- New Stats tab: main stats as tiles and the ten deity stats as meters, each with the game's description on hover
+
 ## 2.3.2
 - An update now shows as a dot on your profile picture (green: ready, gold: installing); its button is at the top of that menu
 
