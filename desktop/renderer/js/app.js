@@ -39,11 +39,13 @@ function paintTitlebar() {
   if (sig === titleSig) return;
   titleSig = sig;
   clear(titlebar);
-  // An update waiting: a small arrow beside the logo; clicking it opens Settings → Updates.
+  // An update waiting: a small green blip on the logo's corner (like an app badge); the logo then opens
+  // Settings → Updates.
   const up = updateItem();
-  titlebar.append(h("span.logo", { html: LOGO }));
-  if (up) titlebar.append(h("button.upflag", { class: up.kind, title: up.label, html: ICONS.update,
-    onClick: () => { if (S.screen !== "settings") openSettings(); } }));
+  titlebar.append(up
+    ? h("button.logo.has-update", { class: up.kind, title: up.label, html: LOGO,
+      onClick: () => { if (S.screen !== "settings") openSettings(); } }, h("i.blip"))
+    : h("span.logo", { html: LOGO }));
   const tabs = h("div.tabs");
   if (S.screen !== "list") {
     const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent" }[S.mode], settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
@@ -85,10 +87,10 @@ function meMenu(anchor) {
     onRemove: async () => { await setMy("my.delete", { slot: i }); refreshOpenSub(switchItems()); },
   }));
   const items = [];
-  if (me) items.push({ label: "My profile", onClick: async () => openProfile(await call("my.character")) });
+  if (me) items.push({ label: "My Profile", onClick: async () => openProfile(await call("my.character")) });
   if (used.length) items.push({ label: "Switch Profile", submenu: switchItems });
   const free = S.my.slots.findIndex((d) => !d);
-  if (free >= 0) items.push({ label: used.length ? "Add character" : "Find my character", onClick: () => openFinder(free) });
+  if (free >= 0) items.push({ label: used.length ? "Add Character" : "Find My Character", onClick: () => openFinder(free) });
   items.push("-", { label: "Settings", onClick: openSettings });
   showMenu(items, r.right, r.bottom + 2, { alignRight: true });
 }
@@ -105,7 +107,7 @@ function updateItem() {
   if (u.state === "available") return { kind: "new", label: `Download v${u.latest}` };
   if (u.state === "downloading") return { kind: "busy", label: `Installing v${u.latest}… ${Math.round((u.progress || 0) * 100)}%` };
   if (u.state === "ready") return { kind: "new", label: `Restart for v${u.latest}` };
-  if (u.state === "error" && u.clicked) return { kind: "bad", label: "Update failed · Retry" };
+  if (u.state === "error" && u.clicked) return { kind: "bad", label: "Update Failed · Retry" };
   return null;
 }
 
@@ -421,7 +423,7 @@ const list = (() => {
       case "cp": return num(c.combat_power, "cp");
       case "seen":
         return h("div.c", { style: { ...style, color: here ? "var(--green)" : "var(--dim)" } },
-          r?.fought ? h("span.fought", {}, "⚔") : null, h("span", {}, here ? "Here now" : r ? ago(r.seen) : ""));
+          r?.fought ? h("span.fought", {}, "⚔") : null, h("span", {}, here ? "Here Now" : r ? ago(r.seen) : ""));
     }
     return null;
   }
@@ -461,17 +463,17 @@ const list = (() => {
 
   function emptyState() {
     let [t, sub] = ["", ""];
-    if (S.mode === "search") [t, sub] = S.keyword ? ["No results", "Try another name or fewer filters"] : ["Search for a character", ""];
-    else if (S.mode === "favorites") [t, sub] = ["No favorites yet", ""];
+    if (S.mode === "search") [t, sub] = S.keyword ? ["No Results", "Try another name or fewer filters"] : ["Search for a Character", ""];
+    else if (S.mode === "favorites") [t, sub] = ["No Favorites Yet", ""];
     else if (!S.nearby.enabled) return nearbyOptIn();
-    else if (S.mode === "recent") t = S.nearby.recent.length ? "No results" : "No recent players";
+    else if (S.mode === "recent") t = S.nearby.recent.length ? "No Results" : "No Recent Players";
     else if (S.nearby.state === "no_admin") {
       return h("div.empty", { style: { position: "absolute", left: 0, right: 0, top: "40px" } }, h("div", {},
-        h("b", {}, "Nearby needs administrator"),
+        h("b", {}, "Nearby Needs Administrator"),
         h("div", { style: { margin: "0 auto 14px" } }, "Windows only lets administrators read the game's traffic."),
-        h("button.btn.gold", { onClick: () => win.relaunchAsAdmin() }, "Restart as administrator")));
+        h("button.btn.gold", { onClick: () => win.relaunchAsAdmin() }, "Restart as Administrator")));
     }
-    else t = { waiting: "Waiting for AION 2", starting: "Starting…", error: "Nearby stopped", capturing: S.nearby.rows.length ? "No results" : "No players nearby" }[S.nearby.state] || "";
+    else t = { waiting: "Waiting for AION 2", starting: "Starting…", error: "Nearby Stopped", capturing: S.nearby.rows.length ? "No Results" : "No Players Nearby" }[S.nearby.state] || "";
     if (S.nearby.state === "error" && S.mode === "nearby") sub = S.nearby.detail || "";
     return h("div.empty", { style: { position: "absolute", left: 0, right: 0, top: "40px" } }, h("div", {}, h("b", {}, t), sub));
   }
@@ -480,7 +482,7 @@ const list = (() => {
     return h("div.empty", { style: { position: "absolute", left: 0, right: 0, top: "30px" } }, h("div", {},
       h("b", {}, "Nearby"),
       h("div", { style: { maxWidth: "330px", margin: "0 auto 14px" } }, "The players around your character, with their combat power and gear score."),
-      h("button.btn.gold", { onClick: async () => { S.nearby = await call("nearby.enable", { on: true }); if (S.nearby.state === "no_admin") win.relaunchAsAdmin(); app.render(); } }, "Turn on Nearby")));
+      h("button.btn.gold", { onClick: async () => { S.nearby = await call("nearby.enable", { on: true }); if (S.nearby.state === "no_admin") win.relaunchAsAdmin(); app.render(); } }, "Turn On Nearby")));
   }
 
   let drag = null;
@@ -526,7 +528,7 @@ function columnsMenu(x, y) {
   const cols = S.cfg.columns || DEFAULT_COLUMNS;
   const items = DEFAULT_COLUMNS.map((k) => ({ label: COL_MENU[k] + (k === "seen" ? "  (Recent)" : ""), check: cols.includes(k),
     onClick: () => { save("columns", cols.includes(k) ? cols.filter((c) => c !== k) : DEFAULT_COLUMNS.filter((c) => c === k || cols.includes(c))); list.render(); } }));
-  items.push("-", { label: "Reset columns", onClick: () => { save("columns", [...DEFAULT_COLUMNS]); list.render(); } });
+  items.push("-", { label: "Reset Columns", onClick: () => { save("columns", [...DEFAULT_COLUMNS]); list.render(); } });
   showMenu(items, x, y);
 }
 
@@ -542,9 +544,9 @@ function rowMenu(c, x, y) {
   const fav = S.favorites.some((f) => f.key === c.key);
   const known = !!c.char_id;
   const items = [
-    { label: "View profile", disabled: !known, onClick: () => openProfile(c) },
-    { label: fav ? "Remove from favorites" : "Add to favorites", disabled: !known, onClick: () => toggleFavorite(c) },
-    { label: "Copy name", onClick: () => navigator.clipboard.writeText(c.name) },
+    { label: "View Profile", disabled: !known, onClick: () => openProfile(c) },
+    { label: fav ? "Remove from Favorites" : "Add to Favorites", disabled: !known, onClick: () => toggleFavorite(c) },
+    { label: "Copy Name", onClick: () => navigator.clipboard.writeText(c.name) },
     { label: "Refresh", disabled: !known, onClick: () => call("card.refresh", { key: c.key }) },
     { label: "Set Profile", disabled: !known, submenu: () => S.my.slots.map((d, i) => ({
       label: d ? d.name : `Set Character ${i + 1}`, selected: d && `${d.server_id}:${d.char_id}` === c.key,

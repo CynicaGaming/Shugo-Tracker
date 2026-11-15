@@ -81,14 +81,15 @@ input { font: inherit; }
 .mebtn img, .mebtn .ph { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; object-position: top; flex: none;
   background: var(--panel-2); }
 .mebtn .nm { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* an update waiting: a small arrow beside the logo (green: download / restart; gold, pulsing: installing; red: failed) */
-.upflag { -webkit-app-region: no-drag; display: grid; place-items: center; width: 18px; height: 18px; margin-left: -4px;
-  padding: 0; border: 0; border-radius: 50%; background: rgba(95, 211, 138, 0.16); color: var(--green); cursor: pointer; }
-.upflag svg { width: 12px; height: 12px; }
-.upflag:hover { background: rgba(95, 211, 138, 0.3); }
-.upflag.busy { background: rgba(232, 196, 106, 0.16); color: var(--gold); animation: upulse 1.2s ease-in-out infinite; }
-.upflag.bad { background: rgba(255, 107, 107, 0.16); color: var(--red); }
-@keyframes upulse { 50% { opacity: 0.5; } }
+/* an update waiting: a small blip on the logo's top-right corner (green; gold while installing; red if it failed) */
+.titlebar .logo.has-update { position: relative; padding: 0; border: 0; background: none; cursor: pointer; display: block; }
+.titlebar .logo svg { width: 100%; height: 100%; display: block; }
+.blip { position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 6px rgba(95, 211, 138, 0.8); }
+.has-update.busy .blip { background: var(--gold); box-shadow: 0 0 0 2px var(--bg), 0 0 6px rgba(232, 196, 106, 0.8);
+  animation: upulse 1.2s ease-in-out infinite; }
+.has-update.bad .blip { background: var(--red); box-shadow: 0 0 0 2px var(--bg); }
+@keyframes upulse { 50% { opacity: 0.45; } }
 
 /* ───── tabs: the game's text tabs with a glowing underline ───── */
 .tabs { display: flex; align-items: stretch; gap: 2px; height: 100%; }
@@ -321,3 +322,5 @@ input[type=range] { accent-color: var(--gold-2); }
 .unotes li::marker { color: rgba(232, 196, 106, 0.6); }
 .btn svg { width: 13px; height: 13px; margin-right: 5px; vertical-align: -2px; }
 .btn:disabled { opacity: 0.6; cursor: default; }
+
+.legal { padding: 14px 14px 18px; color: var(--faint); font-size: 11px; line-height: 1.5; text-align: center; }

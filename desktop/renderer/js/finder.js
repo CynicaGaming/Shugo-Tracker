@@ -25,7 +25,7 @@ export class FinderView {
 
   paint() {
     const el = clear(this.el);
-    el.append(h("div.fhead", {}, h("div.ft", {}, "Find your character"),
+    el.append(h("div.fhead", {}, h("div.ft", {}, "Find Your Character"),
       h("div.fsteps", {},
         this.step(1, "Region", this.region && REGION_NAMES[this.region], () => { this.region = null; this.server = null; this.paint(); }),
         h("span.sep", {}, "›"),
@@ -57,7 +57,7 @@ export class FinderView {
 
   paintName(el) {
     const { call } = this.app;
-    el.append(h("div.bar", {}, "Character name"));
+    el.append(h("div.bar", {}, "Character Name"));
     const results = h("div.fresults");
     let timer = null, asked = 0;
     const run = async (name) => {

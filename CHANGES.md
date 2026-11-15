@@ -9,6 +9,11 @@ Each release's notes come from its section here (shown in Settings → Updates).
 - New look for the filters: one region switch, Elyos and Asmodians toggles, and a Filters button (with a count) for class and level
 - Region names tidied up: NA East, NA West, Europe, Latin America, Asia
 
+## 2.3.8
+- An update now shows as a small green blip on the logo; click the logo for Settings → Updates
+- Menus, buttons, headings and settings use Title Case throughout (My Profile, Add to Favorites, Always on Top)
+- Settings ends with the NCSOFT notice
+
 ## 2.3.7
 - Fixed: Nearby in Shugo Festival lists the match's players (from its scoreboard), even when Nearby starts mid-match
 - Fixed: entering an instance moves the town crowd to Recent, even when the game sends no map change

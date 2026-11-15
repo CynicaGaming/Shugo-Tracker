@@ -54,7 +54,6 @@ export const ICONS = {
   starFill: P('<path fill="currentColor" d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'),
   refresh: P('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>'),
   grip: P('<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'),
-  update: P('<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>'),
   sliders: P('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'),
 };
 export const icon = (name) => h("span", { html: ICONS[name], style: { display: "contents" } });
@@ -65,8 +64,8 @@ export const LOGO = `<svg viewBox="0 0 32 32"><defs><linearGradient id="lg" x1="
 const SPEC = [["name", 130, 1e6, 3, "w", 0], ["legion", 56, 170, 2, "w", 2], ["class", 70, 112, 1, "w", 3],
   ["level", 24, 24, 0, "e", 0], ["server", 90, 200, 2, "w", 1], ["gs", 44, 52, 0, "e", 0], ["cp", 60, 72, 0, "e", 0],
   ["seen", 76, 96, 0, "w", 2]];
-export const COL_LABELS = { name: "Name", legion: "Legion", class: "Class", level: "Lv", server: "Server", gs: "GS", cp: "CP", seen: "Last seen" };
-export const COL_MENU = { ...COL_LABELS, level: "Level", gs: "Gear score", cp: "Combat power" };
+export const COL_LABELS = { name: "Name", legion: "Legion", class: "Class", level: "Lv", server: "Server", gs: "GS", cp: "CP", seen: "Last Seen" };
+export const COL_MENU = { ...COL_LABELS, level: "Level", gs: "Gear Score", cp: "Combat Power" };
 export const DEFAULT_COLUMNS = ["legion", "class", "level", "server", "gs", "cp", "seen"];
 export function layoutColumns(width, keys) {
   const GAP = 10, STAR = 24, x1 = width - 6, left = 8, right = x1 - STAR, avail = right - left;

@@ -39,13 +39,13 @@ export class SettingsView {
       ? h("div.unotes", {}, h("div.unt", {}, `What's new in ${notesFor}`), h("ul", {}, u.notes.map((n) => h("li", {}, n))))
       : null;
     const label = { available: "Download", downloading: "Installing…", ready: "Restart",
-      checking: "Checking…" }[u.state] || "Check now";
+      checking: "Checking…" }[u.state] || "Check Now";
     const act = h("button.btn", { class: ["available", "ready"].includes(u.state) ? "gold" : "",
       disabled: ["downloading", "checking", "dev"].includes(u.state), onClick: () => this.updateAction() },
       u.state === "ready" ? icon("refresh") : null, label);
     const when = u.checkedAt ? fmtWhen(u.checkedAt) : "never";
     clear(box).append(h("div.ucard", {}, head, notes),
-      h("div.setting", {}, h("div.grow", {}, "Check for updates", h("div.sub", {}, `Last checked ${when}`)), act));
+      h("div.setting", {}, h("div.grow", {}, "Check for Updates", h("div.sub", {}, `Last checked ${when}`)), act));
   }
 
   async updateAction() {
@@ -76,7 +76,7 @@ export class SettingsView {
     el.append(h("div.bar", {}, "Updates"));
     this.upBox = h("div");
     el.append(this.upBox);
-    el.append(row(h("div", {}, "Check automatically", h("div.sub", {}, "Also when the app starts. Nothing downloads until you click.")),
+    el.append(row(h("div", {}, "Check Automatically", h("div.sub", {}, "Also when the app starts. Nothing downloads until you click.")),
       ...steps(UPDATE_EVERY, cfg.update_check_s ?? 1800, (v) => { save("update_check_s", v); win.update(v); })));
     this.paintUpdate();
     win.update("freshen").then((u) => { if (u) { S.update = { ...S.update, ...u }; this.paintUpdate(); } });
@@ -87,15 +87,18 @@ export class SettingsView {
     el.append(row("Opacity", h("input", { type: "range", min: 30, max: 100, value: op, style: { width: "150px" },
       onInput: (e) => { opOut.textContent = `${e.target.value}%`; win.setOpacity(e.target.value / 100); },
       onChange: (e) => save("window_opacity", e.target.value / 100) }), opOut));
-    el.append(row("Always on top", toggle(cfg.always_on_top !== false, (v) => { save("always_on_top", v); win.setAlwaysOnTop(v); this.app.render(); })));
+    el.append(row("Always on Top", toggle(cfg.always_on_top !== false, (v) => { save("always_on_top", v); win.setAlwaysOnTop(v); this.app.render(); })));
 
     el.append(h("div.bar", {}, "Nearby", h("span.extra", {}, "BETA")));
     el.append(row("Show Nearby", toggle(!!S.nearby.enabled, async (v) => {
       S.nearby = await call("nearby.enable", { on: v });
       if (v && S.nearby.state === "no_admin") win.relaunchAsAdmin();
     })));
-    el.append(row("Auto-clear", ...steps(AUTOCLEAR, cfg.nearby_autoclear_s ?? 0, (v) => save("nearby_autoclear_s", v))));
-    el.append(row("Recent players", ...steps(RECENT, cfg.recent_max ?? 250, (v) => { cfg.recent_max = v; call("recent.max", { n: v }); }),
+    el.append(row("Auto-Clear", ...steps(AUTOCLEAR, cfg.nearby_autoclear_s ?? 0, (v) => save("nearby_autoclear_s", v))));
+    el.append(row("Recent Players", ...steps(RECENT, cfg.recent_max ?? 250, (v) => { cfg.recent_max = v; call("recent.max", { n: v }); }),
       h("button.btn", { onClick: () => call("nearby.clear", { which: "recent" }) }, "Clear")));
+
+    el.append(h("div.legal", {}, "Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. ",
+      "AION and AION 2 are trademarks of NCSOFT Corporation; game names, text and images belong to NCSOFT."));
   }
 }

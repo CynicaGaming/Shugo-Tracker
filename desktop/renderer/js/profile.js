@@ -8,7 +8,7 @@ const TABS = ["Gear", "Skills", "Daevanion", "Stats", "Cosmetics", "Titles"];
 const GEAR_MAIN = ["MainHand", "SubHand", "Helmet", "Shoulder", "Torso", "Pants", "Gloves", "Boots", "Cape", "Belt"];
 const GEAR_ACC = ["Necklace", "Earring1", "Earring2", "Ring1", "Ring2", "Bracelet1", "Bracelet2", "Amulet", "Rune1", "Rune2"];
 const GEAR_ARCANA = Array.from({ length: 10 }, (_, i) => `Arcana${i + 1}`);
-const SLOT_NAMES = { MainHand: "Main hand", SubHand: "Off hand", Earring1: "Earring", Earring2: "Earring", Ring1: "Ring",
+const SLOT_NAMES = { MainHand: "Main Hand", SubHand: "Off Hand", Earring1: "Earring", Earring2: "Earring", Ring1: "Ring",
   Ring2: "Ring", Bracelet1: "Bracelet", Bracelet2: "Bracelet", Rune1: "Rune", Rune2: "Rune", Cape: "Cloak", Torso: "Chest",
   Pants: "Legs" };
 const slotName = (s) => SLOT_NAMES[s] || (s.startsWith("Arcana") ? "Arcana" : s);
@@ -151,8 +151,8 @@ export class ProfileView {
         h("button.iconbtn", { html: ICONS.refresh, onClick: () => this.reload() }),
         h("button.iconbtn", { class: fav ? "on" : "", html: fav ? ICONS.starFill : ICONS.star, onClick: () => this.app.toggleFavorite(c) })),
       h("div.statstrip", {},
-        h("div", {}, h("small", {}, "Combat power"), h("b.cp", {}, (p.combat_power ?? c.combat_power) != null ? fmtInt(p.combat_power ?? c.combat_power) : wait)),
-        h("div", {}, h("small", {}, "Gear score"), h("b", {}, (p.gear_score ?? c.gear_score) != null ? fmtInt(p.gear_score ?? c.gear_score) : wait)),
+        h("div", {}, h("small", {}, "Combat Power"), h("b.cp", {}, (p.combat_power ?? c.combat_power) != null ? fmtInt(p.combat_power ?? c.combat_power) : wait)),
+        h("div", {}, h("small", {}, "Gear Score"), h("b", {}, (p.gear_score ?? c.gear_score) != null ? fmtInt(p.gear_score ?? c.gear_score) : wait)),
         h("div", {}, h("small", {}, "Level"), h("b", {}, p.level || c.level || wait))));
   }
   paintStar() { this.paintHead(); }
@@ -183,7 +183,7 @@ export class ProfileView {
     b.scrollTop = 0;
     if (this.error && !this.profile) {
       b.append(h("div.empty", {}, h("div", {}, h("b", {}, "Couldn't load this profile"), this.error,
-        h("div", { style: { marginTop: "12px" } }, h("button.btn.gold", { onClick: () => this.reload() }, "Try again")))));
+        h("div", { style: { marginTop: "12px" } }, h("button.btn.gold", { onClick: () => this.reload() }, "Try Again")))));
       return;
     }
     if (!this.ready) { b.append(this.ringEl = this.ring()); this.paintRing(); return; }
@@ -343,7 +343,7 @@ export class ProfileView {
   tabDaevanion(p) {
     const out = h("div");
     const boards = p.boards || [];
-    if (!boards.length) return h("div.empty", {}, "No boards opened");
+    if (!boards.length) return h("div.empty", {}, "No Boards Opened");
     const sel = boards.find((b) => b.name === this.app.S.cfg.daevanion_board) || boards[0];
     const tabs = h("div.btabs");
     const pct = (b) => b.game_percent ?? (b.total ? Math.round(100 * b.opened / b.total) : 0);
@@ -390,7 +390,7 @@ export class ProfileView {
     const item = (it, label) => h("div.slot", {}, this.tile(it),
       h("div.txt", {}, h("div.n", { style: { color: gradeColor(it.grade) } }, it.name),
         h("div.s", {}, [label, it.grade, it.level ? `Lv ${it.level}` : ""].filter(Boolean).join(" · "))));
-    const wings = [[p.wing, "Wings"], [p.wing_skin, "Wing appearance"]].filter(([it]) => it);
+    const wings = [[p.wing, "Wings"], [p.wing_skin, "Wing Appearance"]].filter(([it]) => it);
     if (wings.length) out.append(h("div.bar", {}, "Wings"), h("div.cgrid", {}, wings.map(([it, l]) => item(it, l))));
     if (p.pet) out.append(h("div.bar", {}, "Pet"), h("div.cgrid", {}, item(p.pet, "Pet")));
     if (p.skins?.length) out.append(h("div.bar", {}, "Closet", h("span.extra", {}, `${p.skins.length} items`)),
