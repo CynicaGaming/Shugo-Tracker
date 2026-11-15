@@ -1,18 +1,16 @@
-.venv/
-.build-venv/
-build/
-dist/
+# Python
 __pycache__/
 *.pyc
-config.json
-shugo_cache.json
-shugo-tracker.log
-shugo-tracker-crash.log
+.venv/
+build/
+dist/
+# The app's own folders (when run from the source tree)
 data/
 !shugotracker/data/
 cache/
 logs/
+.dev-app/
+# Electron
 desktop/node_modules/
 desktop/dist/
-.dev-app/
 !desktop/build/

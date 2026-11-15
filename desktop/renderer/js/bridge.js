@@ -38,6 +38,5 @@ export function off(event, fn) { listeners[event] = (listeners[event] || []).fil
 
 /** Window controls (Electron only; no-ops in a browser preview). */
 export const win = native?.win || {
-  minimize() {}, close() {}, setAlwaysOnTop() {}, setOpacity() {}, openFolder() {}, openExternal(u) { window.open(u); },
-  relaunchAsAdmin() {}, update: async () => ({ state: "dev" }), onUpdate() {},
+  minimize() {}, close() {}, setAlwaysOnTop() {}, setOpacity() {}, relaunchAsAdmin() {}, update: async () => ({ state: "dev" }), onUpdate() {},
 };

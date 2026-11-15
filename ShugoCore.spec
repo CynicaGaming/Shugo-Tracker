@@ -16,5 +16,5 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="shugo-core", console=True, upx=False,
-          icon="assets/ShugoTracker.ico")
+          icon="desktop/build/icon.ico")
 coll = COLLECT(exe, a.binaries, a.datas, upx=False, name="shugo-core")

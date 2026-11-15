@@ -15,6 +15,11 @@ with open(os.path.join(HERE, "fixtures", "profile_sample.json"), encoding="utf-8
     SAMPLE = json.load(f)
 
 
+def _fixture(name):
+    with open(os.path.join(os.path.dirname(__file__), "fixtures", name), encoding="utf-8") as f:
+        return json.load(f)
+
+
 def char(**kw):
     d = dict(char_id="TEST-ID=", name="Testchar", race=1, pc_id=10, level=45, server_id=1101,
              server_name="Siel", region="nae")
@@ -36,7 +41,7 @@ class ParseProfileTests(unittest.TestCase):
         g = self.p.gear
         self.assertEqual(g["MainHand"].name, "Spiritforged Longsword")
         self.assertEqual((g["MainHand"].enchant, g["MainHand"].grade), (15, "Unique"))
-        self.assertEqual(g["Bracelet2"].slot_label, "Bracelet")
+        self.assertEqual(g["Bracelet2"].slot, "Bracelet2")
         self.assertIn("Arcana1", g)
         self.assertNotIn("Helmet", g)  # missing slots stay missing
 
@@ -46,19 +51,19 @@ class ParseProfileTests(unittest.TestCase):
         self.assertEqual((p.wing.name, p.wing_skin.name), ("Forest Spirit Wings", "Ultimate Daeva Wings"))
         self.assertEqual((p.pet.name, p.pet.level), ("Crasaur", 3))
 
-    def test_skills_sorted_equipped_first(self):
-        act = self.p.skills_in("Active")
-        self.assertEqual([s.name for s in act], ["Vicious Strike", "Defiance"])
-        dp = self.p.skills_in("Dp")
-        self.assertEqual([s.name for s in dp], ["Battlefield Banner", "Nezekan's Shield"])
-        self.assertFalse(dp[1].acquired)
+    def test_skills(self):
+        by = {s.name: s for s in self.p.skills}
+        self.assertEqual({by["Vicious Strike"].category, by["Defiance"].category}, {"Active"})
+        self.assertEqual(by["Battlefield Banner"].category, "Dp")
+        self.assertFalse(by["Nezekan's Shield"].acquired)
 
     def test_stats_boards_titles(self):
         p = self.p
-        self.assertEqual([s.type for s in p.primary_stats], ["STR", "INT"])
-        self.assertEqual([s.type for s in p.deity_stats], ["Justice"])
-        self.assertEqual(p.deity_stats[0].effects, ["Defense increase +6.9%", "Perfect Chance +6.9%"])
-        self.assertEqual([(b.name, b.percent) for b in p.boards], [("Nezekan", 69), ("Azphel", 13)])
+        stats = {st.type: st for st in p.stats}
+        self.assertTrue({"STR", "INT", "Justice"} <= set(stats))
+        self.assertEqual(stats["Justice"].effects, ["Defense increase +6.9%", "Perfect Chance +6.9%"])
+        self.assertEqual([(b.name, b.game_percent if b.game_percent is not None else round(100 * b.opened / b.total))
+                          for b in p.boards], [("Nezekan", 69), ("Azphel", 13)])
         self.assertEqual((p.titles_owned, p.titles_total), (207, 297))
         self.assertEqual(p.titles[0].effects, ["Critical Attack +45", "Critical Damage Boost +3%", "Critical Attack +3"])
 
@@ -250,21 +255,6 @@ class LegionTests(unittest.TestCase):
         self.assertIn(a.INFO_URL, sess.calls)
 
 
-class StatBonusTests(unittest.TestCase):
-    def test_per_point(self):
-        from shugotracker.profile import STAT_BONUSES
-        self.assertEqual(STAT_BONUSES["INT"], [("Status Effect Chance", "+")])
-        self.assertEqual(STAT_BONUSES["Illusion"], [("Cooldown", "-"), ("Endurance Penetration", "+")])
-        self.assertEqual(len(STAT_BONUSES), 16)
-
-    def test_bonus_table_matches_live_text(self):
-        # the API's own lines for a stat with points: label and sign must match our table
-        from shugotracker.profile import STAT_BONUSES
-        live = ["Defense increase +6.9%", "Perfect Chance +6.9%"]          # Justice, 69 points
-        self.assertEqual([f"{label} {sign}" for label, sign in STAT_BONUSES["Justice"]],
-                         [e[:e.rindex(" ") + 2] for e in live])          # "Defense increase +"
-
-
 class ReuseCardInfoTests(unittest.TestCase):
     def test_profile_after_card_skips_second_info_call(self):
         sess = FakeSession()
@@ -285,7 +275,7 @@ class EmptyItemTests(unittest.TestCase):
     def test_placeholder_wing_appearance_is_dropped(self):
         import copy
         from shugotracker.profile import parse_profile
-        data = json.load(open(os.path.join(os.path.dirname(__file__), "fixtures", "profile_sample.json"), encoding="utf-8"))
+        data = _fixture("profile_sample.json")
         eq = copy.deepcopy(data["equipment"])
         eq["petwing"]["wingSkin"] = {"id": 0, "name": "", "grade": "", "icon": "", "enchantLevel": 0}
         p = parse_profile(data["info"], eq)

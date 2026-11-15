@@ -1,4 +1,4 @@
-"""Settings: migration from older versions, opacity, cache clearing, request ceiling, favorites on disk."""
+"""Settings: migration from older versions, the config file, opacity, request ceiling, favorites on disk."""
 import json
 import time
 import os
@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from shugotracker import aion2api as a
-from shugotracker.settings import OPACITY_MIN, SETTING_DEFAULTS, clamp_opacity, migrate
+from shugotracker.config import DEFAULTS, OPACITY_MIN, clamp_opacity, load_config, migrate, save_config
 
 
 class MigrateTests(unittest.TestCase):
@@ -16,7 +16,7 @@ class MigrateTests(unittest.TestCase):
         self.assertEqual(cfg["window_opacity"], 1.0)                  # old 0.97 "opacity" isn't carried over
         for gone in ("overlay", "opacity", "idle_opacity", "opacity_unfocused", "requests_per_second", "region"):
             self.assertNotIn(gone, cfg)
-        for k in SETTING_DEFAULTS:
+        for k in DEFAULTS:
             self.assertIn(k, cfg)
 
 
@@ -33,7 +33,7 @@ class OpacityAndLayoutTests(unittest.TestCase):
 
 class FavoritesOnDiskTests(unittest.TestCase):
     def test_saved_immediately_and_moved_to_data_folder(self):
-        from shugotracker import app
+        from shugotracker import config as app
         from shugotracker.favorites import Favorites
         chars, _ = a.parse_search({"list": [
             {"characterId": "abc%3D", "name": "Luna", "race": 2, "pcId": 36, "level": 45, "serverId": 2101,
@@ -58,7 +58,7 @@ class FavoritesOnDiskTests(unittest.TestCase):
 
 class AppFolderTests(unittest.TestCase):
     def test_appdata_moves_into_the_app_folder(self):
-        from shugotracker import app
+        from shugotracker import config as app
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as appdata:
             old = os.path.join(appdata, "ShugoTracker")
             os.makedirs(os.path.join(old, "cache", "images"))
@@ -87,28 +87,6 @@ class RequestCeilingTests(unittest.TestCase):
         self.assertEqual(api.limiter.rate, a.REQUESTS_PER_SECOND)
 
 
-class ClearCacheTests(unittest.TestCase):
-    def test_clear(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            cp, pd = os.path.join(tmp, "details.json"), os.path.join(tmp, "profiles")
-            with open(cp, "w") as f:
-                json.dump({"x": {"combat_power": 1, "legion": None, "ts": time.time()}}, f)
-            os.makedirs(pd)
-            with open(os.path.join(pd, "p.json"), "w") as f:
-                f.write("{}")
-            api = a.Api(db_path=os.path.join(tmp, "shugo.db"), migrate_from=(cp, pd))
-            # the old files were imported and removed
-            self.assertEqual((os.path.exists(cp), os.path.exists(pd)), (False, False))
-            self.assertIn("x", api._cache)
-            api._search_cache[("a",)] = (0, {})
-            api.clear_caches()
-            self.assertEqual((api._cache, api._search_cache, api.store.counts()["details"]), ({}, {}, 0))
-            api.close()                    # (Windows can't delete the folder while the database is open)
-
-
-if __name__ == "__main__":
-    unittest.main()
-
 
 class EmptyFavoritesTests(unittest.TestCase):
     def test_empty_store_is_not_falsy(self):
@@ -122,8 +100,26 @@ class EmptyFavoritesTests(unittest.TestCase):
 
 class AutoClearMigrationTests(unittest.TestCase):
     def test_switch_folds_into_the_interval(self):
-        from shugotracker.settings import migrate
         self.assertEqual(migrate({"nearby_autoclear": False, "nearby_autoclear_s": 300})["nearby_autoclear_s"], 0)
         self.assertEqual(migrate({"nearby_autoclear": True, "nearby_autoclear_s": 300})["nearby_autoclear_s"], 300)
         self.assertEqual(migrate({})["nearby_autoclear_s"], 0)
         self.assertNotIn("layout", migrate({"layout": "compact"}))
+
+
+class ConfigFileTests(unittest.TestCase):
+    def test_broken_or_missing_file_gives_defaults_and_saves_atomically(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "config.json")
+            self.assertEqual(load_config(path)["recent_max"], 250)          # missing
+            with open(path, "w") as f:
+                f.write("{not json")
+            self.assertEqual(load_config(path)["recent_max"], 250)          # broken
+            save_config(path, {**load_config(path), "recent_max": 500, "borderless": True})
+            self.assertEqual(os.listdir(d), ["config.json"])                # no temporary file left
+            cfg = load_config(path)
+            self.assertEqual(cfg["recent_max"], 500)
+            self.assertNotIn("borderless", cfg)                             # retired key dropped
+
+
+if __name__ == "__main__":
+    unittest.main()

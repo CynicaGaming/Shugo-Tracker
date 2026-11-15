@@ -1,6 +1,6 @@
 // Settings, in the game's style: header bars per group, one setting per row.
 import { win } from "./bridge.js";
-import { ICONS, LOGO, clear, h } from "./dom.js";
+import { LOGO, clear, h, icon } from "./dom.js";
 
 const RECENT = [[50, "50"], [100, "100"], [250, "250"], [500, "500"], [1000, "1,000"], [0, "Unlimited"]];
 const AUTOCLEAR = [[0, "Never"], [60, "1m"], [300, "5m"], [900, "15m"], [1800, "30m"], [3600, "60m"]];
@@ -41,7 +41,7 @@ export class SettingsView {
       checking: "Checking…" }[u.state] || "Check now";
     const act = h("button.btn", { class: ["available", "ready"].includes(u.state) ? "gold" : "",
       disabled: ["downloading", "checking", "dev"].includes(u.state), onClick: () => this.updateAction() },
-      u.state === "ready" ? h("span", { html: ICONS.refresh, style: { display: "contents" } }) : null, label);
+      u.state === "ready" ? icon("refresh") : null, label);
     const when = u.checkedAt ? fmtWhen(u.checkedAt) : "never";
     clear(box).append(h("div.ucard", {}, head, notes),
       h("div.setting", {}, h("div.grow", {}, "Check for updates", h("div.sub", {}, `Last checked ${when}`)), act));

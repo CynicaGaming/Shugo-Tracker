@@ -1,10 +1,12 @@
-"""Config and app-folder helpers used by the core, plus the command-line tools (--search-cli, --bench, --replay-bin).
+"""Command-line tools for development and CI (the app itself is the Electron window, which runs shugotracker.core):
 
-The app itself is the Electron window in desktop/, which starts shugotracker.core."""
+    python -m shugotracker.cli --search-cli Luna      search like the app does and print the results
+    python -m shugotracker.cli --bench Luna           time a search, card numbers and a profile, cold and cached
+    python -m shugotracker.cli --replay-bin FILE      decode a Nearby log (logs\\diagnostics\\nearby_*.bin)
+"""
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 import time
@@ -12,145 +14,17 @@ import time
 from . import servers as sv
 from ._version import __version__
 
-FROZEN = getattr(sys, "frozen", False)
-# Next to ShugoTracker.exe when built, else the project folder.
-HERE = os.path.dirname(sys.executable) if FROZEN else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-
-def _writable(folder: str) -> bool:
-    try:
-        os.makedirs(folder, exist_ok=True)
-        probe = os.path.join(folder, ".write-test")
-        with open(probe, "w") as f:
-            f.write("ok")
-        os.remove(probe)
-        return True
-    except OSError:
-        return False
-
-
-def _app_root() -> str:
-    """
-    Everything the app keeps lives in its own folder, so the whole folder can be moved or copied anywhere:
-
-        ShugoTracker.exe
-        data\\    config.json, favorites.json
-        cache\\   shugo.db (card numbers, profiles, Nearby lookups), images\\
-        logs\\    shugo-tracker.log, diagnostics\\ (Nearby recordings)
-
-    Only if that folder can't be written to (e.g. Program Files) does it fall back to %APPDATA%\\ShugoTracker.
-    """
-    if _writable(os.path.join(HERE, "data")):
-        return HERE
-    return os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "ShugoTracker")
-
-
-ROOT = _app_root()
-DATA = os.path.join(ROOT, "data")
-CACHE = os.path.join(ROOT, "cache")
-LOGS = os.path.join(ROOT, "logs")
-OLD_APPDATA = os.path.join(os.environ["APPDATA"], "ShugoTracker") if os.environ.get("APPDATA") else None
-USER_FILES = ("config.json", "favorites.json", "character_cache.json")   # (the last is imported into cache/shugo.db)
-
-
-def migrate_user_files(old_dir: str, new_dir: str) -> list[str]:
-    """Bring settings / favorites an older version kept in old_dir into the data folder. Returns what moved."""
-    import shutil
-    moved = []
-    if os.path.normcase(os.path.abspath(old_dir)) == os.path.normcase(os.path.abspath(new_dir)):
-        return moved
-    os.makedirs(new_dir, exist_ok=True)
-    for name in USER_FILES:
-        src, dst = os.path.join(old_dir, name), os.path.join(new_dir, name)
-        if not os.path.isfile(src):
-            continue
-        try:
-            if name == "favorites.json" and os.path.exists(dst):
-                from .favorites import Favorites
-                merged = Favorites(dst)
-                if merged.merge_from(src):
-                    merged.save()
-            elif not os.path.exists(dst):
-                shutil.copy2(src, dst)
-            else:
-                continue
-            os.replace(src, src + ".moved")      # leave a trace, never read again
-            moved.append(name)
-        except OSError:
-            pass
-    return moved
-
-
-DEFAULT_CONFIG = {
-    "my_server": "",
-    "forget_after_s": 900,
-    "auto_update": True,
-    "update_repo": "CynicaGaming/Shugo-Tracker",
-    "regions": [],
-    "factions": [],
-    "always_on_top": True,
-    "window_pos": [80, 80],
-    "opcodes": {},
-}
-
-
-def migrate_to_app_folder(root: str | None = None, old: str | None = None) -> list[str]:
-    """
-    v1.22 and earlier kept everything in %APPDATA%\\ShugoTracker (and before that, loose next to the exe). Move it
-    all into the app's own folders, then remove the old folder. Returns what moved.
-    """
-    import shutil
-    root = root or ROOT
-    old = OLD_APPDATA if old is None else old
-    data, cache, logs = (os.path.join(root, d) for d in ("data", "cache", "logs"))
-    moved = migrate_user_files(root, data)                  # loose files next to the exe (oldest versions)
-    if not old or not os.path.isdir(old) or \
-            os.path.normcase(os.path.abspath(old)) == os.path.normcase(os.path.abspath(root)):
-        return moved
-    moved += migrate_user_files(old, data)
-    failed = False
-    for src, dst in ((os.path.join(old, "cache"), cache),
-                     (os.path.join(old, "diagnostics"), os.path.join(logs, "diagnostics"))):
-        if not os.path.isdir(src):
-            continue
-        for dirpath, _dirs, files in os.walk(src):
-            target = os.path.join(dst, os.path.relpath(dirpath, src))
-            os.makedirs(target, exist_ok=True)
-            for f in files:
-                if not os.path.exists(os.path.join(target, f)):
-                    try:
-                        shutil.move(os.path.join(dirpath, f), os.path.join(target, f))
-                        moved.append(os.path.relpath(os.path.join(dirpath, f), old))
-                    except OSError:
-                        failed = True
-    failed = failed or any(os.path.isfile(os.path.join(old, n)) for n in ("config.json", "favorites.json"))
-    if not failed:
-        shutil.rmtree(old, ignore_errors=True)              # what's left: old logs and ".moved" traces
-    return moved
-
-
-def load_config(path: str) -> dict:
-    cfg = dict(DEFAULT_CONFIG)
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as f:
-            cfg.update(json.load(f))
-    return cfg
-
-
-def save_config(path: str, cfg: dict) -> None:
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=2)
-    except OSError:
-        pass
-
-
-def _search_cli(name: str) -> int:
+def _utf8_console() -> None:
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
+
+
+def _search_cli(name: str) -> int:
+    _utf8_console()
     import threading as _t
     from .aion2api import SUB_REGIONS, Api, rank
     api = Api(workers=4)
@@ -187,11 +61,7 @@ def _bench(name: str) -> int:
     import threading as _t
     from .aion2api import SUB_REGIONS, Api, rank
 
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, ValueError):
-            pass
+    _utf8_console()
     tmp = tempfile.mkdtemp()
 
     def run(label: str) -> None:
@@ -308,10 +178,9 @@ def _replay_bin(path: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Shugo Tracker command-line tools (the app is the Electron window)")
-    ap.add_argument("--config", default=os.path.join(DATA, "config.json"))
     ap.add_argument("--search-cli", metavar="NAME", help="search from the command line and print results")
     ap.add_argument("--bench", metavar="NAME", help="time cold vs cached search/profile loading and exit")
-    ap.add_argument("--replay-bin", metavar="FILE", help="decode a Nearby troubleshooting recording and print it")
+    ap.add_argument("--replay-bin", metavar="FILE", help="decode a Nearby log file and print it")
     ap.add_argument("--version", action="version", version=f"Shugo Tracker {__version__}")
     args = ap.parse_args(argv)
     if args.replay_bin:

@@ -158,8 +158,6 @@ ipcMain.handle("win", async (_e, action, arg) => {
     case "close": app.quit(); break;
     case "alwaysOnTop": pinned = !!arg; pin(pinned, true); winLog(`always on top: ${pinned}`); break;
     case "opacity": opacity = Math.max(0.3, Math.min(1, Number(arg) || 1)); win?.setOpacity(opacity); break;
-    case "openFolder": shell.openPath(arg === "logs" ? path.join(ROOT, "logs") : ROOT); break;
-    case "openExternal": shell.openExternal(String(arg)); break;
     case "relaunchAsAdmin": return relaunchAsAdmin();
     case "update": return updater.act(arg);              // "check" | "download" | "restart" | "state"
   }

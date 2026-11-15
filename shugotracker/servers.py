@@ -6,11 +6,10 @@ import re
 from .server_table import SERVER_NAMES
 
 ELYOS, ASMODIAN = 1, 2
-FACTION_NAMES = {ELYOS: "Elyos", ASMODIAN: "Asmodian"}
 
 # Region digit -> Shugo.GG sub-region slug prefix (Global).
 REGION_PREFIX = {1: "nae", 2: "naw", 3: "eu", 4: "la", 5: "as"}
-REGION_LABEL = {1: "NA-East", 2: "NA-West", 3: "EU", 4: "LatAm", 5: "Asia", 0: "KR/TW"}
+REGION_LABEL = {1: "NA East", 2: "NA West", 3: "Europe", 4: "Latin America", 5: "Asia", 0: "KR/TW"}   # (log lines)
 
 KNOWN_SERVERS: set[int] = set(SERVER_NAMES)
 

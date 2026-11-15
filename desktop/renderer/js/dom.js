@@ -53,18 +53,15 @@ export const ICONS = {
   star: P('<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'),
   starFill: P('<path fill="currentColor" d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'),
   refresh: P('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>'),
-  cog: P('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   update: P('<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>'),
   grip: P('<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'),
-  caret: P('<path d="m6 9 6 6 6-6"/>'),
   sliders: P('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'),
-  swords: P('<path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="m13 19 6-6"/><path d="m16 16 4 4"/><path d="M19 21l2-2"/>'),
 };
 export const icon = (name) => h("span", { html: ICONS[name], style: { display: "contents" } });
 
 export const LOGO = `<svg viewBox="0 0 32 32"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6d27a"/><stop offset="1" stop-color="#c8922e"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="7" fill="#141a26" stroke="url(#lg)" stroke-width="1.5"/><path d="M18 4 9 18h6l-2 10 10-15h-6z" fill="url(#lg)"/></svg>`;
 
-/** Lay out the table columns for a list `width` px wide (mirrors shugotracker/columns.py). */
+/** Lay out the table columns for a list `width` px wide. */
 const SPEC = [["name", 130, 1e6, 3, "w", 0], ["legion", 56, 170, 2, "w", 2], ["class", 70, 112, 1, "w", 3],
   ["level", 24, 24, 0, "e", 0], ["server", 90, 200, 2, "w", 1], ["gs", 44, 52, 0, "e", 0], ["cp", 60, 72, 0, "e", 0],
   ["seen", 64, 96, 0, "w", 2]];
@@ -94,7 +91,7 @@ export function layoutColumns(width, keys) {
   return { x1, star: x1 - 11, spans };
 }
 
-/** Sort rows like shugotracker/sorting.py: numbers biggest first, text A–Z, empty last; sides kept grouped. */
+/** Sort rows: numbers biggest first, text A–Z, empty last; sides kept grouped. */
 const SORTS = {
   name: [(c) => c.name.toLowerCase(), false], legion: [(c) => (c.legion || "").toLowerCase() || null, false],
   class: [(c) => (c.class_name || "").toLowerCase() || null, false], level: [(c) => c.level || null, true],
@@ -107,10 +104,11 @@ export function sortChars(chars, key, reverse, sideOf, when) {
   if ((key === "latest" || key === "seen") && when) { val = (c) => when[c.key] ?? when[c.name] ?? null; desc = true; }
   else if (SORTS[key]) [val, desc] = SORTS[key];
   if (val) {
-    const known = out.filter((c) => val(c) != null), unknown = out.filter((c) => val(c) == null);
+    const keyed = out.map((c) => [val(c), c]);           // each key worked out once, not per comparison
+    const known = keyed.filter(([v]) => v != null), unknown = keyed.filter(([v]) => v == null);
     const dir = (desc !== !!reverse) ? -1 : 1;
-    known.sort((a, b) => { const x = val(a), y = val(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
-    out = known.concat(unknown);
+    known.sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0) * dir);
+    out = known.concat(unknown).map(([, c]) => c);
   }
   if (sideOf) { const order = { enemy: 0, ally: 1 }; out = out.map((c, i) => [c, i]).sort((a, b) =>
     ((order[sideOf[a[0].name]] ?? 2) - (order[sideOf[b[0].name]] ?? 2)) || a[1] - b[1]).map((p) => p[0]); }
@@ -123,4 +121,26 @@ export function ago(t) {
   if (s < 3600) return `${Math.floor(s / 60)} min ago`;
   if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
   return `${Math.floor(s / 86400)} d ago`;
+}
+
+/** 12 -> "▲12", -3.5 -> "▼3.5%" (with pct). */
+export function fmtDelta(d, pct) {
+  const n = Math.abs(d);
+  return (d > 0 ? "▲" : "▼") + (Number.isInteger(n) ? n.toLocaleString("en-US") : n.toFixed(1)) + (pct ? "%" : "");
+}
+/** The number in a stat text: "1,234" -> 1234, "12.5%" -> 12.5. */
+export const num = (t) => { const m = String(t ?? "").replace(/,/g, "").match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null; };
+function totals(det) {
+  const out = {};
+  const add = (name, text) => { const n = num(text); if (!name || n == null) return; const [v, p] = out[name] || [0, false]; out[name] = [v + n, p || String(text).includes("%")]; };
+  for (const [name, value, extra] of det.main_stats || []) { add(name, value); add(name, extra); }
+  for (const [name, value] of det.exceed_stats || []) add(name, value);
+  if (det.item_level != null) out["Item Level"] = [det.item_level, false];
+  return out;
+}
+/** Hold-Alt compare: how the hovered item's stats differ from yours, {stat: [theirs - yours, isPercent]}, non-zero only. */
+export function statDeltas(mine, theirs) {
+  const a = totals(mine), b = totals(theirs), out = {};
+  for (const [k, [v, pct]] of Object.entries(b)) { const d = Math.round((v - (a[k]?.[0] || 0)) * 100) / 100; if (d) out[k] = [d, pct]; }
+  return out;
 }

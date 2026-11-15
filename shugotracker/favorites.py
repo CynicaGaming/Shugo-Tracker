@@ -92,9 +92,6 @@ class Favorites:
         if c.key in self._items:
             self._items[c.key] = {k: getattr(c, k) for k in _KEEP}
 
-    def keys(self) -> list[str]:
-        return list(self._items)
-
     def move(self, key: str, index: int) -> None:
         """Put a favorite at position `index` (counted without it) and save."""
         if key not in self._items:

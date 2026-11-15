@@ -1,7 +1,7 @@
 // A character's profile, laid out like the game's windows. The whole profile (info, gear, every item's details)
 // is loaded before it's shown, so tabs and tooltips never wait.
 import { call, on } from "./bridge.js";
-import { CLASS_COLORS, GRADE_COLORS, ICONS, REGION_NAMES, clear, esc, fmtInt, gradeColor, h } from "./dom.js";
+import { CLASS_COLORS, GRADE_COLORS, ICONS, REGION_NAMES, clear, esc, fmtDelta, fmtInt, gradeColor, h, num, statDeltas } from "./dom.js";
 import { closeMenus } from "./menu.js";
 
 const TABS = ["Gear", "Skills", "Daevanion", "Stats", "Cosmetics", "Titles"];
@@ -428,24 +428,6 @@ function wheel(by, deity) {
 
 const GRADE_HEAD = { Common: "#34373e", Rare: "#1e3d27", Legend: "#1b3350", Unique: "#4a3a16", Epic: "#4a2814", Special: "#163f3c", Mythic: "#4a1a2c" };
 
-function fmtDelta(d, pct) {
-  const n = Math.abs(d);
-  return (d > 0 ? "▲" : "▼") + (Number.isInteger(n) ? n.toLocaleString("en-US") : n.toFixed(1)) + (pct ? "%" : "");
-}
-const num = (t) => { const m = String(t ?? "").replace(/,/g, "").match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null; };
-function totals(det) {
-  const out = {};
-  const add = (name, text) => { const n = num(text); if (!name || n == null) return; const [v, p] = out[name] || [0, false]; out[name] = [v + n, p || String(text).includes("%")]; };
-  for (const [name, value, extra] of det.main_stats || []) { add(name, value); add(name, extra); }
-  for (const [name, value] of det.exceed_stats || []) add(name, value);
-  if (det.item_level != null) out["Item Level"] = [det.item_level, false];
-  return out;
-}
-function statDeltas(mine, theirs) {
-  const a = totals(mine), b = totals(theirs), out = {};
-  for (const [k, [v, pct]] of Object.entries(b)) { const d = Math.round((v - (a[k]?.[0] || 0)) * 100) / 100; if (d) out[k] = [d, pct]; }
-  return out;
-}
 
 function itemTip(it, det, { heading, deltas, hint } = {}) {
   const col = gradeColor(it.grade), hb = GRADE_HEAD[it.grade] || "#2a2d34";

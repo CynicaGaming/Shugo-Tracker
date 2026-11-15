@@ -1,7 +1,6 @@
 """Full character profile: parsed from the info + equipment endpoints (the same data Shugo.GG's profile shows)."""
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 EQUIPMENT_URL = "https://aion2.plaync.com/api/character/equipment"
@@ -13,21 +12,6 @@ GEAR_MAIN = ["MainHand", "SubHand", "Helmet", "Shoulder", "Torso", "Pants", "Glo
 GEAR_ACCESSORIES = ["Necklace", "Earring1", "Earring2", "Ring1", "Ring2", "Bracelet1", "Bracelet2",
                     "Amulet", "Rune1", "Rune2"]
 GEAR_ARCANA = [f"Arcana{i}" for i in range(1, 11)]                 # slots 41-50
-SLOT_LABELS = {
-    "MainHand": "Main hand", "SubHand": "Off hand", "Earring1": "Earring", "Earring2": "Earring",
-    "Ring1": "Ring", "Ring2": "Ring", "Bracelet1": "Bracelet", "Bracelet2": "Bracelet",
-    "Rune1": "Rune", "Rune2": "Rune", "Cape": "Cloak", "Torso": "Chest", "Pants": "Legs",
-    "SwordMain": "Weapon", **{f"Arcana{i}": "Arcana" for i in range(1, 11)},
-}
-
-
-def slot_name(slot: str) -> str:
-    """What a gear slot is called on screen, equipped or not."""
-    return SLOT_LABELS.get(slot, slot)
-
-
-SKILL_CATEGORIES = [("Active", "Active"), ("Passive", "Passive"), ("Dp", "Stigma")]
-PRIMARY_STATS = ["STR", "DEX", "INT", "CON", "AGI", "WIS"]
 
 
 @dataclass
@@ -41,10 +25,6 @@ class Item:
     item_id: int = 0
     level: int | None = None   # pets
     slot_pos: int = 0          # the slot number the item-detail call wants
-
-    @property
-    def slot_label(self) -> str:
-        return SLOT_LABELS.get(self.slot, self.slot)
 
 
 @dataclass
@@ -66,29 +46,6 @@ class Stat:
     value: int
     effects: list[str] = field(default_factory=list)
 
-# Every point of a stat adds 0.1% to each of its bonuses (checked against ~50 live characters; the API only
-# lists bonuses for stats that have points, so this lets empty stats show what they would give).
-STAT_PER_POINT = 0.1
-STAT_BONUSES: dict[str, list[tuple[str, str]]] = {
-    "STR": [("Attack increase", "+")],
-    "DEX": [("Evasion increase", "+"), ("Block increase", "+"), ("Critical Hit Resist increase", "+")],
-    "AGI": [("Accuracy increase", "+"), ("Critical Hit increase", "+")],
-    "CON": [("HP increase", "+")],
-    "INT": [("Status Effect Chance", "+")],
-    "WIS": [("Status Effect Resist", "+")],
-    "Justice": [("Defense increase", "+"), ("Perfect Chance", "+")],
-    "Freedom": [("Accuracy increase", "+"), ("Evasion increase", "+")],
-    "Illusion": [("Cooldown", "-"), ("Endurance Penetration", "+")],
-    "Life": [("HP increase", "+"), ("Regeneration", "+")],
-    "Time": [("Combat Speed", "+"), ("Double Resist", "+")],
-    "Destruction": [("Attack increase", "+"), ("Perfect Resist", "+")],
-    "Death": [("Critical Hit increase", "+"), ("Regeneration Penetration", "+")],
-    "Wisdom": [("Double Chance", "+"), ("MP Cost", "-")],
-    "Destiny": [("MP increase", "+"), ("Endurance", "+")],
-    "Space": [("Move Speed", "+"), ("Block increase", "+")],
-}
-
-
 @dataclass
 class Board:
     name: str
@@ -97,12 +54,6 @@ class Board:
     icon: str | None = None
     game_percent: int | None = None   # the game's own rounding
     board_id: int = 0                 # for its full layout (DAEVANION_URL)
-
-    @property
-    def percent(self) -> int:
-        if self.game_percent is not None:
-            return self.game_percent
-        return int(100 * self.opened / self.total + 0.5) if self.total else 0
 
 
 @dataclass
@@ -149,18 +100,6 @@ class Profile:
     equipment_error: str | None = None
     equipment_pending: bool = False   # info arrived, gear/skills/cosmetics still loading
     cached_at: float | None = None    # set when this copy came from the cache
-
-    def skills_in(self, category: str) -> list[Skill]:
-        out = [s for s in self.skills if s.category == category]
-        return sorted(out, key=lambda s: (not s.equipped, not s.acquired, -s.level, s.need_level))
-
-    @property
-    def primary_stats(self) -> list[Stat]:
-        return [s for s in self.stats if s.type in PRIMARY_STATS]
-
-    @property
-    def deity_stats(self) -> list[Stat]:
-        return [s for s in self.stats if s.type not in PRIMARY_STATS and s.type != "ItemLevel"]
 
 
 def _item(d: dict | None, slot: str | None = None) -> Item | None:
@@ -308,55 +247,6 @@ def parse_item_detail(d: dict) -> ItemDetail:
         det.set_size = len(st.get("items") or [])
         det.set_bonuses = [(int(b.get("degree") or 0), list(b.get("descriptions") or [])) for b in st.get("bonuses") or []]
     return det
-
-
-# ───── compare (hold Alt over an item: yours in the same slot, side by side) ─────
-_NUM = re.compile(r"-?\d+(?:\.\d+)?")
-
-
-def stat_number(text) -> float | None:
-    """'1,234' -> 1234, '12.5%' -> 12.5, '+24' -> 24; None when there's no number."""
-    m = _NUM.search(str(text or "").replace(",", ""))
-    return float(m.group()) if m else None
-
-
-def _stat_totals(det: "ItemDetail") -> dict[str, tuple[float, bool]]:
-    """Each stat's full value on an item (base + enchant + exceed), and whether it's a percentage."""
-    out: dict[str, tuple[float, bool]] = {}
-
-    def add(name, text):
-        n = stat_number(text)
-        if not name or n is None:
-            return
-        have, pct = out.get(name, (0.0, False))
-        out[name] = (have + n, pct or "%" in str(text))
-    for name, value, extra in det.main_stats:
-        add(name, value)
-        add(name, extra)
-    for name, value in det.exceed_stats:
-        add(name, value)
-    if det.item_level is not None:
-        out["Item Level"] = (float(det.item_level), False)
-    return out
-
-
-def stat_deltas(mine: "ItemDetail | None", theirs: "ItemDetail") -> dict[str, tuple[float, bool]]:
-    """How the hovered item's stats compare with yours: {stat: (theirs - yours, is_percent)}, non-zero only.
-    A stat your item doesn't have counts as 0 on yours."""
-    yours = _stat_totals(mine) if mine else {}
-    out = {}
-    for name, (v, pct) in _stat_totals(theirs).items():
-        d = round(v - yours.get(name, (0.0, False))[0], 2)
-        if d:
-            out[name] = (d, pct)
-    return out
-
-
-def fmt_delta(d: float, pct: bool = False) -> str:
-    """12 -> '▲12', -3.5 -> '▼3.5', with '%' for percentages."""
-    n = abs(d)
-    txt = f"{n:,.0f}" if n == int(n) else f"{n:,.1f}"
-    return ("▲" if d > 0 else "▼") + txt + ("%" if pct else "")
 
 
 # ───── Daevanion board layout ─────

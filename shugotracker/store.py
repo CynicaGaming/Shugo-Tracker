@@ -7,8 +7,7 @@ One small SQLite file for everything Shugo Tracker caches about characters:
   items     each worn item's full details (stats, stones, sets) per character     key -> zlib-packed JSON
   boards    each Daevanion board's layout and opened nodes per character           key -> zlib-packed JSON
 
-Replaces character_cache.json (rewritten whole on every exit) and one JSON file per profile. Lookups are what
-make Nearby fast: a player you've met before resolves without asking NCSOFT again.
+Lookups are what make Nearby fast: a player you've met before resolves without asking NCSOFT again.
 """
 from __future__ import annotations
 
@@ -172,52 +171,10 @@ class Store:
         self._run("DELETE FROM items WHERE ts < ? OR owner NOT IN (SELECT key FROM profiles)", (now - profiles_keep,))
         self._run("DELETE FROM boards WHERE ts < ? OR owner NOT IN (SELECT key FROM profiles)", (now - profiles_keep,))
 
-    def clear(self) -> None:
-        for table in ("details", "profiles", "lookups", "items", "boards"):
-            self._run(f"DELETE FROM {table}")
-        self._run("VACUUM")
-
-    def size(self) -> int:
-        if not self.path:
-            return 0
-        return sum(os.path.getsize(self.path + s) for s in ("", "-wal") if os.path.exists(self.path + s))
-
-    def counts(self) -> dict[str, int]:
-        return {t: (self._run(f"SELECT COUNT(*) FROM {t}") or [(0,)])[0][0]
-                for t in ("details", "profiles", "lookups", "items", "boards")}
-
     def close(self) -> None:
         with self._lock:
             try:
                 self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
                 self._db.close()
             except sqlite3.Error:
-                pass
-
-    # ───── moving off the old files ─────
-    def migrate(self, details_json: str | None, profile_dir: str | None) -> None:
-        """Import character_cache.json once and delete it; old per-profile JSON files are just removed."""
-        if details_json and os.path.exists(details_json):
-            try:
-                with open(details_json, encoding="utf-8") as f:
-                    data = json.load(f)
-                rows = [(k, float(v.get("ts", 0)), json.dumps({kk: vv for kk, vv in v.items()
-                                                                if kk != "ts" and vv is not None}, **_DUMPS))
-                        for k, v in (data.items() if isinstance(data, dict) else []) if isinstance(v, dict)]
-                self._run("INSERT OR REPLACE INTO details VALUES (?, ?, ?)", rows, many=True)
-            except (OSError, ValueError, TypeError):
-                pass
-            try:
-                os.remove(details_json)
-            except OSError:
-                pass
-        if profile_dir and os.path.isdir(profile_dir):
-            for f in os.listdir(profile_dir):
-                try:
-                    os.remove(os.path.join(profile_dir, f))
-                except OSError:
-                    pass
-            try:
-                os.rmdir(profile_dir)
-            except OSError:
                 pass

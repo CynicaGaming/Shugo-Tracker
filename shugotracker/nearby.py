@@ -157,12 +157,6 @@ class NearbyService:
         self._set_state(CAPTURING, "demo")
         feed(self)
 
-    def retry(self) -> None:
-        """'Try again' after a capture error."""
-        if self.state in (NO_ADMIN, NO_LIBS, ERROR):
-            self.state = OFF
-            self.start()
-
     def _capture_log(self, msg: str) -> None:
         self.log(f"nearby: {msg}")
         low = msg.lower()
@@ -493,15 +487,6 @@ class NearbyService:
         with self._lock:
             return self.tracker.me.name, self.tracker.me.server
 
-    def counts(self) -> dict[str, int]:
-        with self._lock:
-            g = self.tracker.groups()
-            return {k: len(v) for k, v in g.items()}
-
-    # ───── running log of the game's traffic ─────
-    # While Nearby runs, the traffic it reads is always saved to logs\diagnostics\nearby_<start time>.bin. A new
-    # file starts each time Nearby starts and whenever one passes RUNNING_LOG_MAX; only the newest RUNNING_LOG_KEEP
-    # are kept, so the last stretches of play are always there to send when Nearby misreads something.
     def start_running_log(self) -> str | None:
         if not self.data_dir:
             return None

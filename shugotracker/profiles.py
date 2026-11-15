@@ -42,9 +42,6 @@ class MyCharacters:
     def active(self) -> dict | None:
         return self.slots[self.active_slot] if self.active_slot is not None else None
 
-    def used(self) -> list[tuple[int, dict]]:
-        return [(i, d) for i, d in enumerate(self.slots) if d]
-
     def set(self, slot: int, char: dict) -> None:
         """Put a character in a slot (replacing whoever was there). It becomes active when nothing was, or when it
         replaced the active one; the same character already in another slot moves here."""

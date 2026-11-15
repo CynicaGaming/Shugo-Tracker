@@ -1,12 +1,8 @@
-"""Regenerate assets/ShugoTracker.ico from the drawing in tools/icons.py."""
+"""Regenerate desktop/build/icon.ico (the exe's and window's icon) from the drawing in tools/icons.py."""
 import os
-import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from icons import make_bubble_image, make_icon_image, save_ico  # noqa: E402
+from icons import save_ico
 
-here = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
-save_ico(os.path.join(here, "ShugoTracker.ico"))
-make_icon_image(256).save(os.path.join(here, "icon.png"))
-make_bubble_image(92).save(os.path.join(here, "bubble.png"))
-print("written to", here)
+path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "desktop", "build", "icon.ico")
+save_ico(path)
+print("written", path)

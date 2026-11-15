@@ -43,7 +43,7 @@ class SlotsTest(unittest.TestCase):
         m.set(0, ch("Main", "a"))
         m.set(3, ch("Main", "a"))
         self.assertIsNone(m.slots[0])
-        self.assertEqual((m.active_slot, len(m.used())), (3, 1))
+        self.assertEqual((m.active_slot, sum(1 for d in m.slots if d)), (3, 1))
 
     def test_delete(self):
         cfg = {}

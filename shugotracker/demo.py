@@ -1,4 +1,4 @@
-"""Offline stand-in for the AION 2 endpoints: --demo shows the search window with made-up characters."""
+"""Offline stand-in for the AION 2 endpoints: --demo fills the app with made-up characters and Nearby players."""
 from __future__ import annotations
 
 import random

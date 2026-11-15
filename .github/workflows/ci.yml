@@ -35,7 +35,7 @@ jobs:
       - name: Live API check (real search + details through the app's own client)
         shell: pwsh
         run: |
-          python -m shugotracker.app --search-cli Luna *> live.txt
+          python -m shugotracker.cli --search-cli Luna *> live.txt
           $code = $LASTEXITCODE
           Get-Content live.txt | Select-Object -Last 9 | ForEach-Object { Write-Output "::notice title=live::$_" }
           exit $code
@@ -45,7 +45,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force shots | Out-Null
-          python -m shugotracker.app --bench Luna *> shots\bench.txt
+          python -m shugotracker.cli --bench Luna *> shots\bench.txt
           Get-Content shots\bench.txt | Select-Object -Last 4 | ForEach-Object { Write-Output "::notice title=bench::$_" }
 
       - name: Raw-socket capture sees real traffic
@@ -69,6 +69,10 @@ jobs:
       - name: Install Electron
         working-directory: desktop
         run: npm install --no-audit --no-fund && npm install --no-save --no-audit --no-fund playwright@1.48.2
+
+      - name: Window unit tests (column layout, sorting, Alt-compare)
+        working-directory: desktop
+        run: node --test test/unit.mjs
 
       - name: Screenshots of the real window (demo data)
         working-directory: desktop

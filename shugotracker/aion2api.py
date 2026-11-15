@@ -33,7 +33,6 @@ SEARCH_URL = "https://api-search.plaync.com/aion2global/search/v2/character"
 INFO_URL = "https://aion2.plaync.com/api/character/info"
 PORTRAIT_BASE = "https://profileimg.plaync.com"
 SUB_REGIONS = ["nae", "naw", "eu", "la", "as"]
-REGION_LABELS = {"nae": "NA East", "naw": "NA West", "eu": "Europe", "la": "Latin America", "as": "Asia"}
 USER_AGENT = f"ShugoTracker/{__version__} (+https://github.com/CynicaGaming/Shugo-Tracker)"
 
 CLASS_RANGES = [
@@ -43,7 +42,6 @@ CLASS_RANGES = [
 ]
 
 
-CLASSES = [name for _lo, _hi, name in CLASS_RANGES]
 LEVEL_CAP = 45
 
 
@@ -231,14 +229,13 @@ class Api:
 
     def __init__(self, db_path: str | None = None, workers: int = 6, rate: float = REQUESTS_PER_SECOND,
                  cache_ttl_s: float = DETAILS_FRESH_S, log: Callable[[str], None] | None = None,
-                 session: requests.Session | None = None, migrate_from: tuple = (None, None)):
+                 session: requests.Session | None = None):
         self.log = log or (lambda s: None)
         self.session = session or requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT, "Accept": "application/json"})
         self.limiter = RateLimiter(rate=rate, max_rate=rate)   # recovers after a back-off, never above
         self.cache_ttl_s = cache_ttl_s
         self.store = Store(db_path)
-        self.store.migrate(*migrate_from)
         self.store.prune(DETAILS_KEEP_S, PROFILE_KEEP_S, PROFILE_DISK_MAX, LOOKUP_KEEP_S)
         self._cache: dict[str, dict] = self.store.all_details(time.time() - DETAILS_KEEP_S)
         self.lookup_hits = 0
@@ -680,18 +677,6 @@ class Api:
             self._cache[c.key] = {**info, "ts": now}
         self.store.put_details(c.key, info, now)
 
-    def clear_caches(self) -> None:
-        """Forget every cached search, card number, profile and name lookup (memory and disk)."""
-        with self._cache_lock:
-            self._cache.clear()
-            self._recent_info.clear()
-        with self._pflock:
-            self._profiles.clear()
-            self._item_details.clear()
-            self._boards.clear()
-        self._items_loaded.clear()
-        self._search_cache.clear()
-        self.store.clear()
 
 def character_from_dict(d: dict) -> Character:
     return Character(**{k: v for k, v in d.items() if k in Character.__dataclass_fields__})

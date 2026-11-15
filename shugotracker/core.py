@@ -49,10 +49,9 @@ class Core:
     def __init__(self, root: str, emit: Callable[[dict], None], demo: bool = False, log=None,
                  showcase: str | None = None):
         """root: the app folder (data, cache, logs live next to the exe). emit: sends one message to the UI."""
-        from .app import DEFAULT_CONFIG, load_config, migrate_to_app_folder, save_config
+        from .config import DEFAULTS, load_config, migrate, migrate_to_app_folder
         from .favorites import Favorites
         from .profiles import MyCharacters
-        from .settings import migrate
 
         self.root, self.demo, self._emit = root, demo, emit
         self.data, self.cache, self.logs = (os.path.join(root, d) for d in ("data", "cache", "logs"))
@@ -65,9 +64,7 @@ class Core:
             except OSError:
                 pass
         self.config_path = os.path.join(self.data, "config.json")
-        self._save_config = save_config
-        self.cfg = {**DEFAULT_CONFIG, **load_config(self.config_path)} if not demo else dict(DEFAULT_CONFIG)
-        migrate(self.cfg)
+        self.cfg = migrate(dict(DEFAULTS)) if demo else load_config(self.config_path)
         session = None
         if showcase:                                     # README screenshots: demo data plus one real character
             from .demo import ShowcaseSession
@@ -100,7 +97,8 @@ class Core:
 
     def save(self) -> None:
         if not self.demo:
-            self._save_config(self.config_path, self.cfg)
+            from .config import save_config
+            save_config(self.config_path, self.cfg)
 
     def set_config(self, key: str, value) -> None:
         self.cfg[key] = value
@@ -284,9 +282,12 @@ class Core:
         return to_json(t)
 
     def rpc_alt(self) -> bool | None:
-        """Whether Alt is held, even while the game has focus (Alt-compare); None where it can't be asked."""
-        from .desktop import alt_down
-        return alt_down()
+        """Whether Alt is held, even while the game has focus (Alt-compare in a profile); None where Windows
+        can't be asked (the window then goes by its own key events)."""
+        if sys.platform != "win32":
+            return None
+        import ctypes
+        return bool(ctypes.windll.user32.GetAsyncKeyState(0x12) & 0x8000)   # VK_MENU
 
     # ───── Nearby ─────
     def rpc_nearby_enable(self, on: bool) -> dict:
@@ -313,8 +314,7 @@ class Core:
         for _s, c, *_ in rows + recent:
             self.chars[c.key] = c
         return {"enabled": bool(self.cfg.get("nearby_enabled")), "state": nb.state, "detail": nb.detail,
-                "stats": dict(nb.stats),
-                "rows": [{"side": s, "char": char_json(c), "first_seen": p.first_seen} for s, c, p in rows],
+                "rows": [{"side": s, "char": char_json(c)} for s, c, _p in rows],
                 "recent": [{"side": s, "char": char_json(c), "seen": t, "fought": f} for s, c, t, f in recent]}
 
     def _watch_nearby(self) -> None:
@@ -345,20 +345,6 @@ class Core:
     def rpc_nearby_clear(self, which: str = "nearby") -> bool:
         (self.nearby.clear_recent if which == "recent" else self.nearby.clear_nearby)()
         return True
-
-    def rpc_nearby_status(self) -> dict:
-        """Settings: what Nearby is doing right now (state, bytes read, players seen)."""
-        return self._nearby_state()
-
-    # ───── settings ─────
-    def rpc_cache_size(self) -> int:
-        from .desktop import folder_size
-        return folder_size(self.cache) if os.path.isdir(self.cache) else 0
-
-    def rpc_cache_clear(self) -> int:
-        before = self.rpc_cache_size()
-        self.api.clear_caches()
-        return max(0, before - self.rpc_cache_size())
 
     def rpc_recent_max(self, n: int) -> bool:
         self.set_config("recent_max", int(n))
@@ -404,6 +390,9 @@ def serve_stdio(root: str, demo: bool = False, showcase: str | None = None) -> i
         logf.flush()
     log(f"Shugo Tracker core v{__version__}" + (" (demo)" if demo else ""))
     core = Core(root, write, demo=demo or bool(showcase), log=log, showcase=showcase)
+    # Requests run on a small pool (some wait on the network; most are instant), not a new thread each.
+    from concurrent.futures import ThreadPoolExecutor
+    pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="rpc")
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -414,7 +403,8 @@ def serve_stdio(root: str, demo: bool = False, showcase: str | None = None) -> i
             continue
         if msg.get("method") == "quit":
             break
-        threading.Thread(target=core.handle, args=(msg, write), daemon=True).start()
+        pool.submit(core.handle, msg, write)
+    pool.shutdown(wait=False, cancel_futures=True)
     core.close()
     return 0
 

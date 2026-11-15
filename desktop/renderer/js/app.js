@@ -2,7 +2,7 @@
 // in place of the list (profile.js, settings.js).
 import { call, on, win } from "./bridge.js";
 import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, ago, clear,
-  factionColor, fmtInt, h, layoutColumns, sortChars } from "./dom.js";
+  factionColor, fmtInt, h, icon, layoutColumns, sortChars } from "./dom.js";
 import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
 import { ProfileView } from "./profile.js";
 import { SettingsView } from "./settings.js";
@@ -15,7 +15,6 @@ const S = {                                    // everything the window shows
   keyword: "", gen: 0, results: [], regionState: {},
   chars: new Map(), favorites: [], my: { slots: [], active: null },
   nearby: { enabled: false, state: "", rows: [], recent: [] },
-  hover: null,
   update: { state: "idle" },                   // the self-updater (desktop/updater.js)
 };
 export const app = { S, call, save, openProfile, closeScreen, myChar, pickMine, refreshList: () => list.render() };
@@ -30,13 +29,21 @@ const view = h("div.view");
 const footer = h("div.footer");
 root.append(titlebar, view, footer);
 
+let titleSig = "";
 function paintTitlebar() {
+  // Redrawn on many events (Nearby, cards, updates): only when something it shows has changed.
+  const me0 = myChar(), up0 = S.update;
+  const sig = JSON.stringify([S.screen, S.mode, S.favorites.length, S.nearby.enabled, S.nearby.rows.length,
+    S.nearby.recent.length, up0.state, up0.latest, Math.round((up0.progress || 0) * 100), up0.clicked,
+    S.cfg.always_on_top, me0?.key, me0?.portrait, me0?.name, me0?.server_name, S.my.slots.some(Boolean)]);
+  if (sig === titleSig) return;
+  titleSig = sig;
   clear(titlebar);
   titlebar.append(h("span.logo", { html: LOGO }));
   const tabs = h("div.tabs");
   if (S.screen !== "list") {
     const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent" }[S.mode], settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
-    tabs.append(h("button.tab.back", { onClick: closeScreen }, h("span", { html: ICONS.back, style: { display: "contents" } }), back));
+    tabs.append(h("button.tab.back", { onClick: closeScreen }, icon("back"), back));
   } else {
     const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode) },
       label, count ? h("span.count", {}, count) : null);
@@ -244,7 +251,7 @@ function filtersBar() {
     for (const k of ["regions", "factions", "classes", "level_min", "level_max"]) call("config.set", { key: k, value: S.cfg[k] });
     filtersChanged(); } }, "Reset"));
   row.append(h("button.pill.more", { class: open ? "open" : extra ? "on" : "", onClick: () => { save("filters_open", !open); render(); } },
-    h("span", { html: ICONS.sliders, style: { display: "contents" } }), "Filters", extra ? h("b.count", {}, String(extra)) : null));
+    icon("sliders"), "Filters", extra ? h("b.count", {}, String(extra)) : null));
   box.append(row);
 
   if (open) {
@@ -301,13 +308,18 @@ const list = (() => {
   const box = h("div.list");
   const spacer = h("div.spacer");
   box.append(spacer);
-  let rows = [], layout = null, frame = 0, wantTimer = 0;
-  box.addEventListener("scroll", () => draw());
+  let rows = [], layout = null, layoutSig = "", frame = 0, drawFrame = 0, wantTimer = 0;
+  // Row elements are kept by character and reused while what they show is unchanged, so scrolling and card
+  // updates only build the rows that are new or different (and portraits never reload).
+  const made = new Map();                                // key -> { el, sig }
+  box.addEventListener("scroll", () => { cancelAnimationFrame(drawFrame); drawFrame = requestAnimationFrame(draw); }, { passive: true });
   new ResizeObserver(() => render()).observe(box);
 
   function render() {
     rows = visible();
     layout = layoutColumns(box.clientWidth || 560, columns());
+    const sig = JSON.stringify(layout) + S.mode;
+    if (sig !== layoutSig) { layoutSig = sig; made.clear(); }
     drawHead();
     draw();
   }
@@ -329,45 +341,66 @@ const list = (() => {
   function draw() {
     const top = box.scrollTop, height = box.clientHeight;
     const grouped = S.mode === "nearby" || S.mode === "recent";
+    // everything rows need, worked out once per draw
+    const ctx = {
+      fav: new Set(S.favorites.map((f) => f.key)),
+      side: grouped ? new Map((S.mode === "recent" ? S.nearby.recent : S.nearby.rows).map((r) => [r.char.name, r.side])) : new Map(),
+      recent: S.mode === "recent" ? new Map(S.nearby.recent.map((r) => [r.char.key, r])) : null,
+      here: S.mode === "recent" ? new Set(S.nearby.rows.map((r) => r.char.key)) : null,
+      race: grouped ? { enemy: sideRace("enemy"), ally: sideRace("ally") } : {},
+    };
     const items = [];                                     // [y, kind, payload]
     let y = 0, lastSide = null;
-    const sideOf = grouped ? Object.fromEntries((S.mode === "recent" ? S.nearby.recent : S.nearby.rows).map((r) => [r.char.name, r.side])) : {};
     for (const c of rows) {
-      const side = sideOf[c.name];
+      const side = ctx.side.get(c.name);
       if (grouped && side && side !== lastSide) { items.push([y, "group", side]); y += 28; lastSide = side; }
       items.push([y, "row", c]); y += ROW;
     }
-    const loading = S.mode === "search" && Object.entries(S.regionState).some(([r, st]) => st.loading && (!fset("regions").size || fset("regions").has(r)));
-    const skeletons = loading ? 6 : 0;
-    for (let i = 0; i < skeletons; i++) { items.push([y, "skel"]); y += ROW; }
+    const wanted = fset("regions");
+    const loading = S.mode === "search" && Object.entries(S.regionState).some(([r, st]) => st.loading && (!wanted.size || wanted.has(r)));
+    for (let i = 0; loading && i < 6; i++) { items.push([y, "skel"]); y += ROW; }
     spacer.style.height = `${y}px`;
-    clear(spacer);
-    const want = [];
+    const nodes = [], want = [], shown = new Set();
     for (const [iy, kind, p] of items) {
       if (iy + ROW < top - 200 || iy > top + height + 200) continue;
       if (kind === "group") {
-        const race = sideRace(p);
-        spacer.append(h("div.group", { class: p, style: { top: `${iy + 2}px`, ...(race ? { color: factionColor(race) } : {}) } },
+        const race = ctx.race[p];
+        nodes.push(h("div.group", { class: p, style: { top: `${iy + 2}px`, ...(race ? { color: factionColor(race) } : {}) } },
           race === 1 ? "Elyos" : race === 2 ? "Asmodians" : p === "enemy" ? "Enemies" : "Allies"));
+      } else if (kind === "skel") nodes.push(skeletonRow(iy));
+      else {
+        nodes.push(rowFor(p, iy, ctx)); shown.add(p.key);
+        if (p.status === "none" || !p.status || p.stale) want.push(p.key);
       }
-      else if (kind === "skel") spacer.append(skeletonRow(iy));
-      else { spacer.append(rowEl(p, iy, sideOf[p.name])); if (p.status === "none" || !p.status || p.stale) want.push(p.key); }
     }
-    if (!items.length && !loading) spacer.append(emptyState());
+    if (!items.length && !loading) nodes.push(emptyState());
+    spacer.replaceChildren(...nodes);
+    if (made.size > 400) for (const k of made.keys()) if (!shown.has(k)) made.delete(k);
     if (want.length) { clearTimeout(wantTimer); wantTimer = setTimeout(() => call("cards.want", { keys: want }), 30); }
     if (S.mode === "search" && top + height > y - ROW * 8) loadMore();
   }
 
-  function cell(k, c) {
+  /** A row for c at height y: the one already made if nothing it shows has changed, else a new one. */
+  function rowFor(c, y, ctx) {
+    const side = ctx.side.get(c.name), r = ctx.recent?.get(c.key), here = ctx.here?.has(c.key);
+    const sig = [c.name, c.class_name, c.level, c.legion, c.server_name, c.region, c.race, c.portrait, c.status,
+      c.gear_score, c.combat_power, ctx.fav.has(c.key), side, ctx.race[side], r && ago(r.seen), r?.fought, here].join("|");
+    let m = made.get(c.key);
+    if (!m || m.sig !== sig) { m = { el: rowEl(c, side, ctx, r, here), sig }; made.set(c.key, m); }
+    m.el.style.top = `${y}px`;
+    return m.el;
+  }
+
+  function cell(k, c, r, here) {
     const [x0, x1, anchor] = layout.spans[k];
     const style = { left: `${x0}px`, width: `${x1 - x0}px`, justifyContent: anchor === "e" ? "flex-end" : "flex-start" };
     const loading = c.status === "loading" || c.status === "none" || !c.status;
-    const num = (v, cls = "") => h("div.c.num", { class: cls, style }, loading && v == null ? h("i", { style: { width: "34px", height: "9px", borderRadius: "3px", background: "var(--panel-2)", display: "block" } }) : fmtInt(v));
+    const num = (v, cls = "") => h("div.c.num", { class: cls, style }, loading && v == null ? h("i.ph") : fmtInt(v));
     switch (k) {
       case "name": {
         const col = CLASS_COLORS[c.class_name] || "var(--dim)";
         return h("div.c.name", { style },
-          S.mode === "favorites" ? h("span.grip", { html: ICONS.grip, style: { width: "12px", display: "flex" }, onMousedown: (e) => startDrag(e, c) }) : null,
+          S.mode === "favorites" ? h("span.grip", { html: ICONS.grip, onMousedown: (e) => startDrag(e, c) }) : null,
           h("span.badge", { style: { color: col, boxShadow: `inset 0 0 0 1px ${col}33` } },
             c.portrait ? h("img", { src: c.portrait, loading: "lazy", onError: (e) => e.target.replaceWith((c.class_name || "?")[0]) })
               : (c.class_name || "?")[0]),
@@ -379,27 +412,22 @@ const list = (() => {
       case "server": return h("div.c.dim", { style }, h("span", {}, `${c.server_name} · ${REGION_NAMES[c.region] || c.region}`));
       case "gs": return num(c.gear_score);
       case "cp": return num(c.combat_power, "cp");
-      case "seen": {
-        const r = S.nearby.recent.find((x) => x.char.key === c.key);
-        const now = S.nearby.rows.some((x) => x.char.key === c.key);
-        return h("div.c", { style: { ...style, color: now ? "var(--green)" : "var(--dim)" } },
-          r?.fought ? h("span", { style: { color: "var(--red)", marginRight: "4px" } }, "⚔") : null,
-          h("span", {}, now ? "Here now" : r ? ago(r.seen) : ""));
-      }
+      case "seen":
+        return h("div.c", { style: { ...style, color: here ? "var(--green)" : "var(--dim)" } },
+          r?.fought ? h("span.fought", {}, "⚔") : null, h("span", {}, here ? "Here now" : r ? ago(r.seen) : ""));
     }
     return null;
   }
 
-  function rowEl(c, y, side) {
-    const fav = S.favorites.some((f) => f.key === c.key);
-    const el = h("div.row", { style: { top: `${y}px` },
+  function rowEl(c, side, ctx, r, here) {
+    const fav = ctx.fav.has(c.key);
+    const el = h("div.row", {
       onClick: (e) => { if (!e.target.closest(".star") && !e.target.closest(".grip")) openProfile(c); },
       onContextmenu: (e) => { e.preventDefault(); rowMenu(c, e.clientX, e.clientY); } });
-    if (side) { const race = sideRace(side); el.append(h("span.side", { style: { background: race ? factionColor(race) : side === "enemy" ? "#ff6b6b" : "#6ab8ff" } })); }
-    for (const k of Object.keys(layout.spans)) el.append(cell(k, c));
+    if (side) { const race = ctx.race[side]; el.append(h("span.side", { style: { background: race ? factionColor(race) : side === "enemy" ? "#ff6b6b" : "#6ab8ff" } })); }
+    for (const k of Object.keys(layout.spans)) el.append(cell(k, c, r, here));
     el.append(h("div.c.star", { class: fav ? "on" : "", style: { left: `${layout.star - 10}px`, width: "20px" },
       html: fav ? ICONS.starFill : ICONS.star, onClick: () => toggleFavorite(c) }));
-    el.querySelector(".star svg")?.setAttribute("width", "15");
     return el;
   }
 
@@ -559,7 +587,7 @@ function render() {
   else if (S.screen === "settings" && settings) view.append(settings.el);
   else if (S.screen === "finder" && finder) view.append(finder.el);
   else {
-    if (S.mode === "search") view.append(h("div.searchbox", {}, h("span", { html: ICONS.search, style: { display: "contents" } }), searchInput));
+    if (S.mode === "search") view.append(h("div.searchbox", {}, icon("search"), searchInput));
     if (S.mode !== "nearby" || S.nearby.enabled) view.append(filtersBar(), list.head);
     view.append(list.box);
     list.render();
@@ -577,7 +605,6 @@ app.render = render;
   for (const c of init.favorites) S.chars.set(c.key, c);
   S.update = { ...(await win.update("state")) };
   win.setAlwaysOnTop(S.cfg.always_on_top !== false);
-  if (S.cfg.opacity) win.setOpacity(S.cfg.opacity);
   paintClock();
   if (!S.my.slots.some(Boolean) && !S.cfg.setup_done && !S.demo) openFinder(0);   // first start: find yourself
   else render();

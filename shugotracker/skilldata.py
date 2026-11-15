@@ -16,7 +16,6 @@ import threading
 from dataclasses import dataclass, field
 
 log = logging.getLogger(__name__)
-SOURCE = "MetaBot.GG"
 _lock = threading.Lock()
 _skills: dict[str, dict] | None = None
 
