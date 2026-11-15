@@ -25,9 +25,9 @@ const W = 560, H = 720;
   await page.fill(".searchbox input", "Cynica");
   await page.keyboard.press("Enter");
   await shot("search", 9000);
-  await page.click(".filters .chip:has-text('More')");
+  await page.click(".pill.more");                         // the Filters panel (class and level)
   await shot("filters", 600);
-  await page.click(".filters .chip:has-text('Less')");
+  await page.click(".pill.more");
   await page.click(".thead", { button: "right" });
   await shot("columns-menu", 400);
   await page.keyboard.press("Escape");
