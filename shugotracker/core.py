@@ -317,6 +317,7 @@ class Core:
         for _s, c, *_ in rows + recent:
             self.chars[c.key] = c
         return {"enabled": bool(self.cfg.get("nearby_enabled")), "state": nb.state, "detail": nb.detail,
+                "whole_area": nb.whole_area or self.demo,
                 "rows": [{"side": s, "char": char_json(c)} for s, c, _p in rows],
                 "recent": [{"side": s, "char": char_json(c), "seen": t, "fought": f} for s, c, t, f in recent]}
 
@@ -330,7 +331,7 @@ class Core:
                 elif time.monotonic() - cleared >= every:
                     cleared = time.monotonic()
                     self.nearby.clear_nearby()
-                v = (self.nearby.version(), bool(self.cfg.get("nearby_enabled")), self.nearby.state)
+                v = (self.nearby.version(), bool(self.cfg.get("nearby_enabled")), self.nearby.state, self.nearby.whole_area)
                 if v != self._nearby_seen:
                     self._nearby_seen = v
                     self.emit("nearby", self._nearby_state())

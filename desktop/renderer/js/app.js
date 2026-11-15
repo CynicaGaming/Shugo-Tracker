@@ -585,6 +585,9 @@ function paintFooter() {
       const total = Object.values(S.regionState).reduce((a, st) => a + (st.total || 0), 0);
       t = total ? `${n} shown of ${fmtInt(total)} matches` : "";
     } else if (S.mode === "favorites") t = `${n} of ${S.favorites.length} favorites`;
+    else if (S.mode === "nearby" && S.nearby.enabled && S.nearby.state === "capturing" && !S.nearby.whole_area) {
+      t = "Showing arrivals since Nearby started · change area to see everyone";
+    }
   }
   status.textContent = t;
 }

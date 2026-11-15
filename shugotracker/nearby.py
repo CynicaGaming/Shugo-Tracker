@@ -88,6 +88,9 @@ class NearbyService:
         self._loaded_since_self = False               # a map load came in since your last own record
         self._self_eid: int | None = None             # your id in the last record of your own
         self._last_roster: tuple = ()
+        # Players already standing around when Nearby starts aren't announced again until you change area (the
+        # game only sends someone as they come into view): until then the list is partial.
+        self.whole_area = False
         self._my_region: str | None = cfg.get("nearby_region") or None
         self.on_region: Callable[[str], None] = lambda r: None   # remember it (set by the app)
         self.on_me: Callable[[str, int], None] = lambda n, s: None  # remember your character (set by the app)
@@ -212,11 +215,13 @@ class NearbyService:
         if isinstance(ev, MapLoaded):
             self._map_loads_seen = True
             self._loaded_since_self = True
+            self.whole_area = True
             if ev.map_id != self.tracker.map_id:
                 self._parked.clear()                # a new area: those ids mean other things now
                 self._dismissed.clear()
         elif isinstance(ev, SelfSeen) and self._new_area(ev) and self.tracker.players:
             self.log(f"nearby: new area (your id changed to {ev.entity_id}): {len(self.tracker.players)} players to Recent")
+            self.whole_area = True
             self._to_recent(list(self.tracker.players.values()))
             self.tracker.clear()
         elif isinstance(ev, RosterSeen):

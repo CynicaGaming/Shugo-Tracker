@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.11
+- Nearby says when its list is partial: players already around when it started only appear once you change area
+
 ## 2.3.10
 - Fixed: with a region, class or level filter on, Nearby no longer hides players whose details haven't loaded yet
 
