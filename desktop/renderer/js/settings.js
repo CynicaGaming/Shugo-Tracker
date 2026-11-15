@@ -72,6 +72,13 @@ export class SettingsView {
       return [r, out];
     };
 
+    el.append(h("div.bar", {}, "Updates"));
+    this.upBox = h("div");
+    el.append(this.upBox);
+    el.append(row(h("div", {}, "Check automatically", h("div.sub", {}, "Looks for new versions every 30 minutes. Nothing downloads until you click.")),
+      toggle(cfg.auto_update !== false, (v) => save("auto_update", v))));
+    this.paintUpdate();
+
     el.append(h("div.bar", {}, "Window"));
     const op = Math.round((cfg.window_opacity ?? 1) * 100);
     const opOut = h("span", { style: { minWidth: "44px", textAlign: "right" } }, `${op}%`);
@@ -88,12 +95,5 @@ export class SettingsView {
     el.append(row("Auto-clear", ...steps(AUTOCLEAR, cfg.nearby_autoclear_s ?? 0, (v) => save("nearby_autoclear_s", v))));
     el.append(row("Recent players", ...steps(RECENT, cfg.recent_max ?? 250, (v) => { cfg.recent_max = v; call("recent.max", { n: v }); }),
       h("button.btn", { onClick: () => call("nearby.clear", { which: "recent" }) }, "Clear")));
-
-    el.append(h("div.bar", {}, "Updates"));
-    this.upBox = h("div");
-    el.append(this.upBox);
-    el.append(row(h("div", {}, "Check automatically", h("div.sub", {}, "Looks for new versions every 30 minutes. Nothing downloads until you click.")),
-      toggle(cfg.auto_update !== false, (v) => save("auto_update", v))));
-    this.paintUpdate();
   }
 }
