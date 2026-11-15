@@ -76,7 +76,7 @@ export class SettingsView {
     el.append(h("div.bar", {}, "Updates"));
     this.upBox = h("div");
     el.append(this.upBox);
-    el.append(row(h("div", {}, "Check Automatically", h("div.sub", {}, "Also when the app starts. Nothing downloads until you click.")),
+    el.append(row("Check Automatically",
       ...steps(UPDATE_EVERY, cfg.update_check_s ?? 1800, (v) => { save("update_check_s", v); win.update(v); })));
     this.paintUpdate();
     win.update("freshen").then((u) => { if (u) { S.update = { ...S.update, ...u }; this.paintUpdate(); } });

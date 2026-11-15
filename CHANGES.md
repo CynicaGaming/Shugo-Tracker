@@ -13,6 +13,7 @@ Each release's notes come from its section here (shown in Settings → Updates).
 - An update now shows as a small green blip on the logo; click the logo for Settings → Updates
 - Menus, buttons, headings and settings use Title Case throughout (My Profile, Add to Favorites, Always on Top)
 - Settings ends with the NCSOFT notice
+- Check Automatically is just the setting, without the note under it
 
 ## 2.3.7
 - Fixed: Nearby in Shugo Festival lists the match's players (from its scoreboard), even when Nearby starts mid-match
