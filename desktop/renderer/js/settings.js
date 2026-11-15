@@ -10,7 +10,6 @@ const fmtWhen = (t) => {
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   return today ? `today, ${time}` : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`;
 };
-const fmtBytes = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(0)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 
 export class SettingsView {
   constructor(app) {
@@ -86,24 +85,6 @@ export class SettingsView {
       S.nearby = await call("nearby.enable", { on: v });
       if (v && S.nearby.state === "no_admin") win.relaunchAsAdmin();
     })));
-    // What Nearby is doing. Its logs (logs\shugo-core_<time>.log, and the game traffic it read in logs\diagnostics)
-    // is always being written, so there's nothing to start when something goes wrong: just send the folder.
-    const stat = h("div.sub", {}, "…");
-    const STATES = { off: "Off", no_admin: "Needs administrator", no_libs: "Unavailable", starting: "Starting…",
-      waiting: "Waiting for AION 2", capturing: "Running", error: "Stopped" };
-    const fmtMB = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round((n || 0) / 1024)} KB`);
-    const paintStatus = async () => {
-      if (!stat.isConnected && this.statusTimer) { clearInterval(this.statusTimer); return; }
-      const n = await call("nearby.status");
-      const st = n.stats || {};
-      const parts = [STATES[n.state] || n.state || "Off"];
-      if (n.state === "capturing") parts.push(`${fmtMB(st.bytes)} read`, `${st.players_seen || 0} players seen`);
-      else if (n.detail && n.state === "error") parts.push(n.detail);
-      stat.textContent = parts.join(" · ");
-    };
-    el.append(row(h("div", {}, "Status", stat), h("button.btn", { onClick: () => win.openFolder("logs") }, "Open logs")));
-    paintStatus();
-    this.statusTimer = setInterval(paintStatus, 1000);
     el.append(row("Auto-clear", ...steps(AUTOCLEAR, cfg.nearby_autoclear_s ?? 0, (v) => save("nearby_autoclear_s", v))));
     el.append(row("Recent players", ...steps(RECENT, cfg.recent_max ?? 250, (v) => { cfg.recent_max = v; call("recent.max", { n: v }); }),
       h("button.btn", { onClick: () => call("nearby.clear", { which: "recent" }) }, "Clear")));
@@ -114,11 +95,5 @@ export class SettingsView {
     el.append(row(h("div", {}, "Check automatically", h("div.sub", {}, "Looks for new versions every 30 minutes. Nothing downloads until you click.")),
       toggle(cfg.auto_update !== false, (v) => save("auto_update", v))));
     this.paintUpdate();
-
-    el.append(h("div.bar", {}, "Data"));
-    const size = h("div.sub", {}, "…");
-    call("cache.size").then((n) => { size.textContent = fmtBytes(n); });
-    el.append(row(h("div", {}, "Clear cache", size), h("button.btn", { onClick: async () => { await call("cache.clear"); size.textContent = fmtBytes(await call("cache.size")); } }, "Clear")));
-    el.append(row("Application folder", h("button.btn", { onClick: () => win.openFolder() }, "Open")));
   }
 }

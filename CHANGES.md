@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.2.5
+- Settings is shorter: no Data section or Nearby status
+
 ## 2.2.4
 - Logs are named by when they started (for example shugo-core_2026-11-14_22-51-03.log); the newest few are kept, none older than 14 days
 - Every log line starts with the full date and time, to the millisecond
