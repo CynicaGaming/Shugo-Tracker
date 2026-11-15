@@ -19,8 +19,9 @@ const bullets = (body) => String(body || "").split(/\r?\n/).map((l) => l.trim())
 const newer = (a, b) => { const x = parse(a), y = parse(b); if (!x || !y) return false; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
 
 class Updater {
-  constructor({ exe, dir, version, dev, onChange }) {
-    Object.assign(this, { exe, dir, version, dev, onChange });
+  /** launch(args): starts the new exe (main.js decides how: as administrator when Nearby needs it). */
+  constructor({ exe, dir, version, dev, onChange, launch }) {
+    Object.assign(this, { exe, dir, version, dev, onChange, launch });
     this.state = { state: "idle", current: version, latest: null, progress: 0, error: null, notes: [], checkedAt: null };
     this.staged = path.join(dir, `${EXE_ASSET}.new`);
     try { fs.rmSync(`${exe}.old`, { force: true }); } catch { /* still locked: next time */ }
@@ -85,8 +86,9 @@ class Updater {
   /** Swap in the new exe and start it; this copy then quits. */
   restart() {
     if (this.state.state !== "ready" || !this.swap()) return false;
-    spawn(this.exe, ["--after-update"], { detached: true, stdio: "ignore", cwd: this.dir }).unref();
-    app.releaseSingleInstanceLock();
+    app.releaseSingleInstanceLock();                     // the new copy takes over
+    if (this.launch) this.launch(["--after-update"]);
+    else spawn(this.exe, ["--after-update"], { detached: true, stdio: "ignore", cwd: this.dir }).unref();
     app.quit();
     return true;
   }

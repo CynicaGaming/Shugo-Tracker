@@ -9,6 +9,9 @@ Each release's notes come from its section here (shown in Settings → Updates).
 - New look for the filters: one region switch, Elyos and Asmodians toggles, and a Filters button (with a count) for class and level
 - Region names tidied up: NA East, NA West, Europe, Latin America, Asia
 
+## 2.3.1
+- Fixed: with Nearby on, restarting for an update starts the new version as administrator, so Nearby keeps working
+
 ## 2.3.0
 - Smoother lists: scrolling and live updates reuse rows instead of rebuilding them, so portraits no longer reload
 - The title bar only redraws when something on it changes
