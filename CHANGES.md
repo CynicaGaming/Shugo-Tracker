@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.2.7
+- New look for the filters: one region switch, Elyos and Asmodians toggles, and a Filters button (with a count) for class and level
+- Region names tidied up: NA East, NA West, Europe, Latin America, Asia
+
 ## 2.2.6
 - Updates is now first in Settings, with simpler buttons: Download, Installing…, Restart
 

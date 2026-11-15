@@ -29,7 +29,9 @@ export const clear = (el) => { while (el.firstChild) el.firstChild.remove(); ret
 export const fmtInt = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US"));
 export const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-export const REGION_NAMES = { nae: "NA - East", naw: "NA - West", eu: "Europe", la: "Latin America", as: "Asia" };
+export const REGION_NAMES = { nae: "NA East", naw: "NA West", eu: "Europe", la: "Latin America", as: "Asia" };
+/** Short region names for tight spots (the filter bar). */
+export const REGION_SHORT = { nae: "NA East", naw: "NA West", eu: "EU", la: "LATAM", as: "Asia" };
 export const CLASSES = ["Gladiator", "Templar", "Ranger", "Assassin", "Spiritmaster", "Sorcerer", "Cleric", "Chanter", "Brawler"];
 export const CLASS_COLORS = {
   Gladiator: "#e0864a", Templar: "#d8b44a", Ranger: "#7fc06a", Assassin: "#c96ad6", Spiritmaster: "#5fc4c4",
@@ -57,6 +59,7 @@ export const ICONS = {
   update: P('<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>'),
   grip: P('<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'),
   caret: P('<path d="m6 9 6 6 6-6"/>'),
+  sliders: P('<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>'),
   swords: P('<path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="m13 19 6-6"/><path d="m16 16 4 4"/><path d="M19 21l2-2"/>'),
 };
 export const icon = (name) => h("span", { html: ICONS[name], style: { display: "contents" } });

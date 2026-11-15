@@ -1,7 +1,7 @@
 // The window: title bar, Search / Favorites / Nearby / Recent lists, menus, footer. Profile and Settings open
 // in place of the list (profile.js, settings.js).
 import { call, on, win } from "./bridge.js";
-import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, ago, clear,
+import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, REGION_SHORT, ago, clear,
   factionColor, fmtInt, h, layoutColumns, sortChars } from "./dom.js";
 import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
 import { ProfileView } from "./profile.js";
@@ -223,30 +223,43 @@ function filtersBar() {
     save(key, [...s]);
     filtersChanged();
   };
-  const row1 = h("div.chips");
-  row1.append(h("button.chip", { class: regions.size ? "" : "on", onClick: () => { save("regions", []); filtersChanged(); } }, "All"));
-  for (const r of S.regions) row1.append(h("button.chip", { class: regions.has(r) ? "on" : "", onClick: () => toggle("regions", r) }, REGION_NAMES[r]));
-  row1.append(h("span.sep"));
-  for (const [v, n] of [["1", "Elyos"], ["2", "Asmodian"]]) row1.append(h("button.chip", { class: factions.has(v) ? "on" : "", onClick: () => toggle("factions", v) }, n));
-  row1.append(h("span.grow"));
-  const advanced = !!S.cfg.filters_open;
-  const anyAdv = classes.size || S.cfg.level_min != null || S.cfg.level_max != null;
-  if (regions.size || factions.size || anyAdv) row1.append(h("button.chip.solid", { onClick: () => {
+  // Region: one segmented control ("All" or any mix of regions).
+  const seg = h("div.seg", {}, h("button", { class: regions.size ? "" : "on", onClick: () => { save("regions", []); filtersChanged(); } }, "All"));
+  for (const r of S.regions) seg.append(h("button", { class: regions.has(r) ? "on" : "", title: REGION_NAMES[r], onClick: () => toggle("regions", r) }, REGION_SHORT[r] || r));
+  box.append(seg);
+
+  // Faction toggles, the Filters panel (class and level), and Reset when anything is set.
+  const levelSet = S.cfg.level_min != null || S.cfg.level_max != null;
+  const extra = classes.size + (levelSet ? 1 : 0);
+  const open = !!S.cfg.filters_open;
+  const row = h("div.frow2");
+  for (const [v, n] of [["1", "Elyos"], ["2", "Asmodians"]]) {
+    row.append(h("button.pill", { class: factions.has(v) ? "on" : "", style: { "--fc": factionColor(+v) }, onClick: () => toggle("factions", v) },
+      h("i.dia"), n));
+  }
+  row.append(h("span.grow"));
+  if (regions.size || factions.size || extra) row.append(h("button.link", { onClick: () => {
     for (const k of ["regions", "factions", "classes"]) S.cfg[k] = [];
     S.cfg.level_min = S.cfg.level_max = null;
     for (const k of ["regions", "factions", "classes", "level_min", "level_max"]) call("config.set", { key: k, value: S.cfg[k] });
-    filtersChanged(); } }, "Clear"));
-  row1.append(h("button.chip", { class: anyAdv ? "on" : "", onClick: () => { save("filters_open", !advanced); render(); } }, advanced ? "Less ▴" : "More ▾"));
-  box.append(row1);
-  if (advanced) {
-    const row2 = h("div.chips", {}, h("span.label", {}, "Class"));
-    for (const c of CLASSES) row2.append(h("button.chip", { class: classes.has(c) ? "on" : "", onClick: () => toggle("classes", c) }, c));
-    const lv = (key) => h("input.lvl", { value: S.cfg[key] ?? "", placeholder: key === "level_min" ? "min" : "max",
+    filtersChanged(); } }, "Reset"));
+  row.append(h("button.pill.more", { class: open ? "open" : extra ? "on" : "", onClick: () => { save("filters_open", !open); render(); } },
+    h("span", { html: ICONS.sliders, style: { display: "contents" } }), "Filters", extra ? h("b.count", {}, String(extra)) : null));
+  box.append(row);
+
+  if (open) {
+    const panel = h("div.fpanel");
+    const cls = h("div.fclasses");
+    for (const c of CLASSES) {
+      cls.append(h("button.pill", { class: classes.has(c) ? "on" : "", style: { "--fc": CLASS_COLORS[c] }, onClick: () => toggle("classes", c) }, h("i.dot"), c));
+    }
+    const lv = (key) => h("input.lvl", { value: S.cfg[key] ?? "", placeholder: key === "level_min" ? "1" : "45", inputmode: "numeric",
       onInput: (e) => { clearTimeout(e.target._t); e.target._t = setTimeout(() => {
         const n = parseInt(e.target.value, 10); save(key, Number.isFinite(n) ? Math.max(1, Math.min(45, n)) : null); filtersChanged(false);
       }, 600); } });
-    const row3 = h("div.chips", {}, h("span.label", {}, "Level"), lv("level_min"), h("span", { style: { color: "var(--faint)" } }, "–"), lv("level_max"));
-    box.append(row2, row3);
+    panel.append(h("div.flabel", {}, "Class"), cls,
+      h("div.flabel", {}, "Level"), h("div.flevel", {}, lv("level_min"), h("span", {}, "to"), lv("level_max")));
+    box.append(panel);
   }
   return box;
 }
