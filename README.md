@@ -90,7 +90,7 @@ and a ⚔ for anyone who fought you.
 **★ Favorites**<br>
 Star friends, rivals and your legion. Drag them into your own order.
 
-Save up to five of your own characters (right-click → **Set Profile**) and switch between them from
+Save up to five of your own characters (right-click → **Set as My Character**) and switch between them from
 your name in the top right.
 
 </td>

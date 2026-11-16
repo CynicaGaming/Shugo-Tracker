@@ -88,7 +88,7 @@ function meMenu(anchor) {
   }));
   const items = [];
   if (me) items.push({ label: "My Profile", onClick: async () => openProfile(await call("my.character")) });
-  if (used.length) items.push({ label: "Switch Profile", submenu: switchItems });
+  if (used.length) items.push({ label: "Switch Character", submenu: switchItems });
   const free = S.my.slots.findIndex((d) => !d);
   if (free >= 0) items.push({ label: used.length ? "Add Character" : "Find My Character", onClick: () => openFinder(free) });
   items.push("-", { label: "Settings", onClick: openSettings });
@@ -550,7 +550,7 @@ function rowMenu(c, x, y) {
     { label: fav ? "Remove from Favorites" : "Add to Favorites", disabled: !known, onClick: () => toggleFavorite(c) },
     { label: "Copy Name", onClick: () => navigator.clipboard.writeText(c.name) },
     { label: "Refresh", disabled: !known, onClick: () => call("card.refresh", { key: c.key }) },
-    { label: "Set Profile", disabled: !known, submenu: () => S.my.slots.map((d, i) => ({
+    { label: "Set as My Character", disabled: !known, submenu: () => S.my.slots.map((d, i) => ({
       label: d ? d.name : `Set Character ${i + 1}`, selected: d && `${d.server_id}:${d.char_id}` === c.key,
       onClick: () => setMy("my.set", { key: c.key, slot: i }) })) },
   ];
