@@ -315,7 +315,7 @@ export class ProfileView {
       const st = by[type], v = st?.value || 0;
       prim.append(tip(h("div.mstat", { class: v ? "" : "zero" }, h("span.n", {}, name), h("b", {}, fmtInt(v))), name, null, st));
     }
-    const gods = h("div.dstats");                       // bars out of 100, with a mark at 50
+    const gods = h("div.dstats");                       // bars out of 100 (50 is halfway)
     for (const [type, god, desc] of DEITY) {
       const v = by[type]?.value || 0;
       gods.append(tip(h("div.dstat", { class: v ? "" : "zero" },
