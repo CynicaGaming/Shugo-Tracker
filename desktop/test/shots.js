@@ -7,7 +7,12 @@ const fs = require("fs");
   const out = path.join(__dirname, "..", "..", "shots");
   fs.mkdirSync(out, { recursive: true });
   const app = await electron.launch({ args: [path.join(__dirname, ".."), "--demo"], cwd: path.join(__dirname, "..") });
-  const page = await app.firstWindow();
+  await app.firstWindow();
+  let page;                                                // the main window (not the tooltip window)
+  for (let i = 0; i < 100 && !page; i++) {
+    page = app.windows().find((w) => w.url().endsWith("index.html"));
+    if (!page) await new Promise((r) => setTimeout(r, 100));
+  }
   const log = [];
   page.on("pageerror", (e) => log.push(`pageerror: ${e}`));
   page.on("console", (m) => { if (m.type() === "error") log.push(`console: ${m.text()}`); });

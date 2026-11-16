@@ -112,7 +112,7 @@ function createWindow() {
   opacity = Math.max(0.3, Math.min(1, Number(cfg.window_opacity) || 1));
   if (opacity < 1) win.setOpacity(opacity);
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
-  win.once("ready-to-show", () => { onScreen(); win.show(); });
+  win.once("ready-to-show", () => { onScreen(); win.show(); makeTipWin(); });
   for (const ev of ["minimize", "restore", "hide", "show", "maximize", "unmaximize", "unresponsive", "responsive"]) {
     win.on(ev, () => winLog(`window ${ev}`));
   }
@@ -127,7 +127,6 @@ function createWindow() {
   win.on("close", () => { if (!quitting) saveBounds(); });
   win.on("closed", () => { win = null; tipWin?.destroy(); });
   for (const ev of ["move", "minimize", "hide"]) win.on(ev, hideTipWin);
-  makeTipWin();
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
 }
 

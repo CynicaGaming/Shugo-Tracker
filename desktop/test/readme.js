@@ -11,7 +11,12 @@ const W = 560, H = 720;
   fs.mkdirSync(out, { recursive: true });
   const app = await electron.launch({ args: [path.join(__dirname, ".."), "--showcase=Cynica@Kaisinel=Cynica"],
     cwd: path.join(__dirname, "..") });
-  const page = await app.firstWindow();
+  await app.firstWindow();
+  let page;                                                // the main window (not the tooltip window)
+  for (let i = 0; i < 100 && !page; i++) {
+    page = app.windows().find((w) => w.url().endsWith("index.html"));
+    if (!page) await new Promise((r) => setTimeout(r, 100));
+  }
   await app.evaluate(({ BrowserWindow }, [w, h]) => BrowserWindow.getAllWindows()[0].setContentSize(w, h), [W, H]);
   const shot = async (name, wait = 600) => { await page.waitForTimeout(wait); await page.screenshot({ path: path.join(out, `show-${name}.png`) }); };
   const core = (method, params) => page.evaluate(async ([m, p]) => {
