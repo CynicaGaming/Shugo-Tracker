@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   release:
@@ -57,7 +58,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ok=$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=${{ github.sha }}&status=success" -q '.total_count')
-          if [ "$ok" = "0" ]; then echo "The Tests run for ${{ github.sha }} hasn't passed: not publishing"; exit 1; fi
+          if [ "$ok" = "0" ] || [ -z "$ok" ]; then echo "The Tests run for ${{ github.sha }} hasn't passed: not publishing"; exit 1; fi
 
       - name: Stamp version
         shell: pwsh
