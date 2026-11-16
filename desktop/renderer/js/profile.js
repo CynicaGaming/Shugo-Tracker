@@ -13,7 +13,7 @@ const SLOT_NAMES = { MainHand: "Main Hand", SubHand: "Off Hand", Earring1: "Earr
   Pants: "Legs" };
 const slotName = (s) => SLOT_NAMES[s] || (s.startsWith("Arcana") ? "Arcana" : s);
 // Main stats, in the game's names; the deity stats with the game's own descriptions (shown on hover).
-const PRIMARY = [["STR", "Might"], ["DEX", "Dexterity"], ["AGI", "Precision"], ["CON", "Constitution"], ["INT", "Intelligence"], ["WIS", "Willpower"]];
+const PRIMARY = [["STR", "Might"], ["DEX", "Dexterity"], ["AGI", "Precision"], ["WIS", "Willpower"], ["INT", "Intelligence"], ["CON", "Constitution"]];   // the game's clockwise order
 const DEITY = [
   ["Destruction", "Zikel", "Increase Attack and Perfect Resist."],
   ["Death", "Triniel", "Increase Critical Hit and Regeneration Penetration."],

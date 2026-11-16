@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.27
+- Changed: main stats in the game's order: Might, Dexterity, Precision, Willpower, Intelligence, Constitution
+
 ## 2.3.26
 - Fixed: clearing the search box goes back to the start instead of leaving the old results
 - Changed: "Asmodian" everywhere (filters, Nearby headers), matching Elyos and the game
