@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.29
+- Fixed: 2.3.28 wouldn't open (a typo in the Stats page)
+- Changed: deity stat bars run 0 to 100, with a mark at 50
+
 ## 2.3.28
 - Changed: deity stat bars run 0 to 100, with a mark at 50
 

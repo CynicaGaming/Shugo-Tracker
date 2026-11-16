@@ -315,12 +315,12 @@ export class ProfileView {
       const st = by[type], v = st?.value || 0;
       prim.append(tip(h("div.mstat", { class: v ? "" : "zero" }, h("span.n", {}, name), h("b", {}, fmtInt(v))), name, null, st));
     }
-    const gods = h("div.dstats");
+    const gods = h("div.dstats");                       // bars out of 100, with a mark at 50
     for (const [type, god, desc] of DEITY) {
       const v = by[type]?.value || 0;
       gods.append(tip(h("div.dstat", { class: v ? "" : "zero" },
         h("div.top", {}, h("span.n", {}, type, h("i", {}, god)), h("b", {}, fmtInt(v))),
-        h("div.meter", {},                              // out of 100, with a mark at 50 h("span", { style: { width: `${Math.min(100, Math.max(0, v))}%` } }))),
+        h("div.meter", {}, h("span", { style: { width: `${Math.min(100, Math.max(0, v))}%` } }))),
       `${type} [${god}]`, desc, by[type]));
     }
     return h("div.statspage", {}, prim, gods);
