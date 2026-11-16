@@ -443,7 +443,10 @@ export class ProfileView {
       const head = h("div.cat", {}, cat);
       if (!t) { cards.append(h("div.tcard.none", {}, head, h("div.nm", {}, "None"))); continue; }
       // like the game: the equipped effect on top, the owned effect under a line, dimmer
-      const fx = (cls, list) => list?.length ? h("ul", { class: cls }, list.map((e) => h("li", {}, e))) : null;
+      const fx = (cls, list) => list?.length ? h("div.tfx", { class: cls }, list.map((e) => {
+        const m = /^(.*?)\s+([+-]?[\d.,]+%?)$/.exec(e);              // "Critical Attack +45": name left, value right
+        return h("div.r", {}, h("span", {}, m ? m[1] : e), m ? h("span.v", {}, m[2]) : null);
+      })) : null;
       cards.append(h("div.tcard", {}, head, h("div.nm", {}, t.name), fx("equip", t.effects), fx("owned", t.owned_effects)));
     }
     out.append(cards);

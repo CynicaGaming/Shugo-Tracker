@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.22
+- Changed: title effects read like stat rows (name left, value right) instead of a bulleted list
+
 ## 2.3.21
 - Changed: with both clocks shown, LT always shows its date too
 
