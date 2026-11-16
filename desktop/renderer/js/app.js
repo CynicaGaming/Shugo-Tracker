@@ -166,11 +166,24 @@ function openSettings() {
 }
 
 const searchInput = h("input", { placeholder: "Search a character name", spellcheck: "false",
-  onInput: () => { clearTimeout(searchInput._t); if (searchInput.value.trim().length >= 2) searchInput._t = setTimeout(() => runSearch(searchInput.value.trim()), 350); },
+  onInput: () => {
+    clearTimeout(searchInput._t);
+    const kw = searchInput.value.trim();
+    if (!kw) clearSearch();                        // emptied: back to the start
+    else if (kw.length >= 2) searchInput._t = setTimeout(() => runSearch(kw), 350);
+  },
   onKeydown: (e) => { if (e.key === "Enter") runSearch(searchInput.value.trim(), true); } });
 
 function serverFilters() {
   return { classes: S.cfg.classes || [], factions: S.cfg.factions || [], level_min: S.cfg.level_min ?? null, level_max: S.cfg.level_max ?? null };
+}
+
+function clearSearch() {
+  if (!S.keyword && !S.results.length) return;
+  S.keyword = ""; S.searchedFilters = ""; S.results = []; S.regionState = {};
+  S.gen += 1;                                     // replies still on their way are ignored
+  list.scrollTop(0);
+  render();
 }
 
 async function runSearch(kw, force = false) {
@@ -249,7 +262,7 @@ function filtersBar() {
   const extra = classes.size + (levelSet ? 1 : 0);
   const open = !!S.cfg.filters_open;
   const row = h("div.frow2");
-  for (const [v, n] of [["1", "Elyos"], ["2", "Asmodians"]]) {
+  for (const [v, n] of [["1", "Elyos"], ["2", "Asmodian"]]) {
     row.append(h("button.pill", { class: factions.has(v) ? "on" : "", style: { "--fc": factionColor(+v) }, onClick: () => toggle("factions", v) },
       h("i.dia"), n));
   }
@@ -377,7 +390,7 @@ const list = (() => {
       if (kind === "group") {
         const race = ctx.race[p];
         nodes.push(h("div.group", { class: p, style: { top: `${iy + 2}px`, ...(race ? { color: factionColor(race) } : {}) } },
-          race === 1 ? "Elyos" : race === 2 ? "Asmodians" : p === "enemy" ? "Enemies" : "Allies"));
+          race === 1 ? "Elyos" : race === 2 ? "Asmodian" : p === "enemy" ? "Enemies" : "Allies"));
       } else if (kind === "skel") nodes.push(skeletonRow(iy));
       else {
         nodes.push(rowFor(p, iy, ctx)); shown.add(p.key);
