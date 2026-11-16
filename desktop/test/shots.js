@@ -30,6 +30,8 @@ const fs = require("fs");
   // the real thing: the tooltip in its own window beside the main one
   await page.mouse.move(5, 5);
   await page.evaluate(() => { window.tipsInWindow = false; });
+  const bounds = await app.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows().sort((a, b) => a.id - b.id)[0]; const b = w.getBounds(); w.setBounds({ ...b, x: 0 }); return b; });
+  await page.waitForTimeout(300);                          // (room on the right for it)
   await page.hover(".slot");
   await page.waitForTimeout(800);
   const tipPage = app.windows().find((w) => w.url().endsWith("tip.html"));
@@ -44,6 +46,7 @@ const fs = require("fs");
   await page.waitForTimeout(300);
   if (await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().sort((a, b) => a.id - b.id)[1].isVisible()))
     log.push("tooltip window stayed up after the mouse left");
+  await app.evaluate(({ BrowserWindow }, b) => BrowserWindow.getAllWindows().sort((a, c) => a.id - c.id)[0].setBounds(b), bounds);
   await page.evaluate(() => { window.tipsInWindow = true; });
   for (const [i, name] of [[2, "skills"], [3, "daevanion"], [4, "stats"], [5, "cosmetics"], [6, "titles"]]) {
     await page.click(`.ptabs .tab:nth-child(${i})`);
