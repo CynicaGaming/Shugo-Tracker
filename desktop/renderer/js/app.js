@@ -568,13 +568,19 @@ list.box.addEventListener("contextmenu", (e) => {
 
 /* ═════ footer ═════ */
 const status = h("span.grow");
-const clock = h("span.clock", { onClick: () => { save("clock", S.cfg.clock === "LT" ? "ST" : "LT"); paintClock(); } });
+const CLOCKS = ["ST", "LT", "Both"];                  // a click goes to the next one
+const clock = h("span.clock", { onClick: () => { save("clock", CLOCKS[(CLOCKS.indexOf(S.cfg.clock) + 1) % CLOCKS.length]); paintClock(); } });
 footer.append(status, clock);
 function paintClock() {
-  const lt = S.cfg.clock === "LT";
   const opts = { month: "2-digit", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false };
-  const t = new Intl.DateTimeFormat("en-US", lt ? opts : { ...opts, timeZone: "America/New_York" }).format(new Date()).replace(",", "");
-  clear(clock).append(h("b", {}, lt ? "LT" : "ST"), t);
+  const now = new Date();
+  const st = new Intl.DateTimeFormat("en-US", { ...opts, timeZone: "America/New_York" }).format(now).replace(",", "");
+  const lt = new Intl.DateTimeFormat("en-US", opts).format(now).replace(",", "");
+  const mode = CLOCKS.includes(S.cfg.clock) ? S.cfg.clock : "ST";
+  clear(clock);
+  if (mode !== "LT") clock.append(h("b", {}, "ST"), st);
+  // both: the local date only when it isn't the server's date
+  if (mode !== "ST") clock.append(h("b", {}, "LT"), mode === "Both" && lt.slice(0, 10) === st.slice(0, 10) ? lt.slice(11) : lt);
 }
 setInterval(paintClock, 1000 * 15);
 function paintFooter() {

@@ -287,13 +287,14 @@ export class ProfileView {
       const my = this.mine.gear?.[it.slot];
       const myDet = my ? this.myDetails.get(dkey(my)) : null;
       const deltas = det && myDet ? statDeltas(myDet, det) : null;
-      // side by side, tops level; "Equipped" sits above yours
-      const col = (label, tip) => h("div", { style: { display: "flex", flexDirection: "column", gap: "4px", width: "300px" } },
-        h("div.cmplabel", { style: label ? {} : { visibility: "hidden" } }, label || "\u00a0"), tip);
+      // side by side: "Equipped" is the top of your item's card, and the other item starts level with your item
+      const heading = `Equipped  ·  ${this.app.myChar()?.name || ""}`;
+      const spacer = h("div.itip.spacer", {}, h("div.heading", {}, heading.toUpperCase()));
       const wrap = h("div.cmp", {},
-        col(null, itemTip(it, det, { deltas })),
-        col(`Equipped  ·  ${this.app.myChar()?.name || ""}`, my ? itemTip(my, myDet)
-          : h("div.tip", { style: { position: "static", width: "300px" } }, h("div.itip", {}, h("div.body.faint", {}, "Nothing equipped in this slot")))));
+        h("div.cmpcol", {}, spacer, itemTip(it, det, { deltas })),
+        h("div.cmpcol", {}, my ? itemTip(my, myDet, { heading })
+          : h("div.tip", { style: { position: "static", width: "300px" } }, h("div.itip", {}, h("div.heading", {}, heading.toUpperCase()),
+            h("div.body.faint", { style: { padding: "10px 12px" } }, "Nothing equipped in this slot")))));
       showTipOutside(wrap, x, y, sy);
     } else {
       showTipOutside(itemTip(it, det, { hint: !!me }), x, y, sy);
@@ -441,8 +442,9 @@ export class ProfileView {
       const t = (p.titles || []).find((x) => (NAMES[x.category] || x.category) === cat);
       const head = h("div.cat", {}, cat);
       if (!t) { cards.append(h("div.tcard.none", {}, head, h("div.nm", {}, "None"))); continue; }
+      const fx = (label, list) => list?.length ? h("div.tfx", {}, h("div.tl", {}, label), h("ul", {}, list.map((e) => h("li", {}, e)))) : null;
       cards.append(h("div.tcard", {}, head, h("div.nm", {}, t.name),
-        t.effects?.length ? h("ul", {}, t.effects.map((e) => h("li", {}, e))) : null));
+        fx("Equipped Effect", t.effects), fx("Owned Effect", t.owned_effects)));
     }
     out.append(cards);
     return out;

@@ -65,7 +65,8 @@ class ParseProfileTests(unittest.TestCase):
         self.assertEqual([(b.name, b.game_percent if b.game_percent is not None else round(100 * b.opened / b.total))
                           for b in p.boards], [("Nezekan", 69), ("Azphel", 13)])
         self.assertEqual((p.titles_owned, p.titles_total), (207, 297))
-        self.assertEqual(p.titles[0].effects, ["Critical Attack +45", "Critical Damage Boost +3%", "Critical Attack +3"])
+        self.assertEqual(p.titles[0].effects, ["Critical Attack +45", "Critical Damage Boost +3%"])
+        self.assertEqual(p.titles[0].owned_effects, ["Critical Attack +3"])
 
     def test_without_equipment(self):
         p = parse_profile(SAMPLE["info"], None)

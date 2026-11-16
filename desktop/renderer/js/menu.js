@@ -46,6 +46,7 @@ function build(items, level) {
       });
       if (!it.submenu) row.addEventListener("click", () => { closeMenus(); it.onClick?.(); });
     }
+    row._item = it;
     el.append(row);
   }
   el.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -59,6 +60,21 @@ export function showMenu(items, x, y, { alignRight = false } = {}) {
   const el = build(items, 0);
   open = [el];
   place(el, x, y, alignRight);
+  // point each submenu's arrow the way it will open (left when there's no room on the right)
+  for (const row of el.querySelectorAll(".item")) {
+    const it = row._item;
+    if (!it?.submenu) continue;
+    const probe = build(typeof it.submenu === "function" ? it.submenu() : it.submenu, 1);
+    probe.style.visibility = "hidden";
+    document.body.append(probe);
+    const w = probe.getBoundingClientRect().width;
+    probe.remove();
+    if (row.getBoundingClientRect().right + 2 + w > innerWidth - 4) {
+      const arrow = row.querySelector(".arrow");
+      arrow.textContent = "‹";
+      row.prepend(arrow);                              // on the side it opens to
+    }
+  }
   return el;
 }
 

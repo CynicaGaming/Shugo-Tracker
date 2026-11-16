@@ -2,6 +2,13 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.19
+- Changed: comparing with ALT keeps Equipped on your item's card, with both items level side by side
+- Changed: titles show their Equipped Effect and Owned Effect separately
+- Changed: click the footer clock to cycle ST, LT, or both
+- Changed: Switch Profile's arrow points the way its menu opens
+- Removed: the Clear button for Recent Players in Settings (right-click Recent to clear it)
+
 ## 2.3.18
 - Changed: item tooltips open beside the window instead of over your gear
 - Changed: comparing with ALT shows both items side by side, tops level, with Equipped above yours

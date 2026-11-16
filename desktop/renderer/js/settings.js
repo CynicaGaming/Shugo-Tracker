@@ -95,8 +95,7 @@ export class SettingsView {
       if (v && S.nearby.state === "no_admin") win.relaunchAsAdmin();
     })));
     el.append(row("Auto-Clear", ...steps(AUTOCLEAR, cfg.nearby_autoclear_s ?? 0, (v) => save("nearby_autoclear_s", v))));
-    el.append(row("Recent Players", ...steps(RECENT, cfg.recent_max ?? 250, (v) => { cfg.recent_max = v; call("recent.max", { n: v }); }),
-      h("button.btn", { onClick: () => call("nearby.clear", { which: "recent" }) }, "Clear")));
+    el.append(row("Recent Players", ...steps(RECENT, cfg.recent_max ?? 250, (v) => { cfg.recent_max = v; call("recent.max", { n: v }); })));
 
     el.append(h("div.legal", {}, "Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. ",
       "AION and AION 2 are trademarks of NCSOFT Corporation; game names, text and images belong to NCSOFT."));

@@ -173,7 +173,10 @@
   color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
 .tcard.none { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
 .tcard.none .nm { color: var(--faint); font-weight: 500; }
-.tcard ul { margin: 7px 0 0; padding: 0 0 0 14px; color: var(--text); font-size: 12px; }
+.tcard .tfx { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line); }
+.tcard .tfx .tl { font-size: 10.5px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--dim); }
+.tcard .tfx + .tfx .tl { color: var(--faint); }
+.tcard ul { margin: 3px 0 0; padding: 0 0 0 14px; color: var(--text); font-size: 12px; }
 
 /* ───── cosmetics ───── */
 .cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px; }
@@ -186,8 +189,10 @@
 .ring.spin .fg { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(270deg); } }
 
-/* Alt-compare: the two tooltips side by side, tops level, "Equipped" above yours */
+/* Alt-compare: the two items side by side; "Equipped" heads your card, and the other card starts level with your item */
 .tip.cmp { width: auto; display: flex; gap: 6px; align-items: flex-start; background: none; border: 0; border-radius: 0;
   box-shadow: none; overflow: visible; }
-.cmplabel { align-self: flex-start; padding: 3px 9px; border-radius: 4px; background: #0f141d; border: 1px solid var(--line-2);
-  color: var(--gold); font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap; }
+.cmpcol { display: flex; flex-direction: column; width: 300px; }
+.itip.spacer { visibility: hidden; }
+.itip .heading { color: var(--gold); font-weight: 600; }
+.tcard .tfx + .tfx ul { color: var(--text-2); }
