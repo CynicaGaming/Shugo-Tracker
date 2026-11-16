@@ -2,8 +2,7 @@
 const root = document.getElementById("root");
 window.tipwin.onShow(({ seq, html }) => {
   root.innerHTML = html;
-  requestAnimationFrame(() => {
-    const r = root.getBoundingClientRect();
-    window.tipwin.size({ seq, w: Math.ceil(r.width), h: Math.ceil(r.height) });
-  });
+  // measured right away (layout is synchronous): a hidden window may never get an animation frame
+  const r = root.getBoundingClientRect();
+  window.tipwin.size({ seq, w: Math.ceil(r.width), h: Math.ceil(r.height) });
 });

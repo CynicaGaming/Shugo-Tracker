@@ -3,6 +3,7 @@
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
 ## 2.3.19
+- Fixed: hovering an item sometimes showed no tooltip at all
 - Changed: comparing with ALT keeps Equipped on your item's card, with both items level side by side
 - Changed: titles show their Equipped Effect and Owned Effect separately
 - Changed: click the footer clock to cycle ST, LT, or both
