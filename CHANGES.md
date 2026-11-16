@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.20
+- Changed: titles show the equipped effect on top and the owned effect under a line, dimmer, like the game (no labels)
+
 ## 2.3.19
 - Fixed: hovering an item sometimes showed no tooltip at all
 - Changed: comparing with ALT keeps Equipped on your item's card, with both items level side by side

@@ -442,9 +442,9 @@ export class ProfileView {
       const t = (p.titles || []).find((x) => (NAMES[x.category] || x.category) === cat);
       const head = h("div.cat", {}, cat);
       if (!t) { cards.append(h("div.tcard.none", {}, head, h("div.nm", {}, "None"))); continue; }
-      const fx = (label, list) => list?.length ? h("div.tfx", {}, h("div.tl", {}, label), h("ul", {}, list.map((e) => h("li", {}, e)))) : null;
-      cards.append(h("div.tcard", {}, head, h("div.nm", {}, t.name),
-        fx("Equipped Effect", t.effects), fx("Owned Effect", t.owned_effects)));
+      // like the game: the equipped effect on top, the owned effect under a line, dimmer
+      const fx = (cls, list) => list?.length ? h("ul", { class: cls }, list.map((e) => h("li", {}, e))) : null;
+      cards.append(h("div.tcard", {}, head, h("div.nm", {}, t.name), fx("equip", t.effects), fx("owned", t.owned_effects)));
     }
     out.append(cards);
     return out;
