@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.21
+- Changed: with both clocks shown, LT always shows its date too
+
 ## 2.3.20
 - Changed: titles show the equipped effect on top and the owned effect under a line, dimmer, like the game (no labels)
 

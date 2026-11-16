@@ -579,8 +579,7 @@ function paintClock() {
   const mode = CLOCKS.includes(S.cfg.clock) ? S.cfg.clock : "ST";
   clear(clock);
   if (mode !== "LT") clock.append(h("b", {}, "ST"), st);
-  // both: the local date only when it isn't the server's date
-  if (mode !== "ST") clock.append(h("b", {}, "LT"), mode === "Both" && lt.slice(0, 10) === st.slice(0, 10) ? lt.slice(11) : lt);
+  if (mode !== "ST") clock.append(h("b", {}, "LT"), lt);
 }
 setInterval(paintClock, 1000 * 15);
 function paintFooter() {
