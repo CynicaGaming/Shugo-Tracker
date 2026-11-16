@@ -185,3 +185,9 @@
 .ring .fg { stroke: var(--gold); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset 0.2s; }
 .ring.spin .fg { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(270deg); } }
+
+/* Alt-compare: the two tooltips side by side, tops level, "Equipped" above yours */
+.tip.cmp { width: auto; display: flex; gap: 6px; align-items: flex-start; background: none; border: 0; border-radius: 0;
+  box-shadow: none; overflow: visible; }
+.cmplabel { align-self: flex-start; padding: 3px 9px; border-radius: 4px; background: #0f141d; border: 1px solid var(--line-2);
+  color: var(--gold); font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; white-space: nowrap; }

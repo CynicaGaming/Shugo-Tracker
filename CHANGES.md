@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.18
+- Changed: item tooltips open beside the window instead of over your gear
+- Changed: comparing with ALT shows both items side by side, tops level, with Equipped above yours
+
 ## 2.3.17
 - Changed: Clear Nearby works like it used to: anyone still around comes back on their next move, and those who left stay on Recent
 

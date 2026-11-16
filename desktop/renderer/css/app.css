@@ -324,3 +324,8 @@ input[type=range] { accent-color: var(--gold-2); }
 .btn:disabled { opacity: 0.6; cursor: default; }
 
 .legal { padding: 14px 14px 18px; color: var(--faint); font-size: 11px; line-height: 1.5; text-align: center; }
+
+/* ───── the tooltip window (item tooltips beside the main window) ───── */
+html:has(body.tipwin), body.tipwin { background: transparent; }
+body.tipwin #root { position: absolute; left: 0; top: 0; width: max-content; }
+body.tipwin .tip { position: static !important; box-shadow: none; }

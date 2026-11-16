@@ -125,7 +125,9 @@ function createWindow() {
     if (!quitting && win) win.reload();                // a crashed page would leave an empty window
   });
   win.on("close", () => { if (!quitting) saveBounds(); });
-  win.on("closed", () => { win = null; });
+  win.on("closed", () => { win = null; tipWin?.destroy(); });
+  for (const ev of ["move", "minimize", "hide"]) win.on(ev, hideTipWin);
+  makeTipWin();
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
 }
 
@@ -168,6 +170,47 @@ function reveal() {
 }
 
 app.on("second-instance", () => reveal());
+
+/* ───── item tooltips, in their own window beside the main one (so they never cover the gear) ───── */
+let tipWin = null, tipSeq = 0, tipWait = null;
+function makeTipWin() {
+  tipWin = new BrowserWindow({
+    width: 10, height: 10, show: false, frame: false, transparent: true, backgroundColor: "#00000000", resizable: false,
+    movable: false, minimizable: false, maximizable: false, focusable: false, skipTaskbar: true, hasShadow: false,
+    webPreferences: { preload: path.join(__dirname, "tip-preload.js"), contextIsolation: true, nodeIntegration: false },
+  });
+  tipWin.setAlwaysOnTop(true, "screen-saver");
+  tipWin.setIgnoreMouseEvents(true);
+  tipWin.loadFile(path.join(__dirname, "renderer", "tip.html"));
+  tipWin.on("closed", () => { tipWin = null; });
+}
+function hideTipWin() { tipSeq++; if (tipWin?.isVisible()) tipWin.hide(); }
+ipcMain.on("tip-size", (_e, m) => { if (tipWait?.seq === m.seq) { tipWait.done(m); tipWait = null; } });
+/** Show `html` beside the window, level with screen y. False when neither side has room (the page then shows it
+ *  inside the window instead). */
+ipcMain.handle("tip", async (_e, action, arg) => {
+  if (action === "hide") { hideTipWin(); return null; }
+  if (!tipWin || !win || tipWin.webContents.isLoading()) return false;
+  const seq = ++tipSeq;
+  const size = await new Promise((done) => {
+    tipWait = { seq, done };
+    tipWin.webContents.send("tip", { seq, html: arg.html });
+    setTimeout(() => done(null), 1000);
+  });
+  if (seq !== tipSeq) return true;                     // a newer tooltip (or a hide) came in meanwhile
+  if (!size) return false;
+  const b = win.getBounds(), wa = screen.getDisplayMatching(b).workArea, gap = 6;
+  const w = Math.min(size.w, wa.width), h = Math.min(size.h, wa.height);
+  let x = b.x + b.width + gap;
+  if (x + w > wa.x + wa.width) x = b.x - w - gap;
+  if (x < wa.x) { hideTipWin(); return false; }
+  const y = Math.max(wa.y, Math.min(Math.round(arg.y) - 20, wa.y + wa.height - h));
+  tipWin.setBounds({ x, y, width: w, height: h });
+  if (!tipWin.isVisible()) tipWin.showInactive();
+  tipWin.setAlwaysOnTop(true, "screen-saver");
+  tipWin.moveTop();
+  return true;
+});
 
 ipcMain.on("core", (_e, msg) => toCore(msg));
 ipcMain.handle("win", async (_e, action, arg) => {

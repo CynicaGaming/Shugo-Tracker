@@ -24,8 +24,27 @@ const fs = require("fs");
   await shot("profile-loading", 800);
   await page.waitForSelector(".pbody .gear", { timeout: 20000 });
   await shot("profile-gear", 300);
+  await page.evaluate(() => { window.tipsInWindow = true; });   // (tooltips beside the window aren't in the page shot)
   await page.hover(".slot");
   await shot("profile-gear-tip", 500);
+  // the real thing: the tooltip in its own window beside the main one
+  await page.mouse.move(5, 5);
+  await page.evaluate(() => { window.tipsInWindow = false; });
+  await page.hover(".slot");
+  await page.waitForTimeout(800);
+  const tipPage = app.windows().find((w) => w.url().endsWith("tip.html"));
+  const where = await app.evaluate(({ BrowserWindow }) => {
+    const [main, tip] = BrowserWindow.getAllWindows().sort((a, b) => a.id - b.id);
+    return { main: main.getBounds(), tip: tip.getBounds(), shown: tip.isVisible() };
+  });
+  const beside = where.tip.x >= where.main.x + where.main.width || where.tip.x + where.tip.width <= where.main.x;
+  if (!tipPage || !where.shown || !beside || where.tip.width < 200) log.push(`tooltip window: ${JSON.stringify(where)}`);
+  else await tipPage.screenshot({ path: path.join(out, "profile-gear-tip-window.png") });
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(300);
+  if (await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().sort((a, b) => a.id - b.id)[1].isVisible()))
+    log.push("tooltip window stayed up after the mouse left");
+  await page.evaluate(() => { window.tipsInWindow = true; });
   for (const [i, name] of [[2, "skills"], [3, "daevanion"], [4, "stats"], [5, "cosmetics"], [6, "titles"]]) {
     await page.click(`.ptabs .tab:nth-child(${i})`);
     await shot(`profile-${name}`, 1200);

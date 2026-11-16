@@ -30,10 +30,22 @@ const SKILL_CATS = [["Active", "Active"], ["Passive", "Passive"], ["Dp", "Stigma
 const dkey = (it) => `${it.slot}|${it.item_id}|${it.enchant}`;
 const worn = (p) => [...GEAR_MAIN, ...GEAR_ACC, ...GEAR_ARCANA].map((s) => p.gear?.[s]).filter((it) => it && it.slot_pos && it.item_id);
 
-let tipEl = null;
-function hideTip() { tipEl?.remove(); tipEl = null; }
+let tipEl = null, outSeq = 0;
+function hideLocalTip() { tipEl?.remove(); tipEl = null; }
+function hideTip() { hideLocalTip(); outSeq++; window.shugo?.tip?.hide(); }
+/** Item tooltips go in their own window beside this one, so they never cover the gear; inside the window only
+ *  when there's no room on either side of it. */
+async function showTipOutside(el, x, y, screenY) {
+  const seq = ++outSeq;
+  el.classList.add("tip");
+  const ok = window.shugo?.tip && !window.tipsInWindow
+    ? await window.shugo.tip.show(el.outerHTML, screenY).catch(() => false) : false;
+  if (seq !== outSeq) return;
+  hideLocalTip();
+  if (!ok) showTip(el, x, y);
+}
 function showTip(el, x, y, side = "right") {
-  hideTip();
+  hideLocalTip();
   el.classList.add("tip");
   document.body.append(el);
   tipEl = el;
@@ -249,8 +261,8 @@ export class ProfileView {
   }
 
   itemHover(el, it) {
-    el.addEventListener("mouseenter", (e) => { this.hoverItem = { it, el, x: e.clientX, y: e.clientY }; this.altState = false; this.drawItemTip(); this.startAlt(); });
-    el.addEventListener("mousemove", (e) => { if (this.hoverItem) { this.hoverItem.x = e.clientX; this.hoverItem.y = e.clientY; } });
+    el.addEventListener("mouseenter", (e) => { this.hoverItem = { it, el, x: e.clientX, y: e.clientY, sy: e.screenY }; this.altState = false; this.drawItemTip(); this.startAlt(); });
+    el.addEventListener("mousemove", (e) => { if (this.hoverItem) { this.hoverItem.x = e.clientX; this.hoverItem.y = e.clientY; this.hoverItem.sy = e.screenY; } });
     el.addEventListener("mouseleave", () => { this.hoverItem = null; this.stopAlt(); hideTip(); });
   }
 
@@ -268,24 +280,23 @@ export class ProfileView {
   setAlt(v) { if (v !== this.altState) { this.altState = v; if (this.hoverItem) this.drawItemTip(); } }
 
   drawItemTip() {
-    const { it, x, y } = this.hoverItem;
+    const { it, x, y, sy } = this.hoverItem;
     const det = this.details.get(dkey(it));
     const me = this.mine && this.mineKey;
     if (this.altState && me) {
       const my = this.mine.gear?.[it.slot];
       const myDet = my ? this.myDetails.get(dkey(my)) : null;
       const deltas = det && myDet ? statDeltas(myDet, det) : null;
-      const wrap = h("div", { style: { display: "flex", gap: "6px", alignItems: "flex-start", background: "none", border: 0, boxShadow: "none", width: "auto", overflow: "visible" } },
-        itemTip(it, det, { deltas }),
-        my ? itemTip(my, myDet, { heading: `Equipped  ·  ${this.app.myChar()?.name || ""}` })
-          : h("div.tip", { style: { position: "static", width: "300px" } }, h("div.itip", {}, h("div.heading", {}, "EQUIPPED"), h("div.body.faint", {}, "Nothing equipped in this slot"))));
-      wrap.querySelectorAll(".tip").forEach((t) => { t.style.position = "static"; });
-      showTip(wrap, x, y);
-      wrap.style.width = "auto"; wrap.style.background = "none"; wrap.style.border = "0"; wrap.style.boxShadow = "none";
+      // side by side, tops level; "Equipped" sits above yours
+      const col = (label, tip) => h("div", { style: { display: "flex", flexDirection: "column", gap: "4px", width: "300px" } },
+        h("div.cmplabel", { style: label ? {} : { visibility: "hidden" } }, label || "\u00a0"), tip);
+      const wrap = h("div.cmp", {},
+        col(null, itemTip(it, det, { deltas })),
+        col(`Equipped  ·  ${this.app.myChar()?.name || ""}`, my ? itemTip(my, myDet)
+          : h("div.tip", { style: { position: "static", width: "300px" } }, h("div.itip", {}, h("div.body.faint", {}, "Nothing equipped in this slot")))));
+      showTipOutside(wrap, x, y, sy);
     } else {
-      const t = itemTip(it, det, { hint: !!me });
-      t.style.position = "fixed";
-      showTip(t, x, y);
+      showTipOutside(itemTip(it, det, { hint: !!me }), x, y, sy);
     }
   }
 

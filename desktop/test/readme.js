@@ -42,6 +42,7 @@ const W = 560, H = 720;
   await page.click(".row");
   await page.waitForSelector(".pbody .gear", { timeout: 30000 });
   await shot("profile-gear", 800);
+  await page.evaluate(() => { window.tipsInWindow = true; });   // (tooltips beside the window aren't in the page shot)
   await page.hover(".slot");
   await shot("profile-gear-tip", 900);
   await page.click(".ptabs .tab:nth-child(2)");

@@ -13,4 +13,8 @@ contextBridge.exposeInMainWorld("shugo", {
     update: (action) => ipcRenderer.invoke("win", "update", action),
     onUpdate: (fn) => ipcRenderer.on("update", (_e, s) => fn(s)),
   },
+  tip: {                                                // item tooltips beside the window
+    show: (html, y) => ipcRenderer.invoke("tip", "show", { html, y }),
+    hide: () => ipcRenderer.invoke("tip", "hide"),
+  },
 });
