@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.23
+- Changed: Switch Profile always opens to the right (the menu makes room for it)
+
 ## 2.3.22
 - Changed: title effects read like stat rows (name left, value right) instead of a bulleted list
 
@@ -16,7 +19,6 @@ Each release's notes come from its section here (shown in Settings → Updates).
 - Changed: comparing with ALT keeps Equipped on your item's card, with both items level side by side
 - Changed: titles show their Equipped Effect and Owned Effect separately
 - Changed: click the footer clock to cycle ST, LT, or both
-- Changed: Switch Profile's arrow points the way its menu opens
 - Removed: the Clear button for Recent Players in Settings (right-click Recent to clear it)
 
 ## 2.3.18

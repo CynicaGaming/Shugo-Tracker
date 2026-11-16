@@ -8,15 +8,16 @@ export function closeMenus() {
   open = [];
 }
 
-function place(el, x, y, alignRight, besideOf) {
+function place(el, x, y, alignRight, besideOf, roomRight = 0) {
   document.body.append(el);
   const r = el.getBoundingClientRect(), W = innerWidth, H = innerHeight;
   if (besideOf) {
     const p = besideOf.getBoundingClientRect();
-    x = p.right + 2 + r.width > W - 4 ? p.left - r.width - 2 : p.right + 2;
+    x = p.right + 2;
     y = Math.min(p.top - 4, H - r.height - 4);
   } else {
     if (alignRight) x -= r.width;
+    x = Math.min(x, W - 4 - r.width - roomRight);
     if (y + r.height > H - 4) y = Math.max(4, y - r.height);
   }
   el.style.left = `${Math.max(4, Math.min(x, W - r.width - 4))}px`;
@@ -46,7 +47,6 @@ function build(items, level) {
       });
       if (!it.submenu) row.addEventListener("click", () => { closeMenus(); it.onClick?.(); });
     }
-    row._item = it;
     el.append(row);
   }
   el.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -59,22 +59,17 @@ export function showMenu(items, x, y, { alignRight = false } = {}) {
   closeMenus();
   const el = build(items, 0);
   open = [el];
-  place(el, x, y, alignRight);
-  // point each submenu's arrow the way it will open (left when there's no room on the right)
-  for (const row of el.querySelectorAll(".item")) {
-    const it = row._item;
+  // submenus always open to the right: move the menu left when there isn't room beside it for the widest one
+  let subW = 0;
+  for (const it of items) {
     if (!it?.submenu) continue;
     const probe = build(typeof it.submenu === "function" ? it.submenu() : it.submenu, 1);
     probe.style.visibility = "hidden";
     document.body.append(probe);
-    const w = probe.getBoundingClientRect().width;
+    subW = Math.max(subW, probe.getBoundingClientRect().width + 2);
     probe.remove();
-    if (row.getBoundingClientRect().right + 2 + w > innerWidth - 4) {
-      const arrow = row.querySelector(".arrow");
-      arrow.textContent = "‹";
-      row.prepend(arrow);                              // on the side it opens to
-    }
   }
+  place(el, x, y, alignRight, null, subW);
   return el;
 }
 
