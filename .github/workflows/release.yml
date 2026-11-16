@@ -47,6 +47,18 @@ jobs:
       - name: Test
         run: python -m unittest discover -s tests -t .
 
+      - name: Window code parses (a typo here leaves the app unable to open)
+        shell: bash
+        run: for f in desktop/*.js desktop/renderer/js/*.js; do node --check "$f" || exit 1; done
+
+      - name: Tests passed for this commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ok=$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=${{ github.sha }}&status=success" -q '.total_count')
+          if [ "$ok" = "0" ]; then echo "The Tests run for ${{ github.sha }} hasn't passed: not publishing"; exit 1; fi
+
       - name: Stamp version
         shell: pwsh
         run: |
