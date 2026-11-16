@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.28
+- Changed: deity stat bars run 0 to 100, with a mark at 50
+
 ## 2.3.27
 - Changed: main stats in the game's order: Might, Dexterity, Precision, Willpower, Intelligence, Constitution
 

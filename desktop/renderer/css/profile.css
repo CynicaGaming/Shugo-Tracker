@@ -95,7 +95,8 @@
 .dstat .n { color: var(--text); font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dstat .n i { font-style: normal; color: var(--faint); font-weight: 400; font-size: 11.5px; margin-left: 6px; }
 .dstat b { color: var(--gold); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.meter { height: 4px; margin-top: 6px; border-radius: 2px; background: var(--panel-3); overflow: hidden; }
+.meter { position: relative; height: 4px; margin-top: 6px; border-radius: 2px; background: var(--panel-3); overflow: hidden; }
+.meter::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255, 255, 255, 0.22); }
 .meter span { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #a8822e, var(--gold)); }
 .mstat:hover, .dstat:hover { background: var(--hover); }
 .mstat.zero b, .dstat.zero b { color: var(--faint); }
