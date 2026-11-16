@@ -223,7 +223,7 @@ export class ProfileView {
 
   /* ───── Gear: the equipment window ───── */
   tile(it, size = 42) {
-    if (!it) return h("div.itile.empty", { style: { width: `${size}px`, height: `${size}px` } });
+    if (!it) return h("div.itile.vacant", { style: { width: `${size}px`, height: `${size}px` } });
     return h("div.itile", { style: { "--g": gradeColor(it.grade), width: `${size}px`, height: `${size}px` } },
       it.icon ? h("img", { src: it.icon, loading: "lazy" }) : null,
       it.exceed ? h("span.exc", {}, `✦${it.exceed}`) : null,

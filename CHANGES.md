@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.3.25
+- Fixed: empty gear slots showed as tall boxes instead of square tiles
+
 ## 2.3.24
 - Changed: Switch Profile is now Switch Character, and Set Profile is Set as My Character
 
