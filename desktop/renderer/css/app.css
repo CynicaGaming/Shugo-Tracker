@@ -94,7 +94,7 @@ input { font: inherit; }
 /* ───── tabs: the game's text tabs with a glowing underline ───── */
 .tabs { display: flex; align-items: stretch; gap: 2px; height: 100%; }
 .tab {
-  position: relative; display: flex; align-items: center; gap: 6px; padding: 0 11px; border: 0; background: none;
+  position: relative; display: flex; align-items: center; gap: 5px; padding: 0 8px; border: 0; background: none;
   color: var(--dim); cursor: pointer; white-space: nowrap; font-size: 13px;
 }
 .tab:hover { color: var(--text-2); }
@@ -329,3 +329,41 @@ input[type=range] { accent-color: var(--gold-2); }
 html:has(body.tipwin), body.tipwin { background: transparent; }
 body.tipwin #root { position: absolute; left: 0; top: 0; width: max-content; }
 body.tipwin .tip { position: static !important; box-shadow: none; }
+
+/* ───── PvP Log ───── */
+.pvp { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.pvptop { display: flex; padding: 8px 12px 6px; flex: none; }
+.pvpseg { width: 100%; }
+.statstrip.pvpstrip { grid-template-columns: repeat(4, 1fr); margin-bottom: 6px; }
+.pvpstrip b.k { color: var(--green); }
+.pvpstrip b.d { color: var(--red); }
+.pvpstrip b.a { color: #6fb4ff; }
+.pvplist { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 12px; position: relative; }
+.pvprow { display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 8px; border: 0;
+  border-radius: var(--radius); background: none; color: var(--text-2); font: inherit; text-align: left; cursor: pointer; }
+.pvprow:hover { background: var(--hover); }
+.pvprow .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pvprow .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pvprow .sub { color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pvprow .tally { display: flex; gap: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pvprow .tally > span { min-width: 30px; text-align: right; }
+.pvprow .tally small { margin-left: 2px; font-size: 10px; font-weight: 600; opacity: 0.75; }
+.pvprow .tally .k { color: var(--green); }
+.pvprow .tally .d { color: var(--red); }
+.pvprow .tally .a { color: #6fb4ff; }
+.pvprow .tally .zero { color: var(--faint); }
+.pvprow .ago { width: 72px; text-align: right; color: var(--dim); font-size: 12px; }
+.pbadge { flex: none; display: grid; place-items: center; border-radius: var(--radius); background: var(--panel-2);
+  font-size: 11px; font-weight: 700; overflow: hidden; }
+.pbadge img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.pvp .phead .pbadge { font-size: 20px; border-radius: 8px; }
+.fight { display: grid; grid-template-columns: 64px 1fr auto 92px; align-items: center; gap: 10px; height: 36px; padding: 0 8px;
+  border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.fight .kind { justify-self: start; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.4px;
+  text-transform: uppercase; }
+.fight.kill .kind { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.fight.death .kind { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.fight.assist .kind { color: #6fb4ff; background: rgba(111, 180, 255, 0.14); }
+.fight .with { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fight .ago { color: var(--text-2); }
+.fight .at { color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; }

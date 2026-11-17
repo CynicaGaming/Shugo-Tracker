@@ -137,7 +137,7 @@ class ProtocolTests(unittest.TestCase):
             self.assertIn(Hit(9001, 501), hits)
             self.assertIn(Hit(501, 9002), hits)
             self.assertEqual(owners, [OwnerRecord(777, "Friendo", 1101)])
-            self.assertIn(EntityGone(9001, True), ev)
+            self.assertIn(EntityGone(9001, True, in_combat=True), ev)
             self.assertIn(EntityGone(9002, False), ev)
             self.assertIn(EntityGone(9003, False), ev)
             self.assertEqual(ev[-1], MapLoaded(1010))

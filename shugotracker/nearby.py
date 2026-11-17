@@ -16,7 +16,7 @@ from typing import Callable
 
 from . import servers as sv
 from .aion2api import Api, Character, class_pc_ids
-from .protocol import EntityActive, Hit, MapLoaded, Opcodes, RosterSeen, SelfSeen, StreamDecoder
+from .protocol import EntityActive, EntityGone, Hit, MapLoaded, Opcodes, RosterSeen, SelfSeen, StreamDecoder
 from .tracker import ALLY, ENEMY, UNKNOWN, Lookup, Player, Tracker
 
 RECORD_MAGIC = b"SHUGOCAP1\n"
@@ -30,6 +30,7 @@ OFF, STARTING, NO_ADMIN, NO_LIBS, WAITING, CAPTURING, ERROR = (
 WIRE_CLASS = {"Elementalist": "Spiritmaster"}   # the wire table predates the Global class names
 LOOKUP_WORKERS = 4      # parallel NCSOFT searches (the shared rate limit still caps requests per second)
 RETRY_FAILED_S = 300    # someone NCSOFT couldn't find is tried again after this long
+PVP_WINDOW_S = 15       # PvP Log: hits this recent count toward a death (the last player's hit is the kill)
 RECENT_MAX = 250        # players kept on the Recent list by default (Settings: 50 … 1000 or Unlimited = 0)
 
 
@@ -83,6 +84,10 @@ class NearbyService:
         # players moved to Recent while possibly still around (Clear Nearby, gone quiet): any record about them
         # puts them back on Nearby. Not those who left view or were left behind by a map change.
         self._parked: dict[int, str] = {}
+        # PvP Log: recent hits on each entity, to tell who landed the killing blow
+        self._hits: dict[int, list[tuple[float, int]]] = {}
+        self._died_at: dict[int, float] = {}
+        self.on_pvp: Callable[[str, Character, list[str]], None] = lambda kind, foe, with_: None
         self._map_loads_seen = False
         self._loaded_since_self = False               # a map load came in since your last own record
         self._self_eid: int | None = None             # your id in the last record of your own
@@ -211,6 +216,7 @@ class NearbyService:
         if isinstance(ev, MapLoaded):
             self._map_loads_seen = True
             self._loaded_since_self = True
+            self._hits.clear()
             if ev.map_id != self.tracker.map_id:
                 self._parked.clear()                # a new area: those ids mean other things now
         elif isinstance(ev, SelfSeen) and self._new_area(ev) and self.tracker.players:
@@ -222,7 +228,10 @@ class NearbyService:
             if names != self._last_roster:
                 self._last_roster = names
                 self.log("nearby: match scoreboard: " + ", ".join(f"{n}@{s}" for n, s in ev.players))
+        elif isinstance(ev, EntityGone) and ev.died and ev.in_combat:
+            self._pvp_death(ev.entity_id)
         elif isinstance(ev, Hit):
+            self._note_hit(ev)
             # someone on the Recent list is fighting right next to you: they never left
             for eid in (ev.actor_id, ev.target_id):
                 name = self._recent_ids.get(eid)
@@ -244,6 +253,50 @@ class NearbyService:
         for n in set(self.tracker.players) - before_names:
             self._recent_players.pop(n, None)           # back in range (they stay on Recent as history)
         self._last_players.update(self.tracker.players)
+
+    # ───── PvP Log ─────
+    def _note_hit(self, ev: Hit) -> None:      # lock held
+        now = time.time()
+        lst = self._hits.setdefault(ev.target_id, [])
+        lst.append((now, ev.actor_id))
+        if len(lst) > 64:
+            del lst[:-64]
+        if len(self._hits) > 4096:              # (monsters come and go: drop the stale ones)
+            for k in [k for k, v in self._hits.items() if now - v[-1][0] > PVP_WINDOW_S]:
+                del self._hits[k]
+
+    def _pvp_death(self, eid: int) -> None:    # lock held
+        """Someone died just now. You: the last player who hit you killed you. A player you hit: your kill if
+        your hit was the last player's hit on them, an assist otherwise."""
+        now = time.time()
+        hits = [(t, a) for t, a in self._hits.pop(eid, []) if now - t <= PVP_WINDOW_S]
+        if now - self._died_at.get(eid, 0) < PVP_WINDOW_S:
+            return                                       # the same death reported twice
+        self._died_at[eid] = now
+        mine = self.tracker.me.entity_ids
+        by_id = self.tracker.by_id
+        players = [(t, a) for t, a in hits if a in mine or by_id.get(a) in self.tracker.players]
+        if not players:
+            return                                       # a monster (or a fall) — not PvP
+        name_of = lambda a: self.tracker.me.name if a in mine else by_id.get(a)   # noqa: E731
+        if eid in mine:
+            foes = [a for _t, a in players if a not in mine]
+            if not foes:
+                return
+            killer = self.tracker.players[by_id[foes[-1]]]
+            others = sorted({name_of(a) for a in foes[:-1]} - {killer.name})
+            self.log(f"pvp: {killer.name} killed you" + (f" (with {', '.join(others)})" if others else ""))
+            self.on_pvp("death", self._character(killer), others)
+            return
+        victim = by_id.get(eid)
+        if victim not in self.tracker.players or not any(a in mine for _t, a in players):
+            return                                       # not someone you fought
+        last = players[-1][1]
+        kind = "kill" if last in mine else "assist"
+        others = sorted({name_of(a) for _t, a in players if a not in mine})
+        self.log(f"pvp: {'you killed' if kind == 'kill' else 'you helped kill'} {victim}"
+                 + (f" (with {', '.join(others)})" if others else ""))
+        self.on_pvp(kind, self._character(self.tracker.players[victim]), others)
 
     def _new_area(self, ev: SelfSeen) -> bool:
         """Your own record arriving means a new area when map-load records aren't coming through at all, or

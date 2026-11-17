@@ -12,7 +12,8 @@ DEFAULTS = {
     "update_check_s": 1800,         # look for updates this often (also at start and when Settings opens); 0 = never
     "clock": "ST",                  # footer clock: ST = server time (US Eastern), LT = this PC's time
     "recent_max": 250,              # players kept on Recent; 0 = unlimited
-    "nearby_autoclear_s": 0,        # move everyone on Nearby to Recent every N s; 0 = never
+    "nearby_autoclear_s": 0,
+    "pvp_within_s": 0,              # PvP Log: show fights from the last N s; 0 = all        # move everyone on Nearby to Recent every N s; 0 = never
     "regions": [],
     "factions": [],
     "window_pos": [80, 80],

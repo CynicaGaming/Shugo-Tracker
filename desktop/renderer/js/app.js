@@ -1,4 +1,4 @@
-// The window: title bar, Search / Favorites / Nearby / Recent lists, menus, footer. Profile and Settings open
+// The window: title bar, Search / Favorites / Nearby / Recent lists, the PvP Log, menus, footer. Profile and Settings open
 // in place of the list (profile.js, settings.js).
 import { call, on, win } from "./bridge.js";
 import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, ago, clear,
@@ -7,17 +7,19 @@ import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
 import { ProfileView } from "./profile.js";
 import { SettingsView } from "./settings.js";
 import { FinderView } from "./finder.js";
+import { PvpFoe, PvpList } from "./pvp.js";
 
 const ROW = 38;
 const S = {                                    // everything the window shows
   cfg: {}, version: "", demo: false, regions: [],
-  mode: "search", screen: "list",              // screen: list | profile | settings | finder
+  mode: "search", screen: "list",              // screen: list | profile | settings | finder | foe (PvP Log)
   keyword: "", gen: 0, results: [], regionState: {},
   chars: new Map(), favorites: [], my: { slots: [], active: null },
   nearby: { enabled: false, state: "", rows: [], recent: [] },
   update: { state: "idle" },                   // the self-updater (desktop/updater.js)
 };
-export const app = { S, call, save, openProfile, closeScreen, myChar, pickMine, refreshList: () => list.render() };
+export const app = { S, call, save, openProfile, closeScreen, myChar, pickMine, refreshList: () => list.render(),
+  openFoe: (id) => openFoe(id), enableNearby: () => enableNearby() };
 
 function save(key, value) { S.cfg[key] = value; call("config.set", { key, value }); }
 const fset = (key) => new Set(S.cfg[key] || []);
@@ -48,7 +50,7 @@ function paintTitlebar() {
     : h("span.logo", { html: LOGO }));
   const tabs = h("div.tabs");
   if (S.screen !== "list") {
-    const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent" }[S.mode], settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
+    const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent", pvp: "PvP" }[S.mode], foe: "PvP", settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
     tabs.append(h("button.tab.back", { onClick: closeScreen }, icon("back"), back));
   } else {
     const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode) },
@@ -56,6 +58,7 @@ function paintTitlebar() {
     tabs.append(t("search", "Search"), t("favorites", "Favorites", S.favorites.length || ""));
     if (S.nearby.enabled) tabs.append(t("nearby", "Nearby", S.nearby.rows.length || ""), t("recent", "Recent", S.nearby.recent.length || ""));
     else tabs.append(t("nearby", "Nearby"));
+    tabs.append(t("pvp", "PvP"));
   }
   titlebar.append(tabs, h("span.grow"));
   const pinned = S.cfg.always_on_top !== false;
@@ -131,12 +134,28 @@ function setMode(mode) {
 
 function closeScreen() {
   if (S.screen === "finder" && !S.cfg.setup_done) save("setup_done", true);   // skipped: don't ask again
+  const backToFoe = S.screen === "profile" && foe;              // opened from a PvP Log opponent: back to them
   profile?.destroy(); profile = null; settings = null; finder = null;
+  if (backToFoe) { S.screen = "foe"; render(); return; }
+  foe?.destroy(); foe = null;
   S.screen = "list";
   render();
 }
 
-let profile = null, settings = null, finder = null;
+let profile = null, settings = null, finder = null, foe = null, pvpList = null;
+/** PvP Log: one opponent's fights. */
+function openFoe(id) {
+  closeMenus();
+  foe?.destroy();
+  S.screen = "foe";
+  foe = new PvpFoe(app, id);
+  render();
+}
+async function enableNearby() {
+  S.nearby = await call("nearby.enable", { on: true });
+  if (S.nearby.state === "no_admin") win.relaunchAsAdmin();
+  render();
+}
 function openFinder(slot) {
   closeMenus();
   S.screen = "finder";
@@ -155,6 +174,7 @@ function openProfile(c) {
   if (!c) return;
   closeMenus();
   profile?.destroy();
+  if (S.screen !== "foe") { foe?.destroy(); foe = null; }
   S.screen = "profile";
   profile = new ProfileView(app, c);
   render();
@@ -497,7 +517,7 @@ const list = (() => {
     return h("div.empty", { style: { position: "absolute", left: 0, right: 0, top: "30px" } }, h("div", {},
       h("b", {}, "Nearby"),
       h("div", { style: { maxWidth: "330px", margin: "0 auto 14px" } }, "The players around your character, with their combat power and gear score."),
-      h("button.btn.gold", { onClick: async () => { S.nearby = await call("nearby.enable", { on: true }); if (S.nearby.state === "no_admin") win.relaunchAsAdmin(); app.render(); } }, "Turn On Nearby")));
+      h("button.btn.gold", { onClick: () => enableNearby() }, "Turn On Nearby")));
   }
 
   let drag = null;
@@ -615,7 +635,12 @@ function render() {
   if (S.screen === "profile" && profile) view.append(profile.el);
   else if (S.screen === "settings" && settings) view.append(settings.el);
   else if (S.screen === "finder" && finder) view.append(finder.el);
-  else {
+  else if (S.screen === "foe" && foe) view.append(foe.el);
+  else if (S.mode === "pvp") {
+    pvpList ??= new PvpList(app);
+    pvpList.load();
+    view.append(pvpList.el);
+  } else {
     if (S.mode === "search") view.append(h("div.searchbox", {}, icon("search"), searchInput));
     if (S.mode !== "nearby" || S.nearby.enabled) view.append(filtersBar(), list.head);
     view.append(list.box);

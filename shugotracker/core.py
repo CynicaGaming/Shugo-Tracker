@@ -85,6 +85,12 @@ class Core:
             find = find_nearby(session)
         self.nearby = NearbyService(self.api, self.cfg, log=self.log, data_dir=self.logs, find=find)
         self.nearby.on_region = lambda r: self.set_config("nearby_region", r)
+        from .pvplog import PvpLog
+        self.pvp = PvpLog(None if demo else os.path.join(self.data, "pvp_log.jsonl"), log=self.log)
+        if demo:
+            from .demo import seed_pvp
+            seed_pvp(self.pvp)
+        self.nearby.on_pvp = self._on_pvp
         mine = self.my.active()
         if mine and not demo:                            # your character, before the game says so (mid-match starts)
             self.nearby.set_me(mine["name"], mine.get("server_id") or 0)
@@ -352,6 +358,34 @@ class Core:
     def rpc_nearby_clear(self, which: str = "nearby") -> bool:
         (self.nearby.clear_recent if which == "recent" else self.nearby.clear_nearby)()
         return True
+
+    # ───── PvP Log ─────
+    def _on_pvp(self, kind: str, foe: Character, with_: list[str]) -> None:
+        me = self.nearby.tracker.me.name or (self.my.active() or {}).get("name") or ""
+        self.chars[foe.key] = foe
+        r = self.pvp.add(kind, me, char_json(foe), with_)
+        self.emit("pvp", r)
+
+    def _pvp_me(self) -> str | None:
+        """The log follows the character you've picked (all of them when none is)."""
+        return (self.my.active() or {}).get("name") or None
+
+    def rpc_pvp_list(self, within_s: int = 0) -> dict:
+        since = time.time() - within_s if within_s else 0
+        return self.pvp.summary(self._pvp_me(), since)
+
+    def rpc_pvp_detail(self, id: str, within_s: int = 0) -> dict:   # noqa: A002
+        since = time.time() - within_s if within_s else 0
+        d = self.pvp.detail(id, self._pvp_me(), since)
+        f = d["foe"]
+        if f.get("char_id") and f.get("server_id") and f.get("key") not in self.chars:   # so View Profile opens it
+            from dataclasses import fields
+            names = {x.name for x in fields(Character)}
+            base = {"race": 0, "pc_id": 0, "level": 0, "server_name": "", "region": ""}
+            c = Character(**{**base, **{k: v for k, v in f.items() if k in names}})
+            self.chars[c.key] = c
+            f["key"] = c.key
+        return d
 
     def rpc_recent_max(self, n: int) -> bool:
         self.set_config("recent_max", int(n))

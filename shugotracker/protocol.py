@@ -68,9 +68,11 @@ class Hit:
 
 @dataclass(frozen=True)
 class EntityGone:
-    """An entity died (died=True) or left view (died=False)."""
+    """An entity died (died=True) or left view (died=False). in_combat: it died just now (not "came into view
+    already dead")."""
     entity_id: int
     died: bool
+    in_combat: bool = False
 
 
 @dataclass(frozen=True)
@@ -424,7 +426,7 @@ class StreamDecoder:
             if ln3 <= 0:
                 return
             # 3 = died in combat, 1 = came into view already dead; other values = removed from view.
-            self.emit(EntityGone(eid, died=flag in (1, 3)))
+            self.emit(EntityGone(eid, died=flag in (1, 3), in_combat=flag == 3))
         elif _at(packet, o, self.op.object_gone):
             eid, ln = read_varint(packet, o + 2)
             if ln > 0 and 1 <= eid <= MAX_ENTITY_ID:

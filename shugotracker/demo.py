@@ -288,3 +288,23 @@ class ShowcaseSession(DemoSession):
                         data["pagination"]["total"] += 1
             return _Resp(data)
         return super().get(url, params, timeout)
+
+
+def seed_pvp(log) -> None:
+    """--demo: a few days of fights against the demo Asmodians, for the PvP Log."""
+    import random
+    from .aion2api import class_pc_ids
+    r = random.Random(7)
+    now = time.time()
+    foes = [(n, srv) for n, srv, _ in DEMO_NEARBY if srv // 1000 == 2] + [("Drevin", 2102), ("Kassia", 2101)]
+    for name, srv in foes:
+        cls = random.Random(name).choice(["Gladiator", "Templar", "Ranger", "Assassin", "Spiritmaster", "Sorcerer",
+                                          "Cleric", "Chanter", "Brawler"])
+        card = {"char_id": f"demo-{name}", "name": name, "race": 2, "pc_id": class_pc_ids([cls])[0], "level": 45,
+                "server_id": srv, "server_name": sv.name_of(srv), "region": "nae", "class_name": cls,
+                "key": f"{srv}:demo-{name}"}
+        for _ in range(r.randint(2, 9)):
+            kind = r.choices(["kill", "death", "assist"], [5, 3, 2])[0]
+            log.add(kind, "Luna", card, [r.choice(["Aria", "Tamsin"])] if kind == "assist" else [],
+                    t=now - r.uniform(60, 40 * 86400) ** r.uniform(0.7, 1.0))
+    log.records.sort(key=lambda x: x["t"])
