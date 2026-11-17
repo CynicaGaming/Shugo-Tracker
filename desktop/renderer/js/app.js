@@ -16,6 +16,7 @@ const S = {                                    // everything the window shows
   keyword: "", gen: 0, results: [], regionState: {},
   chars: new Map(), favorites: [], my: { slots: [], active: null },
   nearby: { enabled: false, state: "", rows: [], recent: [] },
+  game: true,                                  // AION 2 running: the logo is grey while it isn't
   update: { state: "idle" },                   // the self-updater (desktop/updater.js)
 };
 export const app = { S, call, save, openProfile, closeScreen, myChar, pickMine, refreshList: () => list.render(),
@@ -37,7 +38,7 @@ function paintTitlebar() {
   const me0 = myChar(), up0 = S.update;
   const sig = JSON.stringify([S.screen, S.mode, S.favorites.length, S.nearby.enabled, S.nearby.rows.length,
     S.nearby.recent.length, up0.state, up0.latest, Math.round((up0.progress || 0) * 100), up0.clicked,
-    S.cfg.always_on_top, me0?.key, me0?.portrait, me0?.name, me0?.server_name, S.my.slots.some(Boolean)]);
+    S.cfg.always_on_top, me0?.key, me0?.portrait, me0?.name, me0?.server_name, S.my.slots.some(Boolean), S.game]);
   if (sig === titleSig) return;
   titleSig = sig;
   clear(titlebar);
@@ -45,9 +46,9 @@ function paintTitlebar() {
   // Settings → Updates.
   const up = updateItem();
   titlebar.append(up
-    ? h("button.logo.has-update", { class: up.kind, title: up.label, html: LOGO,
+    ? h("button.logo.has-update", { class: [up.kind, S.game ? "" : "idle"].join(" "), title: up.label, html: LOGO,
       onClick: () => { if (S.screen !== "settings") openSettings(); } }, h("i.blip"))
-    : h("span.logo", { html: LOGO }));
+    : h("span.logo", { class: S.game ? "" : "idle", html: LOGO }));
   const tabs = h("div.tabs");
   if (S.screen !== "list") {
     const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent", pvp: "PVP" }[S.mode], foe: "PVP", settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
@@ -251,6 +252,8 @@ on("card", (c) => {
 });
 
 let askedAdmin = false;
+on("game", (d) => { S.game = !!d.running; paintTitlebar(); });
+
 on("nearby", (d) => {
   const toggled = d.enabled !== S.nearby.enabled;
   S.nearby = d;
@@ -693,7 +696,7 @@ app.render = render;
 (async () => {
   const init = await call("init");
   Object.assign(S, { cfg: init.config, version: init.version, demo: init.demo, regions: init.regions,
-    favorites: init.favorites, my: init.my, nearby: init.nearby || S.nearby });
+    favorites: init.favorites, my: init.my, nearby: init.nearby || S.nearby, game: init.game !== false });
   for (const c of init.favorites) S.chars.set(c.key, c);
   S.update = { ...(await win.update("state")) };
   win.setAlwaysOnTop(S.cfg.always_on_top !== false);

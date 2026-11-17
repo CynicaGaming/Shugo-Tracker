@@ -1,7 +1,7 @@
 // Shugo Tracker (Electron): the window, and the Python core running behind it.
 //
 // Portable: everything lives in folders next to ShugoTracker.exe (data, cache, logs), Chromium's own cache too.
-const { app, BrowserWindow, Menu, ipcMain, screen, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, nativeImage, screen, shell } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -70,7 +70,11 @@ function startCore() {
   const full = DEV ? ["-m", "shugotracker.core", ...args] : args;
   core = spawn(cmd, full, { cwd: DEV ? path.join(__dirname, "..") : ROOT, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
   readline.createInterface({ input: core.stdout }).on("line", (line) => {
-    try { win?.webContents.send("core", JSON.parse(line)); } catch { /* not JSON: ignore */ }
+    let msg;
+    try { msg = JSON.parse(line); } catch { return; }    // not JSON: ignore
+    if (msg.event === "game") gameIcon(msg.data.running);
+    else if (msg.result && typeof msg.result.game === "boolean" && "nearby" in msg.result) gameIcon(msg.result.game);   // (init)
+    win?.webContents.send("core", msg);
   });
   core.stderr.on("data", (d) => winLog(`core stderr: ${String(d).trimEnd()}`));
   // A write to a core that has just exited fails later, on its own: catch it here so it can never become an
@@ -142,6 +146,23 @@ function onScreen() {
     winLog(`moved on screen from ${b.x},${b.y}`);
   }
 }
+/** The taskbar icon follows AION 2: in colour while the game runs, grey while it doesn't. */
+let iconColour = null, iconGrey = null;
+function gameIcon(running) {
+  if (!win) return;
+  if (!iconColour) {
+    iconColour = nativeImage.createFromPath(path.join(__dirname, "build", "icon.ico"));
+    const { width, height } = iconColour.getSize();
+    const px = Buffer.from(iconColour.toBitmap());           // BGRA
+    for (let i = 0; i < px.length; i += 4) {
+      const y = Math.round(0.114 * px[i] + 0.587 * px[i + 1] + 0.299 * px[i + 2]);
+      px[i] = px[i + 1] = px[i + 2] = Math.round(y * 0.85);
+    }
+    iconGrey = nativeImage.createFromBitmap(px, { width, height });
+  }
+  if (!iconColour.isEmpty()) win.setIcon(running ? iconColour : iconGrey);
+}
+
 /** Always on top, at the highest level ("screen-saver" stays above borderless games); `force` re-applies it by
  *  switching it off and on, which Windows needs when it has silently dropped it. */
 function pin(on, force = false) {

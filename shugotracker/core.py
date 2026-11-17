@@ -95,6 +95,7 @@ class Core:
         if mine and not demo:                            # your character, before the game says so (mid-match starts)
             self.nearby.set_me(mine["name"], mine.get("server_id") or 0)
         self._nearby_seen = None
+        self.game = True if demo else self._game_running()   # AION 2 running (the window greys its logo when not)
         self._stop = threading.Event()
         threading.Thread(target=self._watch_nearby, name="nearby-watch", daemon=True).start()
         try:
@@ -162,7 +163,7 @@ class Core:
         self._nearby_seen = None             # the window is (re)loaded: send it Nearby's state again
         return {"version": __version__, "demo": self.demo, "config": self.cfg, "regions": SUB_REGIONS,
                 "favorites": self._keep(self.favorites.characters()), "my": self._my_state(),
-                "nearby": self._nearby_state()}
+                "nearby": self._nearby_state(), "game": self.game}
 
     def rpc_config_set(self, key: str, value=None) -> bool:
         self.set_config(key, value)
@@ -330,10 +331,27 @@ class Core:
                 "rows": [{"side": s, "char": char_json(c)} for s, c, _p in rows],
                 "recent": [{"side": s, "char": char_json(c), "seen": t, "fought": f} for s, c, t, f in recent]}
 
+    @staticmethod
+    def _game_running() -> bool:
+        try:
+            import psutil
+            from .capture import GAME_PROCESS_NAMES
+            return any((p.info["name"] or "").lower() in GAME_PROCESS_NAMES for p in psutil.process_iter(["name"]))
+        except Exception:  # noqa: BLE001  (no psutil: say it's running rather than grey the logo for nothing)
+            return True
+
     def _watch_nearby(self) -> None:
         cleared = time.monotonic()
+        looked = 0.0
         while not self._stop.wait(0.3):
             try:
+                if not self.demo and time.monotonic() - looked >= 3:    # is AION 2 running? (every 3 s)
+                    looked = time.monotonic()
+                    running = self._game_running()
+                    if running != self.game:
+                        self.game = running
+                        self.log(f"AION 2 {'started' if running else 'closed'}")
+                        self.emit("game", {"running": running})
                 every = int(self.cfg.get("nearby_autoclear_s") or 0)   # Settings: move everyone to Recent every N s
                 if not (every and self.cfg.get("nearby_enabled")):
                     cleared = time.monotonic()

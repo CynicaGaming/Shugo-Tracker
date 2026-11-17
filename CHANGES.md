@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.4.5
+- New: the logo (in the window and on the taskbar) turns grey while AION 2 isn't running, and back to gold when it starts
+
 ## 2.4.4
 - New: resize columns on Search, Favorites, Nearby and Recent: drag the line between two headers (double-click it to undo; Reset Columns in the header's right-click menu resets them all)
 
