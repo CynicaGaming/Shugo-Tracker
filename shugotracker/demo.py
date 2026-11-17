@@ -305,6 +305,7 @@ def seed_pvp(log) -> None:
                 "key": f"{srv}:demo-{name}"}
         for _ in range(r.randint(2, 9)):
             kind = r.choices(["kill", "death", "assist"], [5, 3, 2])[0]
-            log.add(kind, "Luna", card, [r.choice(["Aria", "Tamsin"])] if kind == "assist" else [],
-                    t=now - r.uniform(60, 40 * 86400) ** r.uniform(0.7, 1.0))
+            ally = r.choice(["Aria", "Tamsin"])
+            log.add(kind, "Luna", card, [ally] if kind == "assist" else [],
+                    t=now - r.uniform(60, 40 * 86400) ** r.uniform(0.7, 1.0), by=ally if kind == "assist" else None)
     log.records.sort(key=lambda x: x["t"])

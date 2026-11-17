@@ -2,9 +2,14 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.4.1
+- Changed: the tab is called PVP
+- Changed: each fight reads like a kill feed: the winner, crossed swords, then the one who fell, in green when you won and red when you didn't
+- Changed: an opponent's page shows who they are at a glance: legion, class, server, faction, combat power, gear score and level
+
 ## 2.4.0
-- New: PvP Log — who you killed, who killed you, and assists, recorded while Nearby is on
-- New: click someone in the PvP Log to see every fight with them, filtered to the last 24h, 7d, 30d or all time
+- New: PVP Log — who you killed, who killed you, and assists, recorded while Nearby is on
+- New: click someone in the PVP Log to see every fight with them, filtered to the last 24h, 7d, 30d or all time
 
 ## 2.3.30
 - Changed: no mark at 50 on the deity stat bars (they still run 0 to 100)

@@ -330,7 +330,7 @@ html:has(body.tipwin), body.tipwin { background: transparent; }
 body.tipwin #root { position: absolute; left: 0; top: 0; width: max-content; }
 body.tipwin .tip { position: static !important; box-shadow: none; }
 
-/* ───── PvP Log ───── */
+/* ───── PVP Log ───── */
 .pvp { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .pvptop { display: flex; padding: 8px 12px 6px; flex: none; }
 .pvpseg { width: 100%; }
@@ -357,13 +357,21 @@ body.tipwin .tip { position: static !important; box-shadow: none; }
   font-size: 11px; font-weight: 700; overflow: hidden; }
 .pbadge img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
 .pvp .phead .pbadge { font-size: 20px; border-radius: 8px; }
-.fight { display: grid; grid-template-columns: 64px 1fr auto 92px; align-items: center; gap: 10px; height: 36px; padding: 0 8px;
-  border-bottom: 1px solid var(--line); font-size: 12.5px; }
-.fight .kind { justify-self: start; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.4px;
-  text-transform: uppercase; }
-.fight.kill .kind { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
-.fight.death .kind { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
-.fight.assist .kind { color: #6fb4ff; background: rgba(111, 180, 255, 0.14); }
-.fight .with { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fight .ago { color: var(--text-2); }
+.fight { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 92px; align-items: center; gap: 12px; height: 38px;
+  padding: 0 10px 0 9px; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; font-size: 12.5px; }
+.fight.kill { border-left-color: var(--green); background: linear-gradient(90deg, color-mix(in srgb, var(--green) 9%, transparent), transparent 45%); }
+.fight.death { border-left-color: var(--red); background: linear-gradient(90deg, color-mix(in srgb, var(--red) 9%, transparent), transparent 45%); }
+.fight.assist { border-left-color: #6fb4ff; background: linear-gradient(90deg, rgba(111, 180, 255, 0.08), transparent 45%); }
+.fight .feed { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+.fight .win { font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.fight .win.us { color: var(--green); }
+.fight .win.them { color: var(--red); }
+.fight.assist .win.us { color: #6fb4ff; }
+.fight .lose { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+.fight .sw { flex: none; display: grid; width: 16px; height: 16px; color: var(--gold); }
+.fight .sw svg { width: 100%; height: 100%; }
+.fight .tag { flex: none; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+  text-transform: uppercase; color: #6fb4ff; background: rgba(111, 180, 255, 0.14); }
+.fight .with { color: var(--faint); font-size: 11.5px; white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.fight .ago { color: var(--text-2); text-align: right; }
 .fight .at { color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; }

@@ -75,7 +75,7 @@ each with their power and gear score, in towns, in the open world, in Shugo and 
 **Recent** keeps everyone you've crossed paths with — as many as you like — with when you last saw them
 and a ⚔ for anyone who fought you.
 
-**PvP** logs who you killed, who killed you and your assists, with kills, deaths and K/D for the last day,
+**PVP** logs who you killed, who killed you and your assists, with kills, deaths and K/D for the last day,
 week, month or all time. Click anyone to see every fight you've had with them.
 
 <sub>Opt-in. Reads the game's network traffic on your PC through Windows itself — nothing extra to install. It never sends or changes anything.</sub>

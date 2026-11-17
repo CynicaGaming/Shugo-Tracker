@@ -17,7 +17,7 @@ class DetectTests(unittest.TestCase):
     def setUp(self):
         self.got = []
         self.svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae"})
-        self.svc.on_pvp = lambda kind, foe, with_: self.got.append((kind, foe.name, with_))
+        self.svc.on_pvp = lambda kind, foe, with_, by=None: self.got.append((kind, foe.name, with_) + ((by,) if by else ()))
         self.feed(self_record(100, "Mine", 1101), other_record(200, "Foe"), other_record(300, "Pal"))
 
     def feed(self, *bodies):
@@ -29,7 +29,7 @@ class DetectTests(unittest.TestCase):
 
     def test_someone_elses_last_hit_is_an_assist(self):
         self.feed(damage(200, 100), damage(200, 300), death(200))
-        self.assertEqual(self.got, [("assist", "Foe", ["Pal"])])
+        self.assertEqual(self.got, [("assist", "Foe", ["Pal"], "Pal")])
 
     def test_the_last_player_to_hit_you_killed_you(self):
         self.feed(damage(100, 300), damage(100, 200), damage(100, 9999), death(100))   # 9999: a monster

@@ -87,7 +87,7 @@ class NearbyService:
         # PvP Log: recent hits on each entity, to tell who landed the killing blow
         self._hits: dict[int, list[tuple[float, int]]] = {}
         self._died_at: dict[int, float] = {}
-        self.on_pvp: Callable[[str, Character, list[str]], None] = lambda kind, foe, with_: None
+        self.on_pvp: Callable[..., None] = lambda kind, foe, with_, by=None: None
         self._map_loads_seen = False
         self._loaded_since_self = False               # a map load came in since your last own record
         self._self_eid: int | None = None             # your id in the last record of your own
@@ -296,7 +296,8 @@ class NearbyService:
         others = sorted({name_of(a) for _t, a in players if a not in mine})
         self.log(f"pvp: {'you killed' if kind == 'kill' else 'you helped kill'} {victim}"
                  + (f" (with {', '.join(others)})" if others else ""))
-        self.on_pvp(kind, self._character(self.tracker.players[victim]), others)
+        self.on_pvp(kind, self._character(self.tracker.players[victim]), others,
+                    by=None if kind == "kill" else name_of(last))
 
     def _new_area(self, ev: SelfSeen) -> bool:
         """Your own record arriving means a new area when map-load records aren't coming through at all, or

@@ -1,4 +1,4 @@
-// The window: title bar, Search / Favorites / Nearby / Recent lists, the PvP Log, menus, footer. Profile and Settings open
+// The window: title bar, Search / Favorites / Nearby / Recent lists, the PVP Log, menus, footer. Profile and Settings open
 // in place of the list (profile.js, settings.js).
 import { call, on, win } from "./bridge.js";
 import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, ago, clear,
@@ -12,7 +12,7 @@ import { PvpFoe, PvpList } from "./pvp.js";
 const ROW = 38;
 const S = {                                    // everything the window shows
   cfg: {}, version: "", demo: false, regions: [],
-  mode: "search", screen: "list",              // screen: list | profile | settings | finder | foe (PvP Log)
+  mode: "search", screen: "list",              // screen: list | profile | settings | finder | foe (PVP Log)
   keyword: "", gen: 0, results: [], regionState: {},
   chars: new Map(), favorites: [], my: { slots: [], active: null },
   nearby: { enabled: false, state: "", rows: [], recent: [] },
@@ -50,7 +50,7 @@ function paintTitlebar() {
     : h("span.logo", { html: LOGO }));
   const tabs = h("div.tabs");
   if (S.screen !== "list") {
-    const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent", pvp: "PvP" }[S.mode], foe: "PvP", settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
+    const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent", pvp: "PVP" }[S.mode], foe: "PVP", settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
     tabs.append(h("button.tab.back", { onClick: closeScreen }, icon("back"), back));
   } else {
     const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode) },
@@ -58,7 +58,7 @@ function paintTitlebar() {
     tabs.append(t("search", "Search"), t("favorites", "Favorites", S.favorites.length || ""));
     if (S.nearby.enabled) tabs.append(t("nearby", "Nearby", S.nearby.rows.length || ""), t("recent", "Recent", S.nearby.recent.length || ""));
     else tabs.append(t("nearby", "Nearby"));
-    tabs.append(t("pvp", "PvP"));
+    tabs.append(t("pvp", "PVP"));
   }
   titlebar.append(tabs, h("span.grow"));
   const pinned = S.cfg.always_on_top !== false;
@@ -134,7 +134,7 @@ function setMode(mode) {
 
 function closeScreen() {
   if (S.screen === "finder" && !S.cfg.setup_done) save("setup_done", true);   // skipped: don't ask again
-  const backToFoe = S.screen === "profile" && foe;              // opened from a PvP Log opponent: back to them
+  const backToFoe = S.screen === "profile" && foe;              // opened from a PVP Log opponent: back to them
   profile?.destroy(); profile = null; settings = null; finder = null;
   if (backToFoe) { S.screen = "foe"; render(); return; }
   foe?.destroy(); foe = null;
@@ -143,7 +143,7 @@ function closeScreen() {
 }
 
 let profile = null, settings = null, finder = null, foe = null, pvpList = null;
-/** PvP Log: one opponent's fights. */
+/** PVP Log: one opponent's fights. */
 function openFoe(id) {
   closeMenus();
   foe?.destroy();

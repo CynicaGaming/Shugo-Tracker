@@ -66,7 +66,7 @@ const fs = require("fs");
   await page.click(".menu .item:last-child");
   await shot("settings", 800);
   await page.click(".tab.back");
-  await page.click(".tabs .tab:has-text('PvP')");                 // PvP Log (demo fights)
+  await page.click(".tabs .tab:has-text('PVP')");                 // PVP Log (demo fights)
   await shot("pvp", 800);
   await page.click(".pvprow");
   await shot("pvp-foe", 800);

@@ -1,9 +1,12 @@
-// PvP Log: everyone you've fought (kills, deaths, assists), and one opponent's fights. Both filter by how far back.
+// PVP Log: everyone you've fought (kills, deaths, assists), and one opponent's fights. Both filter by how far back.
 import { call, on } from "./bridge.js";
 import { CLASS_COLORS, REGION_NAMES, ago, clear, factionColor, fmtInt, h } from "./dom.js";
 
+const SWORDS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+  + '<path d="M14.5 17.5 3 6V3h3l11.5 11.5"/><path d="m13 19 6-6M16 16l4 4M19 21l2-2"/>'
+  + '<path d="M14.5 6.5 18 3h3v3l-3.5 3.5"/><path d="m5 14 4 4M7 17l-3 3M3 19l2 2"/></svg>';
+
 export const WITHIN = [[86400, "24h"], [7 * 86400, "7d"], [30 * 86400, "30d"], [0, "All"]];
-const KIND = { kill: "Kill", death: "Death", assist: "Assist" };
 
 function within(app) {
   const v = app.S.cfg.pvp_within_s;
@@ -39,7 +42,7 @@ function badge(foe, size = 28) {
 const when = (t) => new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
   hour12: false }).format(new Date(t * 1000)).replace(",", "");
 
-/** The PvP tab: everyone you've fought, newest fight first. */
+/** The PVP tab: everyone you've fought, newest fight first. */
 export class PvpList {
   constructor(app) {
     this.app = app;
@@ -62,7 +65,7 @@ export class PvpList {
     el.append(strip(d.totals));
     const list = h("div.pvplist");
     if (!d.foes.length) {
-      list.append(h("div.empty", {}, h("div", {}, h("b", {}, S.nearby.enabled ? "No Fights Yet" : "PvP Log"),
+      list.append(h("div.empty", {}, h("div", {}, h("b", {}, S.nearby.enabled ? "No Fights Yet" : "PVP Log"),
         S.nearby.enabled ? null : h("div", { style: { maxWidth: "330px", margin: "0 auto 14px" } }, "Who you killed and who killed you, recorded while Nearby is on."),
         S.nearby.enabled ? null : h("button.btn.gold", { onClick: () => this.app.enableNearby() }, "Turn On Nearby"))));
     }
@@ -82,57 +85,80 @@ export class PvpList {
   }
 }
 
-/** One opponent: their fights with you, newest first. */
+/** One opponent: who they are (as on their profile), then their fights with you, newest first. */
 export class PvpFoe {
   constructor(app, id) {
     this.app = app;
     this.id = id;
     this.el = h("div.pvp");
-    this.off = on("pvp", () => this.load());
+    this.card = null;                  // their full card (CP, gear score, legion), once looked up
+    this.offs = [on("pvp", () => this.load()),
+      on("card", (c) => { if (this.card && c.key === this.card.key) { this.card = { ...this.card, ...c }; this.paint(); } })];
     this.data = null;
-    this.load();
+    this.load(true);
   }
-  destroy() { this.off(); }
+  destroy() { this.offs.forEach((f) => f()); }
 
-  async load() {
+  async load(first = false) {
     this.data = await call("pvp.detail", { id: this.id, within_s: within(this.app) }).catch(() => null);
     this.paint();
+    if (first) this.lookUp();
   }
 
-  async profile() {
+  /** Their card: by key when we have it, otherwise by name on their server. */
+  async lookUp() {
     const f = this.data?.foe;
     if (!f) return;
-    if (f.char_id) { this.app.openProfile(f); return; }
-    this.looking = true; this.paint();
-    const found = await call("find_mine", { name: f.name, server_id: f.server_id }).catch(() => []);
-    this.looking = false;
-    const c = found.find((x) => x.name === f.name) || found[0];
-    if (c) this.app.openProfile(c);
-    else { this.missing = true; this.paint(); }
+    let c = f.char_id ? { ...f } : null;
+    if (!c && f.server_id) {
+      const found = await call("find_mine", { name: f.name, server_id: f.server_id }).catch(() => []);
+      c = found.find((x) => x.name === f.name) || null;
+      if (!c) { this.missing = true; this.paint(); return; }
+    }
+    if (!c) return;
+    this.card = c;
+    this.paint();
+    call("cards.want", { keys: [c.key] });
   }
 
   paint() {
     const el = clear(this.el), d = this.data;
     if (!d) return;
-    const f = d.foe, cls = f.class_name || "Unknown";
+    const f = { ...d.foe, ...(this.card || {}) }, cls = f.class_name || "Unknown";
+    const wait = this.missing ? "—" : "…";
     const bits = [h("span.cls", { style: { color: CLASS_COLORS[cls] || "var(--dim)" } }, cls),
-      f.level ? ` · Lv ${f.level}` : "", f.server_name ? ` · ${f.server_name}` : "",
-      f.region ? ` · ${REGION_NAMES[f.region] || f.region}` : "", f.race ? ` · ${f.race === 1 ? "Elyos" : "Asmodian"}` : ""];
+      f.server_name ? ` · ${f.server_name}` : "", f.region ? ` · ${REGION_NAMES[f.region] || f.region}` : "",
+      f.race ? ` · ${f.race === 1 ? "Elyos" : "Asmodian"}` : ""];
     el.append(h("div.phead", {}, f.portrait ? h("img.portrait", { src: f.portrait }) : badge(f, 52),
-      h("div.who", {}, h("div.name", {}, f.name), h("div.line", {}, ...bits)),
-      f.server_id ? h("button.btn", { disabled: this.looking || this.missing, onClick: () => this.profile() },
-        this.missing ? "Not Found" : this.looking ? "Looking…" : "View Profile") : null));
+      h("div.who", {}, h("div.name", {}, f.name, f.legion ? h("span.legion", {}, `<${f.legion}>`) : null),
+        h("div.line", {}, ...bits)),
+      this.card ? h("button.btn", { onClick: () => this.app.openProfile(this.card) }, "View Profile") : null),
+    h("div.statstrip", {},
+      h("div", {}, h("small", {}, "Combat Power"), h("b.cp", {}, f.combat_power != null ? fmtInt(f.combat_power) : wait)),
+      h("div", {}, h("small", {}, "Gear Score"), h("b", {}, f.gear_score != null ? fmtInt(f.gear_score) : wait)),
+      h("div", {}, h("small", {}, "Level"), h("b", {}, f.level || wait))));
     el.append(h("div.pvptop", {}, seg(this.app, () => this.load())));
     el.append(strip(d.totals));
     const list = h("div.pvplist");
     if (!d.fights.length) list.append(h("div.empty", {}, h("div", {}, h("b", {}, "No Fights in This Time"))));
-    for (const r of d.fights) {
-      list.append(h("div.fight", { class: r.kind },
-        h("span.kind", {}, KIND[r.kind]),
-        h("span.with", {}, r.with?.length ? `with ${r.with.join(", ")}` : ""),
-        h("span.ago", {}, ago(r.t)),
-        h("span.at", {}, when(r.t))));
-    }
+    for (const r of d.fights) list.append(fightRow(r, f));
     el.append(list);
   }
+}
+
+/** One fight as the game's kill feed: winner ⚔ loser. Green when you came out on top, red when you didn't. */
+function fightRow(r, foe) {
+  const me = r.me || "You", them = foe.name;
+  const [winner, loser] = r.kind === "death" ? [them, me] : [r.kind === "assist" ? (r.by || "Ally") : me, them];
+  const youWon = r.kind !== "death";
+  const others = (r.with || []).filter((n) => n !== winner && n !== loser);
+  return h("div.fight", { class: r.kind },
+    h("span.feed", {},
+      h("span.win", { class: youWon ? "us" : "them" }, winner),
+      h("span.sw", { html: SWORDS }),
+      h("span.lose", {}, loser),
+      r.kind === "assist" ? h("span.tag", {}, "Assist") : null),
+    h("span.with", {}, others.length ? `with ${others.join(", ")}` : ""),
+    h("span.ago", {}, ago(r.t)),
+    h("span.at", {}, when(r.t)));
 }
