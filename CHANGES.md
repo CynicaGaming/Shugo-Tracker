@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.4.4
+- New: resize columns on Search, Favorites, Nearby and Recent: drag the line between two headers (double-click it to undo; Reset Columns in the header's right-click menu resets them all)
+
 ## 2.4.3
 - Changed: the PVP Log's dates are one pill like the other tabs' Filters: Today, Last 7 Days, Last 30 Days, All Time, or pick your own From and To dates; Clear resets it
 

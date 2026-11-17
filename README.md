@@ -28,7 +28,7 @@ Type a name and every match across **all five Global regions** shows up while yo
 
 - Filter by region, faction, class and level in one click
 - Sort by any column; each tab remembers its own sort
-- Show, hide and drag columns into the order you like
+- Show, hide and resize columns: drag the line between two headers
 
 </td>
 </tr>

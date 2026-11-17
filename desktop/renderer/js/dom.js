@@ -68,9 +68,15 @@ const SPEC = [["name", 130, 1e6, 3, "w", 0], ["legion", 56, 170, 2, "w", 2], ["c
 export const COL_LABELS = { name: "Name", legion: "Legion", class: "Class", level: "Lv", server: "Server", gs: "GS", cp: "CP", seen: "Last Seen" };
 export const COL_MENU = { ...COL_LABELS, level: "Level", gs: "Gear Score", cp: "Combat Power" };
 export const DEFAULT_COLUMNS = ["legion", "class", "level", "server", "gs", "cp", "seen"];
-export function layoutColumns(width, keys) {
-  const GAP = 10, STAR = 24, x1 = width - 6, left = 8, right = x1 - STAR, avail = right - left;
-  const byKey = Object.fromEntries(SPEC.map((c) => [c[0], c]));
+/** widths: columns you've sized by hand (by key) keep that width; Name and the rest share what's left. */
+export const COL_GAP = 10;
+export const COL_MIN = 24;
+export function layoutColumns(width, keys, widths = {}) {
+  const GAP = COL_GAP, STAR = 24, x1 = width - 6, left = 8, right = x1 - STAR, avail = right - left;
+  const byKey = Object.fromEntries(SPEC.map((c) => {
+    const w = c[0] !== "name" && widths[c[0]] > 0 ? Math.max(COL_MIN, Math.round(widths[c[0]])) : null;
+    return [c[0], w ? [c[0], w, w, 0, c[4], c[5]] : c];
+  }));
   let cols = [byKey.name, ...keys.filter((k) => byKey[k] && k !== "name").map((k) => byKey[k])];
   const need = (cs) => cs.reduce((a, c) => a + c[1], 0) + GAP * (cs.length - 1);
   for (const drop of [1, 2, 3]) { if (need(cols) <= avail) break; cols = cols.filter((c) => c[5] !== drop); }

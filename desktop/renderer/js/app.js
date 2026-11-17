@@ -2,7 +2,7 @@
 // in place of the list (profile.js, settings.js).
 import { call, on, win } from "./bridge.js";
 import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, ago, clear,
-  factionColor, fmtInt, h, icon, layoutColumns, sortChars } from "./dom.js";
+  COL_GAP, COL_MIN, factionColor, fmtInt, h, icon, layoutColumns, sortChars } from "./dom.js";
 import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
 import { ProfileView } from "./profile.js";
 import { SettingsView } from "./settings.js";
@@ -352,7 +352,7 @@ const list = (() => {
   const box = h("div.list");
   const spacer = h("div.spacer");
   box.append(spacer);
-  let rows = [], layout = null, layoutSig = "", frame = 0, drawFrame = 0, wantTimer = 0;
+  let rows = [], layout = null, layoutSig = "", frame = 0, drawFrame = 0, wantTimer = 0, resizing = null;
   // Row elements are kept by character and reused while what they show is unchanged, so scrolling and card
   // updates only build the rows that are new or different (and portraits never reload).
   const made = new Map();                                // key -> { el, sig }
@@ -361,7 +361,7 @@ const list = (() => {
 
   function render() {
     rows = visible();
-    layout = layoutColumns(box.clientWidth || 560, columns());
+    layout = layoutColumns(box.clientWidth || 560, columns(), S.cfg.col_widths || {});
     const sig = JSON.stringify(layout) + S.mode;
     if (sig !== layoutSig) { layoutSig = sig; made.clear(); }
     drawHead();
@@ -379,7 +379,45 @@ const list = (() => {
         style: { left: `${x0}px`, width: `${x1 - x0}px`, justifyContent: anchor === "e" ? "flex-end" : "flex-start" },
         onClick: () => setSort(k) }, COL_LABELS[k]));
     }
+    // Between two columns: drag to move the line (the left one grows, the right one shrinks); double-click to
+    // put both back to their own size.
+    const keys = Object.keys(layout.spans);
+    for (let i = 0; i + 1 < keys.length; i++) {
+      const [a, b] = [keys[i], keys[i + 1]];
+      const x = layout.spans[a][1] + COL_GAP / 2;
+      head.append(h("div.rz", { class: resizing === a ? "active" : "", style: { left: `${x - 4}px` },
+        onMousedown: (e) => startResize(e, a, b), onClick: (e) => e.stopPropagation(),
+        onDblclick: (e) => { e.stopPropagation(); const w = { ...(S.cfg.col_widths || {}) }; delete w[a]; delete w[b]; save("col_widths", w); render(); } }));
+    }
     head.oncontextmenu = (e) => { e.preventDefault(); columnsMenu(e.clientX, e.clientY); };
+  }
+
+  function startResize(e, a, b) {
+    e.preventDefault(); e.stopPropagation();
+    const width = (k) => layout.spans[k][1] - layout.spans[k][0];
+    const wa = width(a), wb = width(b), x0 = e.clientX;
+    // every column but Name keeps the width it has now, so only the two beside the line move
+    const frozen = { ...(S.cfg.col_widths || {}) };
+    for (const k of Object.keys(layout.spans)) if (k !== "name") frozen[k] = width(k);
+    const minA = a === "name" ? 80 : COL_MIN;
+    document.body.classList.add("resizing");
+    resizing = a;
+    const move = (ev) => {
+      const d = Math.max(minA - wa, Math.min(wb - COL_MIN, ev.clientX - x0));
+      const w = { ...frozen };
+      if (a !== "name") w[a] = wa + d;                    // (Name takes whatever the others leave)
+      w[b] = wb - d;
+      S.cfg.col_widths = w;
+      render();
+    };
+    const up = () => {
+      removeEventListener("mousemove", move); removeEventListener("mouseup", up);
+      document.body.classList.remove("resizing");
+      resizing = null;
+      drawHead();
+      save("col_widths", S.cfg.col_widths || {});
+    };
+    addEventListener("mousemove", move); addEventListener("mouseup", up);
   }
 
   function draw() {
@@ -563,7 +601,7 @@ function columnsMenu(x, y) {
   const cols = S.cfg.columns || DEFAULT_COLUMNS;
   const items = DEFAULT_COLUMNS.map((k) => ({ label: COL_MENU[k] + (k === "seen" ? "  (Recent)" : ""), check: cols.includes(k),
     onClick: () => { save("columns", cols.includes(k) ? cols.filter((c) => c !== k) : DEFAULT_COLUMNS.filter((c) => c === k || cols.includes(c))); list.render(); } }));
-  items.push("-", { label: "Reset Columns", onClick: () => { save("columns", [...DEFAULT_COLUMNS]); list.render(); } });
+  items.push("-", { label: "Reset Columns", onClick: () => { save("columns", [...DEFAULT_COLUMNS]); save("col_widths", {}); list.render(); } });
   showMenu(items, x, y);
 }
 
