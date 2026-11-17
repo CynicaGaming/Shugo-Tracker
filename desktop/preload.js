@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld("shugo", {
     setAlwaysOnTop: (on) => ipcRenderer.invoke("win", "alwaysOnTop", on),
     setOpacity: (v) => ipcRenderer.invoke("win", "opacity", v),
     relaunchAsAdmin: () => ipcRenderer.invoke("win", "relaunchAsAdmin"),
+    setStyle: (s) => ipcRenderer.invoke("win", "style", s),
     update: (action) => ipcRenderer.invoke("win", "update", action),
     onUpdate: (fn) => ipcRenderer.on("update", (_e, s) => fn(s)),
   },

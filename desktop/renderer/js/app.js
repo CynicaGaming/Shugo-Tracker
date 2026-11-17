@@ -140,6 +140,7 @@ function closeScreen() {
   if (backToFoe) { S.screen = "foe"; render(); return; }
   foe?.destroy(); foe = null;
   S.screen = "list";
+  if (S.peek) { S.peek = false; if (S.cfg.style === "hud") win.setStyle("hud"); }   // back to the HUD it came from
   render();
 }
 
@@ -249,10 +250,11 @@ on("card", (c) => {
   }
   list.renderSoon();
   if (myChar()?.key === c.key) paintTitlebar();
+  if (hudOn()) hudSoon();
 });
 
 let askedAdmin = false;
-on("game", (d) => { S.game = !!d.running; paintTitlebar(); });
+on("game", (d) => { S.game = !!d.running; if (hudOn()) render(); else paintTitlebar(); });
 
 on("nearby", (d) => {
   const toggled = d.enabled !== S.nearby.enabled;
@@ -262,6 +264,7 @@ on("nearby", (d) => {
   if (d.enabled && d.state === "no_admin" && !askedAdmin && !S.demo) { askedAdmin = true; win.relaunchAsAdmin(); }
   if (toggled && S.screen === "list") { render(); return; }      // filters and headers come and go with it
   for (const r of [...d.rows, ...d.recent]) S.chars.set(r.char.key, r.char);
+  if (hudOn()) { hudSoon(); return; }
   if (S.screen === "list") paintTitlebar();
   if (S.mode === "nearby" || S.mode === "recent") { list.render(); paintFooter(); }
 });
@@ -580,7 +583,7 @@ const list = (() => {
     addEventListener("mousemove", move); addEventListener("mouseup", up);
   }
 
-  return { head, box, render, renderSoon, scrollTop: (y) => { box.scrollTop = y; }, get count() { return rows.length; } };
+  return { head, box, render, renderSoon, sideRace, scrollTop: (y) => { box.scrollTop = y; }, get count() { return rows.length; } };
 })();
 
 function loadMore() {
@@ -668,9 +671,81 @@ function paintFooter() {
   status.textContent = t;
 }
 
+/* ═════ HUD style: a slim live Nearby list to keep over the game ═════ */
+const hudOn = () => S.cfg.style === "hud" && !S.peek && S.screen === "list";
+let hudFrame = 0;
+function hudSoon() { cancelAnimationFrame(hudFrame); hudFrame = requestAnimationFrame(() => { if (hudOn()) render(); }); }
+
+/** Something bigger than the HUD (a profile, Settings): the window switches to the full style until you go Back. */
+function peek(open) {
+  if (S.cfg.style === "hud" && !S.peek) { S.peek = true; S.mode = "nearby"; win.setStyle("full"); }
+  open();
+}
+app.peek = peek;
+
+const shortCp = (v) => v == null ? "" : v < 1000 ? String(v) : `${(v / 1000).toFixed(v < 100000 ? 1 : 0)}k`;
+
+function paintHudTitle() {
+  titleSig = "";                                        // (the full title bar draws itself again afterwards)
+  clear(titlebar);
+  const n = S.nearby.enabled ? S.nearby.rows.length : 0;
+  const pinned = S.cfg.always_on_top !== false;
+  titlebar.append(h("span.logo", { class: S.game ? "" : "idle", html: LOGO }),
+    h("span.hudtitle", {}, "Nearby", n ? h("span.count", {}, n) : null), h("span.grow"),
+    h("button.iconbtn", { class: pinned ? "on" : "", html: ICONS.pin,
+      onClick: () => { save("always_on_top", !pinned); win.setAlwaysOnTop(!pinned); render(); } }),
+    h("button.iconbtn", { html: ICONS.gear, onClick: () => peek(openSettings) }),
+    h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
+    h("button.iconbtn.close", { html: ICONS.close, onClick: () => win.close() }));
+}
+
+function hudBody() {
+  const box = h("div.hud");
+  const nb = S.nearby;
+  const note = (title, button) => box.append(h("div.hudnote", {}, h("b", {}, title), button || null));
+  if (!nb.enabled) { note("Nearby Is Off", h("button.btn.gold", { onClick: () => enableNearby() }, "Turn On")); return box; }
+  if (nb.state === "no_admin") { note("Needs Administrator", h("button.btn.gold", { onClick: () => win.relaunchAsAdmin() }, "Restart as Administrator")); return box; }
+  if (nb.state === "waiting" || nb.state === "starting") { note(nb.state === "waiting" ? "Waiting for AION 2" : "Starting…"); return box; }
+  if (nb.state === "error") { note("Nearby Stopped"); return box; }
+  const order = { enemy: 0, ally: 1 };
+  const rows = nb.rows.map((r) => ({ side: r.side, c: S.chars.get(r.char.key) || r.char }))
+    .sort((a, b) => ((order[a.side] ?? 2) - (order[b.side] ?? 2)) || ((b.c.combat_power || 0) - (a.c.combat_power || 0)));
+  if (!rows.length) { note("No Players Nearby"); return box; }
+  const want = [];
+  let last = null;
+  for (const { side, c } of rows) {
+    const race = list.sideRace(side);
+    if (side !== last) {
+      last = side;
+      box.append(h("div.hudgroup", { style: race ? { color: factionColor(race) } : {} },
+        race === 1 ? "Elyos" : race === 2 ? "Asmodian" : side === "enemy" ? "Enemies" : side === "ally" ? "Allies" : "Unknown"));
+    }
+    const col = CLASS_COLORS[c.class_name] || "var(--dim)";
+    const loading = c.status === "loading" || c.status === "none" || !c.status;
+    if (c.status === "none" || !c.status || c.stale) want.push(c.key);
+    box.append(h("div.hudrow", { onClick: () => peek(() => openProfile(c)),
+      onContextmenu: (e) => { e.preventDefault(); rowMenu(c, e.clientX, e.clientY); } },
+      h("span.side", { style: { background: race ? factionColor(race) : side === "enemy" ? "#ff6b6b" : "#6ab8ff" } }),
+      h("span.cl", { style: { color: col } }, (c.class_name || "?")[0]),
+      h("span.nm", {}, c.name),
+      h("span.cp", {}, c.combat_power != null ? shortCp(c.combat_power) : loading ? h("i.ph") : ""),
+      h("span.gs", {}, c.gear_score != null ? fmtInt(c.gear_score) : loading ? h("i.ph") : "")));
+  }
+  if (want.length) call("cards.want", { keys: want });
+  return box;
+}
+
 /* ═════ render ═════ */
 function render() {
   closeMenus();
+  root.classList.toggle("hudstyle", hudOn());
+  if (hudOn()) {
+    paintHudTitle();
+    const top = view.querySelector(".hud")?.scrollTop || 0;
+    clear(view).append(hudBody());
+    view.querySelector(".hud").scrollTop = top;
+    return;
+  }
   paintTitlebar();
   clear(view);
   if (S.screen === "profile" && profile) view.append(profile.el);

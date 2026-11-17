@@ -2,6 +2,11 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.5.0
+- New: HUD style (Settings → Window → Style): a slim, always-on-top Nearby list to keep over the game, with each player's class, combat power and gear score, enemies first
+- New: in the HUD, click a player (or the gear) and the window opens full size for their profile (or Settings); Back returns to the HUD
+- Each style remembers its own window size and place
+
 ## 2.4.5
 - New: the logo (in the window and on the taskbar) turns grey while AION 2 isn't running, and back to gold when it starts
 

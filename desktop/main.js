@@ -89,21 +89,57 @@ function startCore() {
 }
 function toCore(msg) { if (core?.stdin.writable && !core.stdin.destroyed) core.stdin.write(JSON.stringify(msg) + "\n"); }
 
+/* Two styles: "full" (every tab) and "hud" (a slim Nearby list to keep over the game). Each keeps its own window
+   size and place. */
+const STYLE = {
+  full: { size: "window_size", pos: "window_pos", def: [600, 760], min: [380, 420] },
+  hud: { size: "hud_size", pos: "hud_pos", def: [270, 360], min: [210, 120] },
+};
+let style = "full";
+const bounds = {};                                      // style -> {x, y, width, height} (this session)
+
 /** Window size and place, saved through the core (data\\config.json). */
 function saveBounds() {
   if (!win || win.isDestroyed()) return;
   const b = win.getNormalBounds();                     // (a minimized window's bounds are far off screen)
-  toCore({ id: 0, method: "config.set", params: { key: "window_size", value: [b.width, b.height] } });
-  toCore({ id: 0, method: "config.set", params: { key: "window_pos", value: [b.x, b.y] } });
+  bounds[style] = b;
+  const k = STYLE[style];
+  toCore({ id: 0, method: "config.set", params: { key: k.size, value: [b.width, b.height] } });
+  toCore({ id: 0, method: "config.set", params: { key: k.pos, value: [b.x, b.y] } });
+}
+
+function boundsFor(s, cfg) {
+  if (bounds[s]) return bounds[s];
+  const k = STYLE[s];
+  const [w, h] = Array.isArray(cfg[k.size]) ? cfg[k.size] : k.def;
+  const pos = Array.isArray(cfg[k.pos]) ? { x: cfg[k.pos][0], y: cfg[k.pos][1] } : {};
+  return { ...pos, width: Math.max(k.min[0], w), height: Math.max(k.min[1], h) };
+}
+
+/** Switch styles: the window takes that style's own size and place. */
+function setStyle(s) {
+  if (!win || !STYLE[s] || s === style) return;
+  saveBounds();
+  const cfg = readConfig();
+  style = s;
+  const b = boundsFor(s, cfg);
+  win.setMinimumSize(...STYLE[s].min);
+  if (b.x == null) {                                   // first time: beside where the window is now
+    const now = win.getBounds();
+    b.x = now.x; b.y = now.y;
+  }
+  win.setBounds({ x: b.x, y: b.y, width: b.width, height: b.height });
+  onScreen();
+  winLog(`style: ${s}`);
 }
 
 /* ───── the window ───── */
 function createWindow() {
   const cfg = readConfig();
-  const [w, h] = Array.isArray(cfg.window_size) ? cfg.window_size : [600, 760];
-  const pos = Array.isArray(cfg.window_pos) ? { x: cfg.window_pos[0], y: cfg.window_pos[1] } : {};
+  style = STYLE[cfg.style] ? cfg.style : "full";
+  const b = boundsFor(style, cfg);
   win = new BrowserWindow({
-    width: Math.max(380, w), height: Math.max(420, h), ...pos, minWidth: 380, minHeight: 420,
+    ...b, minWidth: STYLE[style].min[0], minHeight: STYLE[style].min[1],
     frame: false, backgroundColor: "#0a0d13", show: false, title: "Shugo Tracker",
     icon: path.join(__dirname, "build", "icon.ico"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false },
@@ -252,7 +288,8 @@ ipcMain.handle("win", async (_e, action, arg) => {
     case "alwaysOnTop": pinned = !!arg; pin(pinned, true); winLog(`always on top: ${pinned}`); break;
     case "opacity": opacity = Math.max(0.3, Math.min(1, Number(arg) || 1)); win?.setOpacity(opacity); break;
     case "relaunchAsAdmin": return relaunchAsAdmin();
-    case "update": return updater.act(arg);              // "check" | "download" | "restart" | "state"
+    case "update": return updater.act(arg);
+    case "style": setStyle(arg); break;              // "check" | "download" | "restart" | "state"
   }
   return null;
 });
