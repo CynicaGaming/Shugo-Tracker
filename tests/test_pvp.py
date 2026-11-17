@@ -1,5 +1,6 @@
 """PvP Log: telling kills, assists and deaths apart from the game's hit and death records, and the log file."""
 import os
+import struct
 import tempfile
 import unittest
 
@@ -9,8 +10,9 @@ from shugotracker.pvplog import PvpLog, foe_id
 from tests.test_scout import damage, frame, other_record, self_record
 
 
-def death(eid, flag=3):
-    return b"\x42\x36" + encode_varint(eid) + encode_varint(0) + encode_varint(flag)
+def death(eid, skill=12010000):
+    """The game's kill record: 04 8D <id> <killing skill> <12 zero bytes> 01 02."""
+    return b"\x04\x8d" + encode_varint(eid) + struct.pack("<I", skill) + b"\x00" * 12 + b"\x01\x02"
 
 
 class DetectTests(unittest.TestCase):
@@ -38,8 +40,14 @@ class DetectTests(unittest.TestCase):
     def test_not_pvp(self):
         self.feed(damage(100, 9999), death(100))           # a monster killed you
         self.feed(damage(300, 200), death(300))            # a fight you weren't in
-        self.feed(damage(200, 100), death(200, flag=1))    # came into view already dead
+        self.feed(damage(200, 100, skill=5), b"\x04\x8d" + encode_varint(200) + b"\x01\x02\x03\x04"
+                  + encode_varint(300) + struct.pack("<H", 1101) + b"\x03Pal" + b"\x00" * 8)   # loot, not a death
         self.assertEqual(self.got, [])
+
+    def test_the_killing_skill_names_the_killer(self):
+        # Pal hit last, but with another skill: the killing blow was yours
+        self.feed(damage(200, 100, skill=777), damage(200, 300, skill=5), death(200, skill=777))
+        self.assertEqual(self.got, [("kill", "Foe", ["Pal"])])
 
     def test_one_death_counts_once(self):
         self.feed(damage(200, 100), death(200), death(200))

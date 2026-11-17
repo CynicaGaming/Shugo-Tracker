@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.4.2
+- Fixed: the PVP Log missed kills and deaths: it now reads the game's own kill record, which names the killing blow
+
 ## 2.4.1
 - Changed: the tab is called PVP
 - Changed: each fight reads like a kill feed: the winner, crossed swords, then the one who fell, in green when you won and red when you didn't

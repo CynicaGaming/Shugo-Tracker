@@ -64,6 +64,15 @@ class OwnerRecord:
 class Hit:
     actor_id: int
     target_id: int
+    skill: int = field(default=0, compare=False)     # the skill that hit (matches Killed.skill)
+
+
+@dataclass(frozen=True)
+class Killed:
+    """Someone (a player, you, a monster) was killed: 04 8D <id> <killing skill u32> <12 zero bytes>. The killer
+    is whoever just hit them with that skill (checked against arena deaths, Nov 2026). skill 0: no killer."""
+    entity_id: int
+    skill: int
 
 
 @dataclass(frozen=True)
@@ -95,7 +104,7 @@ class RosterSeen:
     players: tuple[tuple[str, int], ...]      # (name, server)
 
 
-Event = SelfSeen | PlayerSeen | OwnerRecord | Hit | EntityGone | MapLoaded | EntityActive | RosterSeen
+Event = SelfSeen | PlayerSeen | OwnerRecord | Hit | Killed | EntityGone | MapLoaded | EntityActive | RosterSeen
 SPAWN_DEDUPE_S = 2.0     # the same spawn record repeated within this window is one sighting
 
 
@@ -438,6 +447,13 @@ class StreamDecoder:
                     self.emit(MapLoaded(map_id))
         elif _at(packet, o, self.op.roster):
             self._parse_roster(packet, o + 2)
+        elif _at(packet, o, self.op.ownership):
+            # the same opcode also carries loot ownership (an owner and a name after the 4 bytes): a death
+            # record has nothing but zeros there
+            eid, ln = read_varint(packet, o + 2)
+            p = o + 2 + ln
+            if ln > 0 and 1 <= eid <= MAX_ENTITY_ID and p + 16 <= n and not any(packet[p + 4:p + 16]):
+                self.emit(Killed(eid, u32(packet, p)))
 
     # ---- match scoreboard: per player ... <server u16> <u32> 00 00 <server u16> <len><name> ... ----
     def _parse_roster(self, b: bytes, o: int) -> None:
@@ -481,7 +497,8 @@ class StreamDecoder:
         actor, ln = read_varint(packet, o)
         if ln <= 0 or not 1 <= actor <= MAX_ENTITY_ID or actor == target:
             return
-        self.emit(Hit(actor, target))
+        o += ln
+        self.emit(Hit(actor, target, u32(packet, o) if o + 4 <= len(packet) else 0))
 
     # ---- identities: 33 36 (self) / 44 36, 45 36 (others) ----
     # <op> <id varint> <mask1 u32> <mask2 u8> [mask2 & 1] <len u8><utf8 name> [server u16, class u32, u8, level u32]
