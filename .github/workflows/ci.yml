@@ -109,6 +109,11 @@ jobs:
             $what = if ($i -eq 1) { "first start (unpacks)" } else { "start $i" }
             Write-Output "::notice title=startup::${what}: $t s"
             "startup ${what}: $t s" | Add-Content shots\log.txt
+            if ($i -eq 3) {                                   # the window got going: taskbar icon set, no errors
+              Start-Sleep 4
+              Get-Content (Join-Path $dir "logs\shugo-window_*.log") -ErrorAction SilentlyContinue |
+                Select-String "icon|error|exception" | ForEach-Object { "window: $($_.Line)" } | Add-Content shots\log.txt
+            }
             Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($dir) } | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep 2
           }

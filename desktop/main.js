@@ -72,8 +72,10 @@ function startCore() {
   readline.createInterface({ input: core.stdout }).on("line", (line) => {
     let msg;
     try { msg = JSON.parse(line); } catch { return; }    // not JSON: ignore
-    if (msg.event === "game") gameIcon(msg.data.running);
-    else if (msg.result && typeof msg.result.game === "boolean" && "nearby" in msg.result) gameIcon(msg.result.game);   // (init)
+    try {
+      if (msg.event === "game") gameIcon(!!msg.data?.running);
+      else if (msg.result && typeof msg.result.game === "boolean" && "nearby" in msg.result) gameIcon(msg.result.game);   // (init)
+    } catch (e) { winLog(`taskbar icon: ${e.message}`); }
     win?.webContents.send("core", msg);
   });
   core.stderr.on("data", (d) => winLog(`core stderr: ${String(d).trimEnd()}`));
@@ -161,6 +163,7 @@ function gameIcon(running) {
     iconGrey = nativeImage.createFromBitmap(px, { width, height });
   }
   if (!iconColour.isEmpty()) win.setIcon(running ? iconColour : iconGrey);
+  winLog(`AION 2 ${running ? "running" : "not running"}: ${running ? "gold" : "grey"} icon`);
 }
 
 /** Always on top, at the highest level ("screen-saver" stays above borderless games); `force` re-applies it by
