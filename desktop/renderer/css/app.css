@@ -332,8 +332,12 @@ body.tipwin .tip { position: static !important; box-shadow: none; }
 
 /* ───── PVP Log ───── */
 .pvp { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.pvptop { display: flex; padding: 8px 12px 6px; flex: none; }
-.pvpseg { width: 100%; }
+.pvpdates { padding-top: 8px; flex: none; }
+.dateinput { height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel);
+  color: var(--text); font: inherit; font-size: 12.5px; outline: 0; color-scheme: dark; }
+.dateinput:focus { border-color: rgba(232, 196, 106, 0.6); }
+.dateinput::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; }
+.dateinput::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 .statstrip.pvpstrip { grid-template-columns: repeat(4, 1fr); margin-bottom: 6px; }
 .pvpstrip b.k { color: var(--green); }
 .pvpstrip b.d { color: var(--red); }

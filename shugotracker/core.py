@@ -370,13 +370,11 @@ class Core:
         """The log follows the character you've picked (all of them when none is)."""
         return (self.my.active() or {}).get("name") or None
 
-    def rpc_pvp_list(self, within_s: int = 0) -> dict:
-        since = time.time() - within_s if within_s else 0
-        return self.pvp.summary(self._pvp_me(), since)
+    def rpc_pvp_list(self, since: float = 0, until: float = 0) -> dict:
+        return self.pvp.summary(self._pvp_me(), since or 0, until or 0)
 
-    def rpc_pvp_detail(self, id: str, within_s: int = 0) -> dict:   # noqa: A002
-        since = time.time() - within_s if within_s else 0
-        d = self.pvp.detail(id, self._pvp_me(), since)
+    def rpc_pvp_detail(self, id: str, since: float = 0, until: float = 0) -> dict:   # noqa: A002
+        d = self.pvp.detail(id, self._pvp_me(), since or 0, until or 0)
         f = d["foe"]
         if f.get("char_id") and f.get("server_id") and f.get("key") not in self.chars:   # so View Profile opens it
             from dataclasses import fields

@@ -62,15 +62,17 @@ class PvpLog:
                     self.log(f"pvp log: couldn't save: {e}")
         return r
 
-    def _mine(self, me: str | None, since: float) -> list[dict]:
-        return [r for r in self.records if r["t"] >= since and (not me or not r.get("me") or r["me"] == me)]
+    def _mine(self, me: str | None, since: float, until: float = 0) -> list[dict]:
+        return [r for r in self.records if r["t"] >= since and (not until or r["t"] < until)
+                and (not me or not r.get("me") or r["me"] == me)]
 
-    def summary(self, me: str | None = None, since: float = 0) -> dict:
-        """Everyone you fought since `since`, newest fight first, with kills / assists / deaths."""
+    def summary(self, me: str | None = None, since: float = 0, until: float = 0) -> dict:
+        """Everyone you fought between `since` and `until` (0: no end), newest fight first, with kills / assists /
+        deaths."""
         with self._lock:
             rows: dict[str, dict] = {}
             totals = {k: 0 for k in KINDS}
-            for r in self._mine(me, since):
+            for r in self._mine(me, since, until):
                 fid = foe_id(r["foe"])
                 row = rows.get(fid)
                 if row is None:
@@ -82,10 +84,10 @@ class PvpLog:
             out = sorted(rows.values(), key=lambda x: -x["last"])
             return {"foes": out, "totals": totals}
 
-    def detail(self, fid: str, me: str | None = None, since: float = 0) -> dict:
-        """One opponent: every fight since `since`, newest first."""
+    def detail(self, fid: str, me: str | None = None, since: float = 0, until: float = 0) -> dict:
+        """One opponent: every fight between `since` and `until`, newest first."""
         with self._lock:
-            fights = [r for r in self._mine(me, since) if foe_id(r["foe"]) == fid]
+            fights = [r for r in self._mine(me, since, until) if foe_id(r["foe"]) == fid]
             every = [r for r in self.records if foe_id(r["foe"]) == fid]
         totals = {k: sum(1 for r in fights if r["kind"] == k) for k in KINDS}
         card = {}

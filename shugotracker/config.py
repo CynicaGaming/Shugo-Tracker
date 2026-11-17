@@ -13,7 +13,7 @@ DEFAULTS = {
     "clock": "ST",                  # footer clock: ST = server time (US Eastern), LT = this PC's time
     "recent_max": 250,              # players kept on Recent; 0 = unlimited
     "nearby_autoclear_s": 0,
-    "pvp_within_s": 0,              # PvP Log: show fights from the last N s; 0 = all        # move everyone on Nearby to Recent every N s; 0 = never
+    "pvp_range": None,              # PVP Log dates: {"preset": "7d"} or {"from": "2026-11-01", "to": "…"}; None = all time        # move everyone on Nearby to Recent every N s; 0 = never
     "regions": [],
     "factions": [],
     "window_pos": [80, 80],
@@ -29,7 +29,8 @@ OPACITY_MIN = 0.3                   # never so faint that you lose the window
 # Keys older versions wrote that no longer mean anything (removed on load).
 RETIRED = ("pill_pos", "overlay", "idle_opacity", "opacity", "opacity_focused", "opacity_unfocused",
            "opacity_full_on_hover", "requests_per_second", "detail_workers", "region", "faction", "max_level_only",
-           "stat_details", "start_with_windows", "layout", "close_to_tray", "borderless", "update_repo")
+           "stat_details", "start_with_windows", "layout", "close_to_tray", "borderless", "update_repo",
+           "pvp_within_s")
 
 _write_lock = threading.Lock()
 
