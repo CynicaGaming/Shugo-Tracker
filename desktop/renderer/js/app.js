@@ -8,6 +8,7 @@ import { ProfileView } from "./profile.js";
 import { SettingsView } from "./settings.js";
 import { FinderView } from "./finder.js";
 import { PvpFoe, PvpHud, PvpList } from "./pvp.js";
+import { nearbyChanged } from "./alert.js";
 
 const ROW = 38;
 const S = {                                    // everything the window shows
@@ -257,6 +258,7 @@ let askedAdmin = false;
 on("game", (d) => { S.game = !!d.running; if (POP) render(); else paintTitlebar(); });
 
 on("nearby", (d) => {
+  if (!POP) nearbyChanged(d, S.cfg);                    // (the enemy alert: the main window plays it, once)
   const toggled = d.enabled !== S.nearby.enabled;
   S.nearby = d;
   // Nearby is on but this copy isn't administrator (a normal start): restart as administrator once, like
@@ -837,6 +839,7 @@ app.render = render;
   const init = await call("init");
   Object.assign(S, { cfg: init.config, version: init.version, demo: init.demo, regions: init.regions,
     favorites: init.favorites, my: init.my, nearby: init.nearby || S.nearby, game: init.game !== false });
+  if (!POP) nearbyChanged(S.nearby, S.cfg);
   for (const c of init.favorites) S.chars.set(c.key, c);
   S.update = { ...(await win.update("state")) };
   if (!POP) win.setAlwaysOnTop(S.cfg.always_on_top !== false);   // (a pop-out has its own, set by the window)

@@ -1,7 +1,7 @@
 // Shugo Tracker (Electron): the window, and the Python core running behind it.
 //
 // Portable: everything lives in folders next to ShugoTracker.exe (data, cache, logs), Chromium's own cache too.
-const { app, BrowserWindow, Menu, ipcMain, nativeImage, screen, shell } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, nativeImage, screen, shell } = require("electron");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -119,6 +119,26 @@ function savedBounds(k, cfg) {
   const [w, h] = Array.isArray(cfg[k.size]) ? cfg[k.size] : k.def;
   const pos = Array.isArray(cfg[k.pos]) ? { x: cfg[k.pos][0], y: cfg[k.pos][1] } : {};
   return { ...pos, width: Math.max(k.min[0], w), height: Math.max(k.min[1], h), minWidth: k.min[0], minHeight: k.min[1] };
+}
+
+/* ───── the enemy alert's own sound: copied into data\\sounds (portable, like everything else) ───── */
+const SOUNDS = () => path.join(ROOT, "data", "sounds");
+async function pickSound() {
+  const r = await dialog.showOpenDialog(win, { title: "Choose an Alert Sound", properties: ["openFile"],
+    filters: [{ name: "Sounds", extensions: ["mp3", "wav", "ogg", "m4a", "flac", "aac", "webm"] }] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const src = r.filePaths[0];
+  if (fs.statSync(src).size > 10 * 1024 * 1024) return { error: "That file is over 10 MB" };
+  fs.mkdirSync(SOUNDS(), { recursive: true });
+  for (const f of fs.readdirSync(SOUNDS())) if (f.startsWith("alert.")) fs.rmSync(path.join(SOUNDS(), f), { force: true });
+  const file = `alert${path.extname(src).toLowerCase()}`;
+  fs.copyFileSync(src, path.join(SOUNDS(), file));
+  winLog(`alert sound: ${path.basename(src)}`);
+  return { file, name: path.basename(src) };
+}
+function readSound(file) {
+  if (!file || path.basename(file) !== file) return null;           // only our own folder
+  try { return fs.readFileSync(path.join(SOUNDS(), file)); } catch { return null; }
 }
 
 /* ───── Pop Out: a tab in its own slim always-on-top window ───── */
@@ -320,6 +340,8 @@ ipcMain.handle("win", async (e, action, arg) => {
     case "minimize": winLog(kind ? `${kind} pop-out minimize` : "minimize button"); from?.minimize(); break;
     case "close": if (kind) from.close(); else app.quit(); break;
     case "popOut": popOut(arg); break;
+    case "pickSound": return pickSound();
+    case "readSound": return readSound(arg);
     case "showMain": reveal(); win?.webContents.send("core", { event: "show", data: arg }); break;
     case "alwaysOnTop":
       if (kind) { from.onTop = !!arg; from.setAlwaysOnTop(from.onTop, "screen-saver"); break; }

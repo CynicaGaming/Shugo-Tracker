@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.5.7
+- New: Enemy Alert (Settings → Nearby): a sound when an enemy shows up on Nearby, at most once per 10s … 10m, at the volume you set
+- New: use your own sound for it (Choose… picks an mp3, wav, ogg or m4a; it's kept in the data folder beside the app), or the built-in chime; Test plays it
+
 ## 2.5.6
 - Fixed: a sliver of the list showed above the Nearby pop-out's headers when scrolled
 

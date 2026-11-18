@@ -1,9 +1,11 @@
 // Settings, in the game's style: header bars per group, one setting per row.
 import { win } from "./bridge.js";
+import { playAlert } from "./alert.js";
 import { LOGO, clear, h, icon } from "./dom.js";
 
 const RECENT = [[50, "50"], [100, "100"], [250, "250"], [500, "500"], [1000, "1,000"], [0, "Unlimited"]];
 const UPDATE_EVERY = [[0, "Never"], [1800, "30m"], [3600, "1h"], [21600, "6h"], [43200, "12h"], [86400, "24h"]];
+const ALERT_EVERY = [[10, "10s"], [30, "30s"], [60, "1m"], [120, "2m"], [300, "5m"], [600, "10m"]];
 const AUTOCLEAR = [[0, "Never"], [60, "1m"], [300, "5m"], [900, "15m"], [1800, "30m"], [3600, "60m"]];
 
 const fmtWhen = (t) => {
@@ -96,6 +98,29 @@ export class SettingsView {
     })));
     el.append(row("Auto-Clear", ...steps(AUTOCLEAR, cfg.nearby_autoclear_s ?? 0, (v) => save("nearby_autoclear_s", v))));
     el.append(row("Recent Players", ...steps(RECENT, cfg.recent_max ?? 250, (v) => { cfg.recent_max = v; call("recent.max", { n: v }); })));
+
+    // Enemy alert: a sound when an enemy shows up, at most once per "Alert Every"
+    el.append(row("Enemy Alert", toggle(!!cfg.alert_enemy, (v) => save("alert_enemy", v))));
+    el.append(row("Alert Every", ...steps(ALERT_EVERY, cfg.alert_cooldown_s ?? 30, (v) => save("alert_cooldown_s", v))));
+    const vol = Math.round((cfg.alert_volume ?? 0.8) * 100);
+    const volOut = h("span", { style: { minWidth: "44px", textAlign: "right" } }, `${vol}%`);
+    el.append(row("Alert Volume", h("input", { type: "range", min: 0, max: 100, value: vol, style: { width: "150px" },
+      onInput: (e) => { volOut.textContent = `${e.target.value}%`; },
+      onChange: (e) => { save("alert_volume", e.target.value / 100); playAlert(cfg); } }), volOut));
+    const soundBox = h("span", { style: { display: "flex", alignItems: "center", gap: "6px" } });
+    const paintSound = () => clear(soundBox).append(...[
+      h("span", { style: { color: "var(--text)", maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+        cfg.alert_sound ? cfg.alert_sound_name || "Custom" : "Chime"),
+      h("button.btn", { onClick: async () => {
+        const r = await win.pickSound();
+        if (!r) return;
+        if (r.error) { soundBox.append(h("span", { style: { color: "var(--red)" } }, r.error)); return; }
+        save("alert_sound", r.file); save("alert_sound_name", r.name); paintSound(); playAlert(cfg);
+      } }, "Choose…"),
+      cfg.alert_sound ? h("button.btn", { onClick: () => { save("alert_sound", ""); save("alert_sound_name", ""); paintSound(); playAlert(cfg); } }, "Chime") : null,
+      h("button.btn", { onClick: () => playAlert(cfg) }, "Test")].filter(Boolean));
+    paintSound();
+    el.append(row("Alert Sound", soundBox));
 
     el.append(h("div.legal", {}, "Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. ",
       "AION and AION 2 are trademarks of NCSOFT Corporation; game names, text and images belong to NCSOFT."));

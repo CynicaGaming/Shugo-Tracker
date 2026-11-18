@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld("shugo", {
     setOpacity: (v) => ipcRenderer.invoke("win", "opacity", v),
     relaunchAsAdmin: () => ipcRenderer.invoke("win", "relaunchAsAdmin"),
     popOut: (kind) => ipcRenderer.invoke("win", "popOut", kind),
+    pickSound: () => ipcRenderer.invoke("win", "pickSound"),
+    readSound: (file) => ipcRenderer.invoke("win", "readSound", file),
     showMain: (what) => ipcRenderer.invoke("win", "showMain", what),
     update: (action) => ipcRenderer.invoke("win", "update", action),
     onUpdate: (fn) => ipcRenderer.on("update", (_e, s) => fn(s)),
