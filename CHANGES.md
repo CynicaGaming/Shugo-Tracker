@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.5.6
+- Fixed: a sliver of the list showed above the Nearby pop-out's headers when scrolled
+
 ## 2.5.5
 - Fixed: after entering a new area (the Abyss especially), Nearby and the PVP Log could miss that you're you, so your kills and deaths there went unlogged
 
