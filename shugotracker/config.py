@@ -64,6 +64,8 @@ def migrate(cfg: dict) -> dict:
     if "auto_update" in cfg:                 # v2.3.4 and earlier: an on/off switch
         if not cfg.pop("auto_update"):
             cfg["update_check_s"] = 0
+    if cfg.pop("style", None) == "hud":       # v2.5.0's HUD style: now Nearby popped out in its own window
+        cfg["popout_nearby"] = True
     if "nearby_autoclear" in cfg:            # v1.28–1.33: an on/off switch beside the interval
         if not cfg.pop("nearby_autoclear"):
             cfg["nearby_autoclear_s"] = 0

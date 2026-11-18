@@ -2,6 +2,12 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.5.1
+- Changed: the HUD is now its own window: right-click the Nearby tab → Pop Out Nearby. It stays on top over the game while the main window does whatever you like; it reopens next time if you left it open
+- Changed: clicking a player in the pop-out (or its gear) opens their profile (or Settings) in the main window
+- Changed: gear score is shortened in the pop-out too (1.9k)
+- Removed: the Style setting (the pop-out replaces it; if you used the HUD style, Nearby pops out on its own)
+
 ## 2.5.0
 - New: HUD style (Settings → Window → Style): a slim, always-on-top Nearby list to keep over the game, with each player's class, combat power and gear score, enemies first
 - New: in the HUD, click a player (or the gear) and the window opens full size for their profile (or Settings); Back returns to the HUD

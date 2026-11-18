@@ -70,21 +70,27 @@ const fs = require("fs");
   await shot("pvp", 800);
   await page.click(".pvprow");
   await shot("pvp-foe", 800);
-  // HUD style: the window shrinks to a slim Nearby list
-  await page.evaluate(() => window.__app.enableNearby());
-  await page.click(".mebtn");
-  await page.click(".menu .item:last-child");
-  await page.click(".setting .seg button:has-text('HUD')");
+  // Pop Out Nearby: right-click the Nearby tab; a slim always-on-top window of its own
   await page.click(".tab.back");
-  await page.waitForTimeout(4000);
-  await shot("hud", 400);
-  const hudSize = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().sort((a, b) => a.id - b.id)[0].getContentSize());
-  if (hudSize[0] > 320) log.push(`hud: window stayed ${hudSize.join("x")}`);
-  await page.click(".hudrow").catch(() => log.push("hud: no rows"));
-  await page.waitForTimeout(600);
-  const fullSize = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().sort((a, b) => a.id - b.id)[0].getContentSize());
-  if (fullSize[0] < 380) log.push(`hud: a profile didn't open full size (${fullSize.join("x")})`);
-  await shot("hud-profile", 800);
+  await page.evaluate(() => window.__app.enableNearby());
+  await page.waitForTimeout(1500);
+  await page.click(".tabs .tab:has-text('Nearby')", { button: "right" });
+  await page.click(".menu .item:has-text('Pop Out Nearby')");
+  let pop;
+  for (let i = 0; i < 60 && !pop; i++) {
+    pop = app.windows().find((w) => w.url().includes("pop=nearby"));
+    if (!pop) await page.waitForTimeout(100);
+  }
+  if (!pop) log.push("pop out: no window");
+  else {
+    await pop.waitForTimeout(3500);
+    await pop.screenshot({ path: path.join(out, "popout.png") });
+    const sz = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((w) => [w.getTitle(), ...w.getContentSize()]));
+    if (!sz.some(([t, w]) => t.includes("Nearby") && w <= 320)) log.push(`pop out: sizes ${JSON.stringify(sz)}`);
+    await pop.click(".hudrow").catch(() => log.push("pop out: no rows"));
+    await page.waitForSelector(".pbody", { timeout: 5000 }).catch(() => log.push("pop out: the profile didn't open in the main window"));
+    await shot("popout-profile", 800);
+  }
   fs.writeFileSync(path.join(out, "log.txt"), log.join("\n") || "OK");
   await app.close();
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -82,16 +82,6 @@ export class SettingsView {
     win.update("freshen").then((u) => { if (u) { S.update = { ...S.update, ...u }; this.paintUpdate(); } });
 
     el.append(h("div.bar", {}, "Window"));
-    // Style: Full (every tab) or HUD (a slim Nearby list for over the game). Back from here goes to it.
-    const styleSeg = h("div.seg", { style: { width: "150px" } });
-    const paintStyle = () => clear(styleSeg).append(...[["full", "Full"], ["hud", "HUD"]].map(([v, label]) =>
-      h("button", { class: (cfg.style || "full") === v ? "on" : "", onClick: () => {
-        save("style", v);
-        S.peek = v === "hud";                          // (this window is full size while Settings is open)
-        paintStyle();
-      } }, label)));
-    paintStyle();
-    el.append(row("Style", styleSeg));
     const op = Math.round((cfg.window_opacity ?? 1) * 100);
     const opOut = h("span", { style: { minWidth: "44px", textAlign: "right" } }, `${op}%`);
     el.append(row("Opacity", h("input", { type: "range", min: 30, max: 100, value: op, style: { width: "150px" },

@@ -76,7 +76,12 @@ function startCore() {
       if (msg.event === "game") gameIcon(!!msg.data?.running);
       else if (msg.result && typeof msg.result.game === "boolean" && "nearby" in msg.result) gameIcon(msg.result.game);   // (init)
     } catch (e) { winLog(`taskbar icon: ${e.message}`); }
-    win?.webContents.send("core", msg);
+    // a reply goes to the window that asked (each window numbers its own requests); events go to every window
+    if (msg.id != null && routes.has(msg.id)) {
+      const { wc, id } = routes.get(msg.id);
+      routes.delete(msg.id);
+      if (!wc.isDestroyed()) wc.send("core", { ...msg, id });
+    } else if (msg.event) for (const w of [win, popWin]) if (w && !w.isDestroyed()) w.webContents.send("core", msg);
   });
   core.stderr.on("data", (d) => winLog(`core stderr: ${String(d).trimEnd()}`));
   // A write to a core that has just exited fails later, on its own: catch it here so it can never become an
@@ -87,59 +92,65 @@ function startCore() {
     if (!quitting) win?.webContents.send("core", { event: "core_exit", data: code });
   });
 }
+const routes = new Map();                               // core request id -> {window, its own id}
+let nextId = 1;
+function fromWindow(wc, msg) {
+  if (msg.id) { const id = nextId++; routes.set(id, { wc, id: msg.id }); msg = { ...msg, id }; }
+  toCore(msg);
+}
 function toCore(msg) { if (core?.stdin.writable && !core.stdin.destroyed) core.stdin.write(JSON.stringify(msg) + "\n"); }
 
-/* Two styles: "full" (every tab) and "hud" (a slim Nearby list to keep over the game). Each keeps its own window
-   size and place. */
-const STYLE = {
-  full: { size: "window_size", pos: "window_pos", def: [600, 760], min: [380, 420] },
-  hud: { size: "hud_size", pos: "hud_pos", def: [270, 360], min: [210, 120] },
-};
-let style = "full";
-const bounds = {};                                      // style -> {x, y, width, height} (this session)
+const MAIN = { size: "window_size", pos: "window_pos", def: [600, 760], min: [380, 420] };
+const POP = { size: "hud_size", pos: "hud_pos", def: [270, 360], min: [210, 120] };
 
-/** Window size and place, saved through the core (data\\config.json). */
-function saveBounds() {
-  if (!win || win.isDestroyed()) return;
-  const b = win.getNormalBounds();                     // (a minimized window's bounds are far off screen)
-  bounds[style] = b;
-  const k = STYLE[style];
+/** A window's size and place, saved through the core (data\\config.json). */
+function saveBounds(w = win, k = MAIN) {
+  if (!w || w.isDestroyed()) return;
+  const b = w.getNormalBounds();                       // (a minimized window's bounds are far off screen)
   toCore({ id: 0, method: "config.set", params: { key: k.size, value: [b.width, b.height] } });
   toCore({ id: 0, method: "config.set", params: { key: k.pos, value: [b.x, b.y] } });
 }
 
-function boundsFor(s, cfg) {
-  if (bounds[s]) return bounds[s];
-  const k = STYLE[s];
+function savedBounds(k, cfg) {
   const [w, h] = Array.isArray(cfg[k.size]) ? cfg[k.size] : k.def;
   const pos = Array.isArray(cfg[k.pos]) ? { x: cfg[k.pos][0], y: cfg[k.pos][1] } : {};
-  return { ...pos, width: Math.max(k.min[0], w), height: Math.max(k.min[1], h) };
+  return { ...pos, width: Math.max(k.min[0], w), height: Math.max(k.min[1], h), minWidth: k.min[0], minHeight: k.min[1] };
 }
 
-/** Switch styles: the window takes that style's own size and place. */
-function setStyle(s) {
-  if (!win || !STYLE[s] || s === style) return;
-  saveBounds();
+/* ───── Pop Out Nearby: the Nearby list in its own slim always-on-top window ───── */
+let popWin = null;
+function popOut() {
+  if (popWin) { popWin.show(); popWin.focus(); return; }
   const cfg = readConfig();
-  style = s;
-  const b = boundsFor(s, cfg);
-  win.setMinimumSize(...STYLE[s].min);
-  if (b.x == null) {                                   // first time: beside where the window is now
-    const now = win.getBounds();
-    b.x = now.x; b.y = now.y;
-  }
-  win.setBounds({ x: b.x, y: b.y, width: b.width, height: b.height });
-  onScreen();
-  winLog(`style: ${s}`);
+  const b = savedBounds(POP, cfg);
+  if (b.x == null && win) { const m = win.getBounds(); b.x = m.x + m.width + 8; b.y = m.y; }   // first time: beside the window
+  popWin = new BrowserWindow({
+    ...b, frame: false, backgroundColor: "#0a0d13", show: false, title: "Shugo Tracker · Nearby",
+    icon: path.join(__dirname, "build", "icon.ico"),
+    webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false },
+  });
+  popWin.setAlwaysOnTop(true, "screen-saver");
+  for (const ev of ["blur", "moved", "show", "restore"]) popWin.on(ev, () => setTimeout(() => {
+    if (popWin && !popWin.isDestroyed()) { popWin.setAlwaysOnTop(false); popWin.setAlwaysOnTop(true, "screen-saver"); }
+  }, 60));
+  if (opacity < 1) popWin.setOpacity(opacity);
+  popWin.loadFile(path.join(__dirname, "renderer", "index.html"), { query: { pop: "nearby" } });
+  popWin.once("ready-to-show", () => {
+    const area = screen.getDisplayMatching(popWin.getBounds()).workArea, pb = popWin.getBounds();
+    if (pb.x + pb.width < area.x + 40 || pb.x > area.x + area.width - 40 || pb.y < area.y - 10 || pb.y > area.y + area.height - 40) popWin.center();
+    popWin.showInactive();
+  });
+  popWin.on("close", () => { saveBounds(popWin, POP); if (!quitting) toCore({ id: 0, method: "config.set", params: { key: "popout_nearby", value: false } }); });
+  popWin.on("closed", () => { popWin = null; });
+  toCore({ id: 0, method: "config.set", params: { key: "popout_nearby", value: true } });
+  winLog("popped out Nearby");
 }
 
 /* ───── the window ───── */
 function createWindow() {
   const cfg = readConfig();
-  style = STYLE[cfg.style] ? cfg.style : "full";
-  const b = boundsFor(style, cfg);
   win = new BrowserWindow({
-    ...b, minWidth: STYLE[style].min[0], minHeight: STYLE[style].min[1],
+    ...savedBounds(MAIN, cfg),
     frame: false, backgroundColor: "#0a0d13", show: false, title: "Shugo Tracker",
     icon: path.join(__dirname, "build", "icon.ico"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false },
@@ -154,7 +165,10 @@ function createWindow() {
   opacity = Math.max(0.3, Math.min(1, Number(cfg.window_opacity) || 1));
   if (opacity < 1) win.setOpacity(opacity);
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
-  win.once("ready-to-show", () => { onScreen(); win.show(); makeTipWin(); });
+  win.once("ready-to-show", () => {
+    onScreen(); win.show(); makeTipWin();
+    if (cfg.popout_nearby || cfg.style === "hud") popOut();      // (2.5.0's HUD style is now the pop-out)
+  });
   for (const ev of ["minimize", "restore", "hide", "show", "maximize", "unmaximize", "unresponsive", "responsive"]) {
     win.on(ev, () => winLog(`window ${ev}`));
   }
@@ -167,7 +181,7 @@ function createWindow() {
     if (!quitting && win) win.reload();                // a crashed page would leave an empty window
   });
   win.on("close", () => { if (!quitting) saveBounds(); });
-  win.on("closed", () => { win = null; tipWin?.destroy(); });
+  win.on("closed", () => { win = null; tipWin?.destroy(); popWin?.destroy(); });
   for (const ev of ["move", "minimize", "hide"]) win.on(ev, hideTipWin);
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
 }
@@ -198,7 +212,7 @@ function gameIcon(running) {
     }
     iconGrey = nativeImage.createFromBitmap(px, { width, height });
   }
-  if (!iconColour.isEmpty()) win.setIcon(running ? iconColour : iconGrey);
+  if (!iconColour.isEmpty()) for (const w of [win, popWin]) if (w && !w.isDestroyed()) w.setIcon(running ? iconColour : iconGrey);
   winLog(`AION 2 ${running ? "running" : "not running"}: ${running ? "gold" : "grey"} icon`);
 }
 
@@ -280,16 +294,19 @@ ipcMain.handle("tip", async (_e, action, arg) => {
   return true;
 });
 
-ipcMain.on("core", (_e, msg) => toCore(msg));
-ipcMain.handle("win", async (_e, action, arg) => {
+ipcMain.on("core", (e, msg) => fromWindow(e.sender, msg));
+ipcMain.handle("win", async (e, action, arg) => {
+  const fromPop = popWin && e.sender === popWin.webContents;
   switch (action) {
-    case "minimize": winLog("minimize button"); win?.minimize(); break;
-    case "close": app.quit(); break;
+    case "minimize": winLog(fromPop ? "pop-out minimize" : "minimize button"); (fromPop ? popWin : win)?.minimize(); break;
+    case "close": if (fromPop) popWin.close(); else app.quit(); break;
+    case "popOut": popOut(); break;
+    case "showMain": reveal(); win?.webContents.send("core", { event: "show", data: arg }); break;
     case "alwaysOnTop": pinned = !!arg; pin(pinned, true); winLog(`always on top: ${pinned}`); break;
-    case "opacity": opacity = Math.max(0.3, Math.min(1, Number(arg) || 1)); win?.setOpacity(opacity); break;
+    case "opacity": opacity = Math.max(0.3, Math.min(1, Number(arg) || 1)); win?.setOpacity(opacity); popWin?.setOpacity(opacity); break;
     case "relaunchAsAdmin": return relaunchAsAdmin();
     case "update": return updater.act(arg);
-    case "style": setStyle(arg); break;              // "check" | "download" | "restart" | "state"
+              // "check" | "download" | "restart" | "state"
   }
   return null;
 });
@@ -323,6 +340,7 @@ app.whenReady().then(() => {
 app.on("before-quit", () => {
   if (quitting) return;
   saveBounds();                                        // first: the core is told to quit right after
+  if (popWin) saveBounds(popWin, POP);
   quitting = true;
   toCore({ method: "quit" });
   setTimeout(() => core?.kill(), 1500);

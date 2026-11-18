@@ -54,7 +54,8 @@ function paintTitlebar() {
     const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent", pvp: "PVP" }[S.mode], foe: "PVP", settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
     tabs.append(h("button.tab.back", { onClick: closeScreen }, icon("back"), back));
   } else {
-    const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode) },
+    const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode),
+      onContextmenu: mode === "nearby" ? (e) => { e.preventDefault(); showMenu([{ label: "Pop Out Nearby", onClick: () => win.popOut() }], e.clientX, e.clientY); } : null },
       label, count ? h("span.count", {}, count) : null);
     tabs.append(t("search", "Search"), t("favorites", "Favorites", S.favorites.length || ""));
     if (S.nearby.enabled) tabs.append(t("nearby", "Nearby", S.nearby.rows.length || ""), t("recent", "Recent", S.nearby.recent.length || ""));
@@ -140,7 +141,6 @@ function closeScreen() {
   if (backToFoe) { S.screen = "foe"; render(); return; }
   foe?.destroy(); foe = null;
   S.screen = "list";
-  if (S.peek) { S.peek = false; if (S.cfg.style === "hud") win.setStyle("hud"); }   // back to the HUD it came from
   render();
 }
 
@@ -261,7 +261,7 @@ on("nearby", (d) => {
   S.nearby = d;
   // Nearby is on but this copy isn't administrator (a normal start): restart as administrator once, like
   // turning it on does. Declined: the Nearby tab offers the button.
-  if (d.enabled && d.state === "no_admin" && !askedAdmin && !S.demo) { askedAdmin = true; win.relaunchAsAdmin(); }
+  if (d.enabled && d.state === "no_admin" && !askedAdmin && !S.demo && !POP) { askedAdmin = true; win.relaunchAsAdmin(); }
   if (toggled && S.screen === "list") { render(); return; }      // filters and headers come and go with it
   for (const r of [...d.rows, ...d.recent]) S.chars.set(r.char.key, r.char);
   if (hudOn()) { hudSoon(); return; }
@@ -672,29 +672,28 @@ function paintFooter() {
 }
 
 /* ═════ HUD style: a slim live Nearby list to keep over the game ═════ */
-const hudOn = () => S.cfg.style === "hud" && !S.peek && S.screen === "list";
+// This window is a pop-out (index.html?pop=nearby): it only ever shows the HUD.
+const POP = new URLSearchParams(location.search).get("pop");
+const hudOn = () => POP === "nearby";
 let hudFrame = 0;
 function hudSoon() { cancelAnimationFrame(hudFrame); hudFrame = requestAnimationFrame(() => { if (hudOn()) render(); }); }
 
-/** Something bigger than the HUD (a profile, Settings): the window switches to the full style until you go Back. */
-function peek(open) {
-  if (S.cfg.style === "hud" && !S.peek) { S.peek = true; S.mode = "nearby"; win.setStyle("full"); }
-  open();
-}
-app.peek = peek;
+/** From the pop-out, something bigger (a profile, Settings) opens in the main window. */
+on("show", (d) => {
+  if (POP) return;
+  if (d?.profile) { S.mode = "nearby"; openProfile(S.chars.get(d.profile.key) || d.profile); }
+  else if (d?.settings) openSettings();
+});
 
-const shortCp = (v) => v == null ? "" : v < 1000 ? String(v) : `${(v / 1000).toFixed(v < 100000 ? 1 : 0)}k`;
+const short = (v) => v == null ? "" : v < 1000 ? String(v) : `${(v / 1000).toFixed(v < 100000 ? 1 : 0)}k`;
 
 function paintHudTitle() {
   titleSig = "";                                        // (the full title bar draws itself again afterwards)
   clear(titlebar);
   const n = S.nearby.enabled ? S.nearby.rows.length : 0;
-  const pinned = S.cfg.always_on_top !== false;
   titlebar.append(h("span.logo", { class: S.game ? "" : "idle", html: LOGO }),
     h("span.hudtitle", {}, "Nearby", n ? h("span.count", {}, n) : null), h("span.grow"),
-    h("button.iconbtn", { class: pinned ? "on" : "", html: ICONS.pin,
-      onClick: () => { save("always_on_top", !pinned); win.setAlwaysOnTop(!pinned); render(); } }),
-    h("button.iconbtn", { html: ICONS.gear, onClick: () => peek(openSettings) }),
+    h("button.iconbtn", { html: ICONS.gear, onClick: () => win.showMain({ settings: true }) }),
     h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
     h("button.iconbtn.close", { html: ICONS.close, onClick: () => win.close() }));
 }
@@ -723,13 +722,12 @@ function hudBody() {
     const col = CLASS_COLORS[c.class_name] || "var(--dim)";
     const loading = c.status === "loading" || c.status === "none" || !c.status;
     if (c.status === "none" || !c.status || c.stale) want.push(c.key);
-    box.append(h("div.hudrow", { onClick: () => peek(() => openProfile(c)),
-      onContextmenu: (e) => { e.preventDefault(); rowMenu(c, e.clientX, e.clientY); } },
+    box.append(h("div.hudrow", { onClick: () => win.showMain({ profile: c }) },
       h("span.side", { style: { background: race ? factionColor(race) : side === "enemy" ? "#ff6b6b" : "#6ab8ff" } }),
       h("span.cl", { style: { color: col } }, (c.class_name || "?")[0]),
       h("span.nm", {}, c.name),
-      h("span.cp", {}, c.combat_power != null ? shortCp(c.combat_power) : loading ? h("i.ph") : ""),
-      h("span.gs", {}, c.gear_score != null ? fmtInt(c.gear_score) : loading ? h("i.ph") : "")));
+      h("span.cp", {}, c.combat_power != null ? short(c.combat_power) : loading ? h("i.ph") : ""),
+      h("span.gs", {}, c.gear_score != null ? short(c.gear_score) : loading ? h("i.ph") : "")));
   }
   if (want.length) call("cards.want", { keys: want });
   return box;
@@ -776,7 +774,7 @@ app.render = render;
   S.update = { ...(await win.update("state")) };
   win.setAlwaysOnTop(S.cfg.always_on_top !== false);
   paintClock();
-  if (!S.my.slots.some(Boolean) && !S.cfg.setup_done && !S.demo) openFinder(0);   // first start: find yourself
+  if (!POP && !S.my.slots.some(Boolean) && !S.cfg.setup_done && !S.demo) openFinder(0);   // first start: find yourself
   else render();
   const q = new URLSearchParams(location.search).get("q");
   if (q) { searchInput.value = q; runSearch(q); }
