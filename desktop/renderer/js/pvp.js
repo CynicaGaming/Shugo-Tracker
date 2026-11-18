@@ -214,3 +214,41 @@ function fightRow(r, foe) {
     h("span.ago", {}, ago(r.t)),
     h("span.at", {}, when(r.t)));
 }
+
+/** The PVP pop-out: today's kills and deaths, then your latest fights as a kill feed. Click one for that opponent
+ *  in the main window. */
+export class PvpHud {
+  constructor(app) {
+    this.app = app;
+    this.el = h("div.hud.pvphud");
+    this.data = null;
+    on("pvp", () => this.load());
+    setInterval(() => this.paint(), 30000);              // ("2 min ago" keeps up)
+    this.load();
+  }
+
+  async load() {
+    this.data = await call("pvp.feed", { today_since: dayStart(new Date()), limit: 60 }).catch(() => null);
+    this.paint();
+    this.onTotals?.(this.data?.today);
+  }
+
+  paint() {
+    const el = clear(this.el), d = this.data;
+    if (!d) return;
+    if (!d.fights.length) {
+      el.append(h("div.hudnote", {}, h("b", {}, this.app.S.nearby.enabled ? "No Fights Yet" : "Nearby Is Off"),
+        this.app.S.nearby.enabled ? null : h("button.btn.gold", { onClick: () => this.app.enableNearby() }, "Turn On")));
+      return;
+    }
+    for (const r of d.fights) {
+      const me = r.me || "You", them = r.foe.name;
+      const [winner, loser] = r.kind === "death" ? [them, me] : [r.kind === "assist" ? (r.by || "Ally") : me, them];
+      el.append(h("div.hudfight", { class: r.kind, onClick: () => this.app.win.showMain({ foe: r.id }) },
+        h("span.win", { class: r.kind === "death" ? "them" : "us" }, winner),
+        h("span.sw", { html: SWORDS }),
+        h("span.lose", {}, loser),
+        h("span.ago", {}, ago(r.t).replace(" ago", ""))));
+    }
+  }
+}

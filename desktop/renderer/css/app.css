@@ -412,3 +412,24 @@ body.tipwin .tip { position: static !important; box-shadow: none; }
 .hudrow .ph { display: inline-block; width: 26px; height: 8px; border-radius: 4px; background: var(--panel-3); }
 .hudnote { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 10px; color: var(--dim); text-align: center; }
 .hudnote b { color: var(--text-2); font-size: 12.5px; }
+/* the PVP pop-out: today's tally in the title, then a kill feed */
+.hudtitle .today { display: flex; align-items: baseline; gap: 2px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+.hudtitle .today b { font-size: 12px; }
+.hudtitle .today small { margin-right: 6px; color: var(--faint); font-size: 9.5px; font-weight: 600; }
+.hudtitle .today .k { color: var(--green); }
+.hudtitle .today .d { color: var(--red); }
+.hudtitle .today .a { color: #6fb4ff; }
+.hudfight { display: grid; grid-template-columns: auto 14px minmax(0, 1fr) auto; align-items: center; gap: 6px; height: 22px;
+  padding: 0 8px 0 8px; border-left: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+.hudfight:hover { background: var(--hover); }
+.hudfight.kill { border-left-color: var(--green); }
+.hudfight.death { border-left-color: var(--red); }
+.hudfight.assist { border-left-color: #6fb4ff; }
+.hudfight .win { font-weight: 700; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+.hudfight .win.us { color: var(--green); }
+.hudfight.assist .win.us { color: #6fb4ff; }
+.hudfight .win.them { color: var(--red); }
+.hudfight .sw { display: grid; width: 13px; height: 13px; color: var(--gold); }
+.hudfight .sw svg { width: 100%; height: 100%; }
+.hudfight .lose { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+.hudfight .ago { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }

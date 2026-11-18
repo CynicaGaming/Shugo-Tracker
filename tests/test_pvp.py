@@ -74,6 +74,9 @@ class LogTests(unittest.TestCase):
         d = again.detail(foe_id(foe), "Mine")
         self.assertEqual([r["kind"] for r in d["fights"]], ["death", "kill"])
         self.assertEqual(again.detail(foe_id(foe))["totals"]["kill"], 2)
+        f = again.feed("Mine", limit=2, today_since=1500)
+        self.assertEqual([r["kind"] for r in f["fights"]], ["assist", "death"])
+        self.assertEqual(f["today"], {"kill": 0, "assist": 1, "death": 1})
 
 
 if __name__ == "__main__":

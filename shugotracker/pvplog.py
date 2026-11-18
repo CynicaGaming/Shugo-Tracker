@@ -94,3 +94,11 @@ class PvpLog:
         for r in every:                          # their newest card, whatever the filter
             card.update(r["foe"])
         return {"id": fid, "foe": card, "totals": totals, "fights": sorted(fights, key=lambda r: -r["t"])}
+
+    def feed(self, me: str | None = None, limit: int = 50, today_since: float = 0) -> dict:
+        """The PVP pop-out: your latest fights (newest first, with each opponent's id) and today's totals."""
+        with self._lock:
+            mine = self._mine(me, 0)
+            latest = sorted(mine, key=lambda r: -r["t"])[:limit]
+            today = {k: sum(1 for r in mine if r["t"] >= today_since and r["kind"] == k) for k in KINDS}
+        return {"fights": [{**r, "id": foe_id(r["foe"])} for r in latest], "today": today}

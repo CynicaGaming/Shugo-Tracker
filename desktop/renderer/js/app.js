@@ -7,7 +7,7 @@ import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
 import { ProfileView } from "./profile.js";
 import { SettingsView } from "./settings.js";
 import { FinderView } from "./finder.js";
-import { PvpFoe, PvpList } from "./pvp.js";
+import { PvpFoe, PvpHud, PvpList } from "./pvp.js";
 
 const ROW = 38;
 const S = {                                    // everything the window shows
@@ -19,7 +19,7 @@ const S = {                                    // everything the window shows
   game: true,                                  // AION 2 running: the logo is grey while it isn't
   update: { state: "idle" },                   // the self-updater (desktop/updater.js)
 };
-export const app = { S, call, save, openProfile, closeScreen, myChar, pickMine, refreshList: () => list.render(),
+export const app = { S, win, call, save, openProfile, closeScreen, myChar, pickMine, refreshList: () => list.render(),
   openFoe: (id) => openFoe(id), enableNearby: () => enableNearby() };
 
 function save(key, value) { S.cfg[key] = value; call("config.set", { key, value }); }
@@ -55,7 +55,7 @@ function paintTitlebar() {
     tabs.append(h("button.tab.back", { onClick: closeScreen }, icon("back"), back));
   } else {
     const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode),
-      onContextmenu: mode === "nearby" ? (e) => { e.preventDefault(); showMenu([{ label: "Pop Out Nearby", onClick: () => win.popOut() }], e.clientX, e.clientY); } : null },
+      onContextmenu: POPPABLE[mode] ? (e) => { e.preventDefault(); showMenu([{ label: `Pop Out ${POPPABLE[mode]}`, onClick: () => win.popOut(mode) }], e.clientX, e.clientY); } : null },
       label, count ? h("span.count", {}, count) : null);
     tabs.append(t("search", "Search"), t("favorites", "Favorites", S.favorites.length || ""));
     if (S.nearby.enabled) tabs.append(t("nearby", "Nearby", S.nearby.rows.length || ""), t("recent", "Recent", S.nearby.recent.length || ""));
@@ -254,7 +254,7 @@ on("card", (c) => {
 });
 
 let askedAdmin = false;
-on("game", (d) => { S.game = !!d.running; if (hudOn()) render(); else paintTitlebar(); });
+on("game", (d) => { S.game = !!d.running; if (POP) render(); else paintTitlebar(); });
 
 on("nearby", (d) => {
   const toggled = d.enabled !== S.nearby.enabled;
@@ -265,6 +265,7 @@ on("nearby", (d) => {
   if (toggled && S.screen === "list") { render(); return; }      // filters and headers come and go with it
   for (const r of [...d.rows, ...d.recent]) S.chars.set(r.char.key, r.char);
   if (hudOn()) { hudSoon(); return; }
+  if (POP === "pvp") { pvpHud?.paint(); return; }
   if (S.screen === "list") paintTitlebar();
   if (S.mode === "nearby" || S.mode === "recent") { list.render(); paintFooter(); }
 });
@@ -674,8 +675,10 @@ function paintFooter() {
 /* ═════ HUD style: a slim live Nearby list to keep over the game ═════ */
 // This window is a pop-out (index.html?pop=nearby): it only ever shows the HUD.
 const POP = new URLSearchParams(location.search).get("pop");
+const POPPABLE = { nearby: "Nearby", pvp: "PVP" };     // tabs that can pop out (right-click the tab)
 const hudOn = () => POP === "nearby";
-if (POP) document.title = "Shugo Tracker · Nearby";      // (its taskbar button)
+if (POP) document.title = `Shugo Tracker · ${POPPABLE[POP] || ""}`;    // (its taskbar button)
+let pvpHud = null, pvpToday = null;
 let hudFrame = 0;
 function hudSoon() { cancelAnimationFrame(hudFrame); hudFrame = requestAnimationFrame(() => { if (hudOn()) render(); }); }
 
@@ -683,6 +686,7 @@ function hudSoon() { cancelAnimationFrame(hudFrame); hudFrame = requestAnimation
 on("show", (d) => {
   if (POP) return;
   if (d?.profile) { S.mode = "nearby"; openProfile(S.chars.get(d.profile.key) || d.profile); }
+  else if (d?.foe) { S.mode = "pvp"; openFoe(d.foe); }
   else if (d?.settings) openSettings();
 });
 
@@ -692,9 +696,13 @@ function paintHudTitle() {
   titleSig = "";                                        // (the full title bar draws itself again afterwards)
   clear(titlebar);
   const n = S.nearby.enabled ? S.nearby.rows.length : 0;
+  const t = pvpToday;                                   // PVP: today's kills and deaths
   titlebar.append(h("span.logo", { class: S.game ? "" : "idle", html: LOGO }),
-    h("span.hudtitle", {}, "Nearby", n ? h("span.count", {}, n) : null), h("span.grow"),
-    h("button.iconbtn", { html: ICONS.gear, onClick: () => win.showMain({ settings: true }) }),
+    POP === "pvp"
+      ? h("span.hudtitle", {}, "PVP", t ? h("span.today", {}, h("b.k", {}, `${t.kill}`), h("small", {}, "K"), h("b.d", {}, `${t.death}`), h("small", {}, "D"),
+        h("b.a", {}, `${t.assist}`), h("small", {}, "A")) : null)
+      : h("span.hudtitle", {}, "Nearby", n ? h("span.count", {}, n) : null),
+    h("span.grow"),
     h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
     h("button.iconbtn.close", { html: ICONS.close, onClick: () => win.close() }));
 }
@@ -737,7 +745,13 @@ function hudBody() {
 /* ═════ render ═════ */
 function render() {
   closeMenus();
-  root.classList.toggle("hudstyle", hudOn());
+  root.classList.toggle("hudstyle", hudOn() || POP === "pvp");
+  if (POP === "pvp") {
+    if (!pvpHud) { pvpHud = new PvpHud(app); pvpHud.onTotals = (t) => { pvpToday = t; paintHudTitle(); }; }
+    paintHudTitle();
+    if (!view.contains(pvpHud.el)) clear(view).append(pvpHud.el);
+    return;
+  }
   if (hudOn()) {
     paintHudTitle();
     const top = view.querySelector(".hud")?.scrollTop || 0;

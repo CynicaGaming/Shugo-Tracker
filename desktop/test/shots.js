@@ -91,6 +91,22 @@ const fs = require("fs");
     await page.waitForSelector(".pbody", { timeout: 5000 }).catch(() => log.push("pop out: the profile didn't open in the main window"));
     await shot("popout-profile", 800);
   }
+  // Pop Out PVP: the kill feed in its own window; a click opens that opponent in the main window
+  await page.click(".tab.back").catch(() => {});
+  await page.click(".tabs .tab:has-text('PVP')", { button: "right" });
+  await page.click(".menu .item:has-text('Pop Out PVP')");
+  let pvp;
+  for (let i = 0; i < 60 && !pvp; i++) {
+    pvp = app.windows().find((w) => w.url().includes("pop=pvp"));
+    if (!pvp) await page.waitForTimeout(100);
+  }
+  if (!pvp) log.push("pop out pvp: no window");
+  else {
+    await pvp.waitForTimeout(1500);
+    await pvp.screenshot({ path: path.join(out, "popout-pvp.png") });
+    await pvp.click(".hudfight").catch(() => log.push("pop out pvp: no fights"));
+    await page.waitForSelector(".pvp .phead", { timeout: 5000 }).catch(() => log.push("pop out pvp: the opponent didn't open in the main window"));
+  }
   fs.writeFileSync(path.join(out, "log.txt"), log.join("\n") || "OK");
   await app.close();
 })().catch((e) => { console.error(e); process.exit(1); });

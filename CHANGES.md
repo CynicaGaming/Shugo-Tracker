@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.5.2
+- New: Pop Out PVP (right-click the PVP tab): today's kills, deaths and assists, then your latest fights as a kill feed; click one to open that opponent in the main window
+- Removed: the gear button on pop-outs
+
 ## 2.5.1
 - Changed: the HUD is now its own window: right-click the Nearby tab → Pop Out Nearby. It stays on top over the game while the main window does whatever you like; it reopens next time if you left it open
 - Changed: clicking a player in the pop-out (or its gear) opens their profile (or Settings) in the main window
