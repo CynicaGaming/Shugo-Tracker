@@ -448,3 +448,6 @@ body.tipwin .tip { position: static !important; box-shadow: none; }
 .poppanel .prow .v { width: 34px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
 .poppanel .grow { flex: 1; }
 .app.hudstyle .iconbtn.on { color: var(--gold); }
+.tag.duel { color: var(--gold) !important; background: rgba(232, 196, 106, 0.14) !important; }
+.hudfight .tag { margin-left: 6px; padding: 0 4px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 0.4px;
+  text-transform: uppercase; }

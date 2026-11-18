@@ -68,6 +68,14 @@ class Hit:
 
 
 @dataclass(frozen=True)
+class DuelEnded:
+    """A duel's result, sent to both players: 0B 94 <u32 you> 04 <u32 loser> <u32 winner> <len><loser name>
+    <len><winner name> (from one duel you lost, Nov 2026)."""
+    loser: str
+    winner: str
+
+
+@dataclass(frozen=True)
 class Killed:
     """Someone (a player, you, a monster) was killed: 04 8D <id> <killing skill u32> then the killer:
     <killer id varint> <server u16> <len><name> <len><legion> in the open world, or all zeros in arenas (where
@@ -108,7 +116,7 @@ class RosterSeen:
     players: tuple[tuple[str, int], ...]      # (name, server)
 
 
-Event = SelfSeen | PlayerSeen | OwnerRecord | Hit | Killed | EntityGone | MapLoaded | EntityActive | RosterSeen
+Event = SelfSeen | PlayerSeen | OwnerRecord | Hit | Killed | DuelEnded | EntityGone | MapLoaded | EntityActive | RosterSeen
 SPAWN_DEDUPE_S = 2.0     # the same spawn record repeated within this window is one sighting
 
 
@@ -124,13 +132,15 @@ class Opcodes:
     object_gone: list[str] = field(default_factory=lambda: ["35 36"])    # id, reason: left view
     map_load: list[str] = field(default_factory=lambda: ["21 36"])       # u32 load count, u32 map id
     roster: list[str] = field(default_factory=lambda: ["03 60"])         # a match scoreboard (Shugo Festival)
+    duel_end: list[str] = field(default_factory=lambda: ["0B 94"])       # a duel's loser and winner
 
     def compiled(self) -> "CompiledOpcodes":
         def parse(codes: list[str]) -> tuple[bytes, ...]:
             return tuple(bytes(int(h, 16) for h in c.split()) for c in codes if c.strip())
         return CompiledOpcodes(parse(self.damage), parse(self.self_record),
                                parse(self.player_spawn), parse(self.ownership),
-                               parse(self.death), parse(self.object_gone), parse(self.map_load), parse(self.roster))
+                               parse(self.death), parse(self.object_gone), parse(self.map_load), parse(self.roster),
+                               parse(self.duel_end))
 
 
 @dataclass(frozen=True)
@@ -143,6 +153,7 @@ class CompiledOpcodes:
     object_gone: tuple[bytes, ...]
     map_load: tuple[bytes, ...]
     roster: tuple[bytes, ...] = ()
+    duel_end: tuple[bytes, ...] = ()
 
 
 def _at(data: bytes, i: int, codes: tuple[bytes, ...]) -> bool:
@@ -450,6 +461,17 @@ class StreamDecoder:
                 map_id = u32(packet, o + 6)
                 if 0 < map_id <= 9_999_999:
                     self.emit(MapLoaded(map_id))
+        elif _at(packet, o, self.op.duel_end):
+            p = o + 2 + 4 + 1 + 8
+            names = []
+            for _ in range(2):
+                nl = packet[p] if p < n else 0
+                if not 1 <= nl <= 48 or p + 1 + nl > n:
+                    return
+                names.append(decode_name(packet[p + 1:p + 1 + nl]))
+                p += 1 + nl
+            if all(names) and packet[o + 6] == 4:
+                self.emit(DuelEnded(names[0], names[1]))
         elif _at(packet, o, self.op.roster):
             self._parse_roster(packet, o + 2)
         elif _at(packet, o, self.op.ownership):

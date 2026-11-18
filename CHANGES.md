@@ -5,6 +5,11 @@ Each release's notes come from its section here (shown in Settings → Updates).
 ## 2.5.5
 - Fixed: after entering a new area (the Abyss especially), Nearby and the PVP Log could miss that you're you, so your kills and deaths there went unlogged
 
+## 2.5.5
+- New: duels go in the PVP Log (marked Duel): the game says who won, so a lost duel is a death and a won one a kill
+- Fixed: a killer named by the game is logged with their exact server
+- The core log now notes each id the game gives you and every kill record about you or a player near you, so a missed fight can be traced
+
 ## 2.5.4
 - Fixed: the PVP Log missed kills and deaths outside arenas. In the open world the game's kill record also names the killer (and their server), which the log now reads, so even a killer you never saw is logged
 

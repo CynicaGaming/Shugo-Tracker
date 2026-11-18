@@ -209,7 +209,8 @@ function fightRow(r, foe) {
       h("span.win", { class: youWon ? "us" : "them" }, winner),
       h("span.sw", { html: SWORDS }),
       h("span.lose", {}, loser),
-      r.kind === "assist" ? h("span.tag", {}, "Assist") : null),
+      r.kind === "assist" ? h("span.tag", {}, "Assist") : null,
+      r.duel ? h("span.tag.duel", {}, "Duel") : null),
     h("span.with", {}, others.length ? `with ${others.join(", ")}` : ""),
     h("span.ago", {}, ago(r.t)),
     h("span.at", {}, when(r.t)));
@@ -247,7 +248,7 @@ export class PvpHud {
       el.append(h("div.hudfight", { class: r.kind, onClick: () => this.app.win.showMain({ foe: r.id }) },
         h("span.win", { class: r.kind === "death" ? "them" : "us" }, winner),
         h("span.sw", { html: SWORDS }),
-        h("span.lose", {}, loser),
+        h("span.lose", {}, loser, r.duel ? h("span.tag.duel", {}, "Duel") : null),
         h("span.ago", {}, ago(r.t).replace(" ago", ""))));
     }
   }

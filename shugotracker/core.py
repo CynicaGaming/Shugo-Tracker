@@ -378,10 +378,10 @@ class Core:
         return True
 
     # ───── PvP Log ─────
-    def _on_pvp(self, kind: str, foe: Character, with_: list[str], by: str | None = None) -> None:
+    def _on_pvp(self, kind: str, foe: Character, with_: list[str], by: str | None = None, duel: bool = False) -> None:
         me = self.nearby.tracker.me.name or (self.my.active() or {}).get("name") or ""
         self.chars[foe.key] = foe
-        r = self.pvp.add(kind, me, char_json(foe), with_, by=by)
+        r = self.pvp.add(kind, me, char_json(foe), with_, by=by, duel=duel)
         self.emit("pvp", r)
 
     def _pvp_me(self) -> str | None:

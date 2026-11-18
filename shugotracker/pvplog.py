@@ -45,12 +45,14 @@ class PvpLog:
             self.log(f"pvp log: couldn't read {self.path}: {e}")
 
     def add(self, kind: str, me: str, foe: dict, with_: list[str] | None = None, t: float | None = None,
-            by: str | None = None) -> dict:
+            by: str | None = None, duel: bool = False) -> dict:
         """by: on an assist, who landed the killing blow."""
         r = {"t": round(t if t is not None else time.time(), 1), "kind": kind, "me": me or "",
              "foe": {k: foe.get(k) for k in _CARD if foe.get(k) not in (None, "")}, "with": list(with_ or [])}
         if by:
             r["by"] = by
+        if duel:
+            r["duel"] = True
         with self._lock:
             self.records.append(r)
             self.version += 1

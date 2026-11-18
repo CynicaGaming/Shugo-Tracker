@@ -16,7 +16,7 @@ from typing import Callable
 
 from . import servers as sv
 from .aion2api import Api, Character, class_pc_ids
-from .protocol import EntityActive, Hit, Killed, MapLoaded, Opcodes, RosterSeen, SelfSeen, StreamDecoder
+from .protocol import DuelEnded, EntityActive, Hit, Killed, MapLoaded, Opcodes, RosterSeen, SelfSeen, StreamDecoder
 from .tracker import ALLY, ENEMY, UNKNOWN, Lookup, Player, Tracker
 
 RECORD_MAGIC = b"SHUGOCAP1\n"
@@ -87,7 +87,7 @@ class NearbyService:
         # PvP Log: recent hits on each entity, to tell who landed the killing blow
         self._hits: dict[int, list[tuple[float, int, int]]] = {}     # target -> [(time, attacker, skill)]
         self._died_at: dict[int, float] = {}
-        self.on_pvp: Callable[..., None] = lambda kind, foe, with_, by=None: None
+        self.on_pvp: Callable[..., None] = lambda kind, foe, with_, **kw: None
         self._map_loads_seen = False
         self._loaded_since_self = False               # a map load came in since your last own record
         self._self_eid: int | None = None             # your id in the last record of your own
@@ -204,6 +204,8 @@ class NearbyService:
         return eid in self._parked or eid in self.tracker.by_id
 
     def _on_event(self, ev) -> None:          # called with self._lock held
+        if isinstance(ev, SelfSeen) and ev.entity_id not in self.tracker.me.entity_ids:
+            self.log(f"nearby: you are id {ev.entity_id}")              # (the PVP Log needs it: worth seeing)
         if isinstance(ev, EntityActive):
             name = self.tracker.by_id.get(ev.entity_id)
             if name in self.tracker.players:
@@ -229,7 +231,12 @@ class NearbyService:
                 self._last_roster = names
                 self.log("nearby: match scoreboard: " + ", ".join(f"{n}@{s}" for n, s in ev.players))
         elif isinstance(ev, Killed):
-            self._pvp_death(ev.entity_id, ev.skill, ev)
+            try:
+                self._pvp_death(ev.entity_id, ev.skill, ev)
+            except Exception as e:  # noqa: BLE001  (never let the log stop Nearby)
+                self.log(f"pvp: couldn't log a death: {e!r}")
+        elif isinstance(ev, DuelEnded):
+            self._pvp_duel(ev)
         elif isinstance(ev, Hit):
             self._note_hit(ev)
             # someone on the Recent list is fighting right next to you: they never left
@@ -265,6 +272,17 @@ class NearbyService:
             for k in [k for k, v in self._hits.items() if now - v[-1][0] > PVP_WINDOW_S]:
                 del self._hits[k]
 
+    def _pvp_duel(self, ev: DuelEnded) -> None:   # lock held
+        me = self.tracker.me.name
+        if me not in (ev.loser, ev.winner):
+            return
+        other = ev.winner if ev.loser == me else ev.loser
+        foe = self.tracker.players.get(other)
+        card = self._character(foe) if foe else self._named_card(other, 0)
+        kind = "death" if ev.loser == me else "kill"
+        self.log(f"pvp: duel: {ev.winner} beat {ev.loser}")
+        self.on_pvp(kind, card, [], duel=True)
+
     def _pvp_death(self, eid: int, skill: int = 0, rec: Killed | None = None) -> None:    # lock held
         """Someone was killed. The killer is whoever just hit them with the killing skill (or, without one, the
         last player to hit them). You died: that player killed you. A player you hit died: your kill if you
@@ -279,6 +297,10 @@ class NearbyService:
         is_player = lambda a: a in mine or by_id.get(a) in self.tracker.players   # noqa: E731
         players = [(t, a, sk) for t, a, sk in hits if is_player(a)]
         named = rec is not None and rec.killer_name                # the open world names the killer
+        if eid in mine or by_id.get(eid) in self.tracker.players or (named and rec.killer_name == self.tracker.me.name):
+            self.log(f"pvp: kill record: {'you' if eid in mine else by_id.get(eid)} (id {eid}) by "
+                     f"{rec.killer_name + ' (id ' + str(rec.killer_id) + ')' if named else 'skill ' + hex(skill)}, "
+                     f"{len(players)} player hit(s) before")
         if named and rec.killer_id not in mine and rec.killer_name == self.tracker.me.name:
             mine.add(rec.killer_id)
         if not players and not named:
@@ -295,6 +317,8 @@ class NearbyService:
             if named:
                 foe = self.tracker.players.get(rec.killer_name)
                 card = self._character(foe) if foe else self._named_card(rec.killer_name, rec.killer_server)
+                if not card.server_id and rec.killer_server:            # the record knows their server for sure
+                    card = self._named_card(rec.killer_name, rec.killer_server) if not card.char_id else card
                 fname = rec.killer_name
             elif by_id.get(killer) in self.tracker.players:
                 foe = self.tracker.players[by_id[killer]]
@@ -317,8 +341,9 @@ class NearbyService:
 
     def _named_card(self, name: str, server: int) -> Character:
         """A killer the game named but we never saw spawn (killed from out of view)."""
-        return Character(char_id="", name=name, race=sv.race_of(server) or 0, pc_id=0, level=0, server_id=server,
-                         server_name=sv.name_of(server), region=sv.REGION_PREFIX.get(sv.region_of(server), ""))
+        return Character(char_id="", name=name, race=(sv.race_of(server) or 0) if server else 0, pc_id=0, level=0,
+                         server_id=server, server_name=sv.name_of(server) if server else "",
+                         region=sv.REGION_PREFIX.get(sv.region_of(server), "") if server else "")
 
     def _new_area(self, ev: SelfSeen) -> bool:
         """Your own record arriving means a new area when map-load records aren't coming through at all, or

@@ -19,7 +19,8 @@ class DetectTests(unittest.TestCase):
     def setUp(self):
         self.got = []
         self.svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae"})
-        self.svc.on_pvp = lambda kind, foe, with_, by=None: self.got.append((kind, foe.name, with_) + ((by,) if by else ()))
+        self.svc.on_pvp = lambda kind, foe, with_, by=None, duel=False: self.got.append(
+            (kind, foe.name, with_) + ((by,) if by else ()) + (("duel",) if duel else ()))
         self.feed(self_record(100, "Mine", 1101), other_record(200, "Foe"), other_record(300, "Pal"))
 
     def feed(self, *bodies):
@@ -56,6 +57,14 @@ class DetectTests(unittest.TestCase):
         self.feed(named(300, 100, "Mine"))                      # you killed Pal (never hit them that we saw)
         self.assertEqual([g[:2] for g in self.got], [("death", "Stranger"), ("assist", "Foe"), ("kill", "Pal")])
         self.assertEqual(self.got[1][3], "Pal")
+
+    def test_a_duel_you_lost_and_one_you_won(self):
+        def duel(loser, winner):
+            lb, wb = loser.encode(), winner.encode()
+            return (b"\x0b\x94" + struct.pack("<I", 100) + b"\x04" + struct.pack("<II", 1, 2)
+                    + bytes([len(lb)]) + lb + bytes([len(wb)]) + wb)
+        self.feed(duel("Mine", "Foe"), duel("Pal", "Mine"), duel("Pal", "Foe"))
+        self.assertEqual(self.got, [("death", "Foe", [], "duel"), ("kill", "Pal", [], "duel")])
 
     def test_one_death_counts_once(self):
         self.feed(damage(200, 100), death(200), death(200))
