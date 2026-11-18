@@ -229,7 +229,7 @@ class NearbyService:
                 self._last_roster = names
                 self.log("nearby: match scoreboard: " + ", ".join(f"{n}@{s}" for n, s in ev.players))
         elif isinstance(ev, Killed):
-            self._pvp_death(ev.entity_id, ev.skill)
+            self._pvp_death(ev.entity_id, ev.skill, ev)
         elif isinstance(ev, Hit):
             self._note_hit(ev)
             # someone on the Recent list is fighting right next to you: they never left
@@ -265,7 +265,7 @@ class NearbyService:
             for k in [k for k, v in self._hits.items() if now - v[-1][0] > PVP_WINDOW_S]:
                 del self._hits[k]
 
-    def _pvp_death(self, eid: int, skill: int = 0) -> None:    # lock held
+    def _pvp_death(self, eid: int, skill: int = 0, rec: Killed | None = None) -> None:    # lock held
         """Someone was killed. The killer is whoever just hit them with the killing skill (or, without one, the
         last player to hit them). You died: that player killed you. A player you hit died: your kill if you
         landed it, an assist otherwise."""
@@ -278,28 +278,47 @@ class NearbyService:
         by_id = self.tracker.by_id
         is_player = lambda a: a in mine or by_id.get(a) in self.tracker.players   # noqa: E731
         players = [(t, a, sk) for t, a, sk in hits if is_player(a)]
-        if not players:
+        named = rec is not None and rec.killer_name                # the open world names the killer
+        if named and rec.killer_id not in mine and rec.killer_name == self.tracker.me.name:
+            mine.add(rec.killer_id)
+        if not players and not named:
             return                                       # a monster (or a fall): not PvP
-        killing = [a for _t, a, sk in players if skill and sk == skill]
-        killer = killing[-1] if killing else players[-1][1]
         name_of = lambda a: self.tracker.me.name if a in mine else by_id.get(a)   # noqa: E731
+        if named:
+            killer = rec.killer_id
+        else:
+            killing = [a for _t, a, sk in players if skill and sk == skill]
+            killer = killing[-1] if killing else players[-1][1]
         if eid in mine:
             if killer in mine:
                 return
-            foe = self.tracker.players[by_id[killer]]
-            others = sorted({name_of(a) for _t, a, _s in players if a not in mine} - {foe.name})
-            self.log(f"pvp: {foe.name} killed you" + (f" (with {', '.join(others)})" if others else ""))
-            self.on_pvp("death", self._character(foe), others)
+            if named:
+                foe = self.tracker.players.get(rec.killer_name)
+                card = self._character(foe) if foe else self._named_card(rec.killer_name, rec.killer_server)
+                fname = rec.killer_name
+            elif by_id.get(killer) in self.tracker.players:
+                foe = self.tracker.players[by_id[killer]]
+                card, fname = self._character(foe), foe.name
+            else:
+                return
+            others = sorted({name_of(a) for _t, a, _s in players if a not in mine and name_of(a)} - {fname})
+            self.log(f"pvp: {fname} killed you" + (f" (with {', '.join(others)})" if others else ""))
+            self.on_pvp("death", card, others)
             return
         victim = by_id.get(eid)
-        if victim not in self.tracker.players or not any(a in mine for _t, a, _s in players):
+        if victim not in self.tracker.players or not (killer in mine or any(a in mine for _t, a, _s in players)):
             return                                       # not someone you fought
         kind = "kill" if killer in mine else "assist"
-        others = sorted({name_of(a) for _t, a, _s in players if a not in mine})
+        others = sorted({name_of(a) for _t, a, _s in players if a not in mine and name_of(a)})
         self.log(f"pvp: {'you killed' if kind == 'kill' else name_of(killer) + ' killed'} {victim}"
                  + ("" if kind == "kill" else " (your assist)") + (f" (with {', '.join(others)})" if others and kind == "kill" else ""))
         self.on_pvp(kind, self._character(self.tracker.players[victim]), others,
-                    by=None if kind == "kill" else name_of(killer))
+                    by=None if kind == "kill" else (rec.killer_name if named else name_of(killer)))
+
+    def _named_card(self, name: str, server: int) -> Character:
+        """A killer the game named but we never saw spawn (killed from out of view)."""
+        return Character(char_id="", name=name, race=sv.race_of(server) or 0, pc_id=0, level=0, server_id=server,
+                         server_name=sv.name_of(server), region=sv.REGION_PREFIX.get(sv.region_of(server), ""))
 
     def _new_area(self, ev: SelfSeen) -> bool:
         """Your own record arriving means a new area when map-load records aren't coming through at all, or

@@ -40,14 +40,22 @@ class DetectTests(unittest.TestCase):
     def test_not_pvp(self):
         self.feed(damage(100, 9999), death(100))           # a monster killed you
         self.feed(damage(300, 200), death(300))            # a fight you weren't in
-        self.feed(damage(200, 100, skill=5), b"\x04\x8d" + encode_varint(200) + b"\x01\x02\x03\x04"
-                  + encode_varint(300) + struct.pack("<H", 1101) + b"\x03Pal" + b"\x00" * 8)   # loot, not a death
         self.assertEqual(self.got, [])
 
     def test_the_killing_skill_names_the_killer(self):
         # Pal hit last, but with another skill: the killing blow was yours
         self.feed(damage(200, 100, skill=777), damage(200, 300, skill=5), death(200, skill=777))
         self.assertEqual(self.got, [("kill", "Foe", ["Pal"])])
+
+    def test_open_world_names_the_killer(self):
+        # 04 8D <victim> <skill> <killer id> <server> <name> <legion>: no need to have seen them hit
+        named = lambda victim, killer, name: (b"\x04\x8d" + encode_varint(victim) + struct.pack("<I", 9) + encode_varint(killer)
+                                              + struct.pack("<H", 2101) + bytes([len(name)]) + name.encode() + b"\x07Eclipse" + b"\x00" * 8)
+        self.feed(named(100, 777, "Stranger"))                  # someone out of view killed you
+        self.feed(damage(200, 100), named(200, 300, "Pal"))     # you hit Foe, Pal finished them
+        self.feed(named(300, 100, "Mine"))                      # you killed Pal (never hit them that we saw)
+        self.assertEqual([g[:2] for g in self.got], [("death", "Stranger"), ("assist", "Foe"), ("kill", "Pal")])
+        self.assertEqual(self.got[1][3], "Pal")
 
     def test_one_death_counts_once(self):
         self.feed(damage(200, 100), death(200), death(200))

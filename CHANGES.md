@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.5.4
+- Fixed: the PVP Log missed kills and deaths outside arenas. In the open world the game's kill record also names the killer (and their server), which the log now reads, so even a killer you never saw is logged
+
 ## 2.5.3
 - New: each pop-out has a gear with its own Opacity and Always on Top
 - New: the Nearby pop-out has column headers: click one to sort, right-click to add or remove Legion, Class, Level, Server, Gear Score and Combat Power

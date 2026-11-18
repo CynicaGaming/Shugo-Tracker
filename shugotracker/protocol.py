@@ -69,10 +69,14 @@ class Hit:
 
 @dataclass(frozen=True)
 class Killed:
-    """Someone (a player, you, a monster) was killed: 04 8D <id> <killing skill u32> <12 zero bytes>. The killer
-    is whoever just hit them with that skill (checked against arena deaths, Nov 2026). skill 0: no killer."""
+    """Someone (a player, you, a monster) was killed: 04 8D <id> <killing skill u32> then the killer:
+    <killer id varint> <server u16> <len><name> <len><legion> in the open world, or all zeros in arenas (where
+    the killer is whoever just hit them with that skill). Checked against arena and open-world deaths, Nov 2026."""
     entity_id: int
     skill: int
+    killer_id: int = 0
+    killer_name: str = ""
+    killer_server: int = 0
 
 
 @dataclass(frozen=True)
@@ -448,12 +452,23 @@ class StreamDecoder:
         elif _at(packet, o, self.op.roster):
             self._parse_roster(packet, o + 2)
         elif _at(packet, o, self.op.ownership):
-            # the same opcode also carries loot ownership (an owner and a name after the 4 bytes): a death
-            # record has nothing but zeros there
             eid, ln = read_varint(packet, o + 2)
             p = o + 2 + ln
-            if ln > 0 and 1 <= eid <= MAX_ENTITY_ID and p + 16 <= n and not any(packet[p + 4:p + 16]):
-                self.emit(Killed(eid, u32(packet, p)))
+            if ln <= 0 or not 1 <= eid <= MAX_ENTITY_ID or p + 16 > n:
+                return
+            skill = u32(packet, p)
+            if not any(packet[p + 4:p + 16]):                  # arena: the killer isn't named
+                self.emit(Killed(eid, skill))
+                return
+            killer, kl = read_varint(packet, p + 4)             # open world: the killer, their server and name
+            q = p + 4 + kl
+            if kl > 0 and 1 <= killer <= MAX_ENTITY_ID and q + 3 <= n:
+                server = u16(packet, q)
+                nl = packet[q + 2]
+                if server in self.known_servers and 1 <= nl <= 48 and q + 3 + nl <= n:
+                    name = decode_name(packet[q + 3:q + 3 + nl])
+                    if name:
+                        self.emit(Killed(eid, skill, killer, name, server))
 
     # ---- match scoreboard: per player ... <server u16> <u32> 00 00 <server u16> <len><name> ... ----
     def _parse_roster(self, b: bytes, o: int) -> None:
