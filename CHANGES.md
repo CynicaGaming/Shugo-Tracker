@@ -2,6 +2,12 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.5.3
+- New: each pop-out has a gear with its own Opacity and Always on Top
+- New: the Nearby pop-out has column headers: click one to sort, right-click to add or remove Legion, Class, Level, Server, Gear Score and Combat Power
+- New: K/D in the PVP pop-out's title, beside today's kills, deaths and assists
+- Changed: no Elyos / Asmodian headings in the Nearby pop-out (the coloured stripe shows the side; enemies stay on top)
+
 ## 2.5.2
 - New: Pop Out PVP (right-click the PVP tab): today's kills, deaths and assists, then your latest fights as a kill feed; click one to open that opponent in the main window
 - Removed: the gear button on pop-outs

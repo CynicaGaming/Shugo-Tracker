@@ -700,11 +700,54 @@ function paintHudTitle() {
   titlebar.append(h("span.logo", { class: S.game ? "" : "idle", html: LOGO }),
     POP === "pvp"
       ? h("span.hudtitle", {}, "PVP", t ? h("span.today", {}, h("b.k", {}, `${t.kill}`), h("small", {}, "K"), h("b.d", {}, `${t.death}`), h("small", {}, "D"),
-        h("b.a", {}, `${t.assist}`), h("small", {}, "A")) : null)
+        h("b.a", {}, `${t.assist}`), h("small", {}, "A"),
+        h("b", {}, t.death ? (t.kill / t.death).toFixed(2) : `${t.kill}`), h("small", {}, "K/D")) : null)
       : h("span.hudtitle", {}, "Nearby", n ? h("span.count", {}, n) : null),
     h("span.grow"),
+    h("button.iconbtn", { class: popPanel ? "on" : "", html: ICONS.gear, onClick: () => { popPanel = !popPanel; render(); } }),
     h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
     h("button.iconbtn.close", { html: ICONS.close, onClick: () => win.close() }));
+}
+
+/* A pop-out's own settings (the gear): opacity, always on top; Nearby's columns and sort live here too. */
+const popCfg = () => ({ on_top: true, opacity: 1, ...(S.cfg[`pop_${POP}`] || {}) });
+const savePop = (patch) => save(`pop_${POP}`, { ...popCfg(), ...patch });
+let popPanel = false;
+
+function popSettings() {
+  const c = popCfg();
+  const op = Math.round((c.opacity || 1) * 100);
+  const out = h("span.v", {}, `${op}%`);
+  const onTop = h("div.toggle", { class: c.on_top !== false ? "on" : "", onClick: () => {
+    const v = !onTop.classList.contains("on"); onTop.classList.toggle("on", v); savePop({ on_top: v }); win.setAlwaysOnTop(v); } });
+  return h("div.poppanel", {},
+    h("div.prow", {}, h("span", {}, "Opacity"), h("input", { type: "range", min: 30, max: 100, value: op,
+      onInput: (e) => { out.textContent = `${e.target.value}%`; win.setOpacity(e.target.value / 100); },
+      onChange: (e) => savePop({ opacity: e.target.value / 100 }) }), out),
+    h("div.prow", {}, h("span", {}, "Always on Top"), h("span.grow"), onTop));
+}
+
+// Nearby pop-out columns: Name always, the rest your choice (right-click the header); click a header to sort.
+const HUD_COLS = {
+  name: ["Name", "minmax(0, 1fr)"], legion: ["Legion", "64px"], class: ["Class", "34px"], level: ["Lv", "20px"],
+  server: ["Server", "64px"], gs: ["GS", "36px"], cp: ["CP", "42px"],
+};
+const HUD_ORDER = ["legion", "class", "level", "server", "gs", "cp"];
+const HUD_DEFAULT = ["class", "gs", "cp"];
+const hudCols = () => ["name", ...HUD_ORDER.filter((k) => (popCfg().columns || HUD_DEFAULT).includes(k))];
+
+function hudHeadMenu(e) {
+  e.preventDefault();
+  const cols = popCfg().columns || HUD_DEFAULT;
+  showMenu([...HUD_ORDER.map((k) => ({ label: COL_MENU[k], check: cols.includes(k),
+    onClick: () => { savePop({ columns: cols.includes(k) ? cols.filter((x) => x !== k) : [...cols, k] }); render(); } })),
+    "-", { label: "Reset Columns", onClick: () => { savePop({ columns: [...HUD_DEFAULT], sort: null }); render(); } }], e.clientX, e.clientY);
+}
+
+function hudSort(k) {
+  const [key, rev] = popCfg().sort || ["default", false];
+  savePop({ sort: key !== k ? [k, false] : rev ? null : [k, true] });
+  render();
 }
 
 function hudBody() {
@@ -715,28 +758,37 @@ function hudBody() {
   if (nb.state === "no_admin") { note("Needs Administrator", h("button.btn.gold", { onClick: () => win.relaunchAsAdmin() }, "Restart as Administrator")); return box; }
   if (nb.state === "waiting" || nb.state === "starting") { note(nb.state === "waiting" ? "Waiting for AION 2" : "Starting…"); return box; }
   if (nb.state === "error") { note("Nearby Stopped"); return box; }
-  const order = { enemy: 0, ally: 1 };
-  const rows = nb.rows.map((r) => ({ side: r.side, c: S.chars.get(r.char.key) || r.char }))
-    .sort((a, b) => ((order[a.side] ?? 2) - (order[b.side] ?? 2)) || ((b.c.combat_power || 0) - (a.c.combat_power || 0)));
-  if (!rows.length) { note("No Players Nearby"); return box; }
+  const cols = hudCols();
+  const grid = { gridTemplateColumns: cols.map((k) => HUD_COLS[k][1]).join(" ") };
+  const [key, rev] = popCfg().sort || ["default", false];
+  // enemies first (the stripe shows the side); within each, your sort or else highest CP first
+  const sideOf = Object.fromEntries(nb.rows.map((r) => [r.char.name, r.side]));
+  const chars = nb.rows.map((r) => S.chars.get(r.char.key) || r.char);
+  const sorted = sortChars(chars, key === "default" ? "cp" : key, key === "default" ? false : rev, sideOf);
+  box.append(h("div.hudhead", { style: grid, onContextmenu: hudHeadMenu }, cols.map((k) => {
+    const natural = ["level", "gs", "cp"].includes(k);
+    return h("span", { class: [key === k ? "sorted" : "", natural ? "num" : ""].join(" "),
+      "data-arrow": (natural !== !!rev) ? "▼" : "▲", onClick: () => hudSort(k) }, HUD_COLS[k][0]);
+  })));
+  if (!sorted.length) { note("No Players Nearby"); return box; }
   const want = [];
-  let last = null;
-  for (const { side, c } of rows) {
-    const race = list.sideRace(side);
-    if (side !== last) {
-      last = side;
-      box.append(h("div.hudgroup", { style: race ? { color: factionColor(race) } : {} },
-        race === 1 ? "Elyos" : race === 2 ? "Asmodian" : side === "enemy" ? "Enemies" : side === "ally" ? "Allies" : "Unknown"));
-    }
-    const col = CLASS_COLORS[c.class_name] || "var(--dim)";
+  for (const c of sorted) {
+    const side = sideOf[c.name], race = list.sideRace(side);
     const loading = c.status === "loading" || c.status === "none" || !c.status;
     if (c.status === "none" || !c.status || c.stale) want.push(c.key);
-    box.append(h("div.hudrow", { onClick: () => win.showMain({ profile: c }) },
+    const ph = (v, f) => v != null ? f(v) : loading ? h("i.ph") : "";
+    const cell = {
+      name: () => h("span.nm", {}, c.name),
+      legion: () => h("span.dim", {}, c.legion || ""),
+      class: () => h("span.cl", { style: { color: CLASS_COLORS[c.class_name] || "var(--dim)" } }, (c.class_name || "?").slice(0, 3)),
+      level: () => h("span.num", {}, c.level || ""),
+      server: () => h("span.dim", {}, c.server_name || ""),
+      gs: () => h("span.num.gs", {}, ph(c.gear_score, short)),
+      cp: () => h("span.num.cp", {}, ph(c.combat_power, short)),
+    };
+    box.append(h("div.hudrow", { style: grid, onClick: () => win.showMain({ profile: c }) },
       h("span.side", { style: { background: race ? factionColor(race) : side === "enemy" ? "#ff6b6b" : "#6ab8ff" } }),
-      h("span.cl", { style: { color: col } }, (c.class_name || "?")[0]),
-      h("span.nm", {}, c.name),
-      h("span.cp", {}, c.combat_power != null ? short(c.combat_power) : loading ? h("i.ph") : ""),
-      h("span.gs", {}, c.gear_score != null ? short(c.gear_score) : loading ? h("i.ph") : "")));
+      cols.map((k) => cell[k]())));
   }
   if (want.length) call("cards.want", { keys: want });
   return box;
@@ -749,13 +801,13 @@ function render() {
   if (POP === "pvp") {
     if (!pvpHud) { pvpHud = new PvpHud(app); pvpHud.onTotals = (t) => { pvpToday = t; paintHudTitle(); }; }
     paintHudTitle();
-    if (!view.contains(pvpHud.el)) clear(view).append(pvpHud.el);
+    clear(view).append(...(popPanel ? [popSettings()] : []), pvpHud.el);
     return;
   }
   if (hudOn()) {
     paintHudTitle();
     const top = view.querySelector(".hud")?.scrollTop || 0;
-    clear(view).append(hudBody());
+    clear(view).append(...(popPanel ? [popSettings()] : []), hudBody());
     view.querySelector(".hud").scrollTop = top;
     return;
   }
@@ -787,7 +839,7 @@ app.render = render;
     favorites: init.favorites, my: init.my, nearby: init.nearby || S.nearby, game: init.game !== false });
   for (const c of init.favorites) S.chars.set(c.key, c);
   S.update = { ...(await win.update("state")) };
-  win.setAlwaysOnTop(S.cfg.always_on_top !== false);
+  if (!POP) win.setAlwaysOnTop(S.cfg.always_on_top !== false);   // (a pop-out has its own, set by the window)
   paintClock();
   if (!POP && !S.my.slots.some(Boolean) && !S.cfg.setup_done && !S.demo) openFinder(0);   // first start: find yourself
   else render();

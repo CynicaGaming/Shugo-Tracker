@@ -141,11 +141,15 @@ function popOut(kind) {
     icon: path.join(__dirname, "build", "icon.ico"),
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false },
   });
-  w.setAlwaysOnTop(true, "screen-saver");
+  // its own opacity and always-on-top (the gear in its title bar)
+  const own = cfg[`pop_${kind}`] || {};
+  w.onTop = own.on_top !== false;
+  if (w.onTop) w.setAlwaysOnTop(true, "screen-saver");
   for (const ev of ["blur", "moved", "show", "restore"]) w.on(ev, () => setTimeout(() => {
-    if (!w.isDestroyed()) { w.setAlwaysOnTop(false); w.setAlwaysOnTop(true, "screen-saver"); }
+    if (!w.isDestroyed() && w.onTop) { w.setAlwaysOnTop(false); w.setAlwaysOnTop(true, "screen-saver"); }
   }, 60));
-  if (opacity < 1) w.setOpacity(opacity);
+  const op = Math.max(0.3, Math.min(1, Number(own.opacity) || 1));
+  if (op < 1) w.setOpacity(op);
   if (iconGrey && lastRunning === false) w.setIcon(iconGrey);
   w.loadFile(path.join(__dirname, "renderer", "index.html"), { query: { pop: kind } });
   w.once("ready-to-show", () => {
@@ -317,8 +321,14 @@ ipcMain.handle("win", async (e, action, arg) => {
     case "close": if (kind) from.close(); else app.quit(); break;
     case "popOut": popOut(arg); break;
     case "showMain": reveal(); win?.webContents.send("core", { event: "show", data: arg }); break;
-    case "alwaysOnTop": pinned = !!arg; pin(pinned, true); winLog(`always on top: ${pinned}`); break;
-    case "opacity": opacity = Math.max(0.3, Math.min(1, Number(arg) || 1)); for (const w of allWindows()) w.setOpacity(opacity); break;
+    case "alwaysOnTop":
+      if (kind) { from.onTop = !!arg; from.setAlwaysOnTop(from.onTop, "screen-saver"); break; }
+      pinned = !!arg; pin(pinned, true); winLog(`always on top: ${pinned}`); break;
+    case "opacity": {
+      const v = Math.max(0.3, Math.min(1, Number(arg) || 1));
+      if (kind) { from.setOpacity(v); break; }
+      opacity = v; win?.setOpacity(opacity); break;
+    }
     case "relaunchAsAdmin": return relaunchAsAdmin();
     case "update": return updater.act(arg);
               // "check" | "download" | "restart" | "state"
