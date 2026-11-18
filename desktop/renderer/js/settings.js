@@ -1,6 +1,6 @@
 // Settings, in the game's style: header bars per group, one setting per row.
 import { win } from "./bridge.js";
-import { playAlert } from "./alert.js";
+import { SOUNDS, playAlert, soundKind } from "./alert.js";
 import { LOGO, clear, h, icon } from "./dom.js";
 
 const RECENT = [[50, "50"], [100, "100"], [250, "250"], [500, "500"], [1000, "1,000"], [0, "Unlimited"]];
@@ -107,20 +107,27 @@ export class SettingsView {
     el.append(row("Alert Volume", h("input", { type: "range", min: 0, max: 100, value: vol, style: { width: "150px" },
       onInput: (e) => { volOut.textContent = `${e.target.value}%`; },
       onChange: (e) => { save("alert_volume", e.target.value / 100); playAlert(cfg); } }), volOut));
-    const soundBox = h("span", { style: { display: "flex", alignItems: "center", gap: "6px" } });
-    const paintSound = () => clear(soundBox).append(...[
-      h("span", { style: { color: "var(--text)", maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
-        cfg.alert_sound ? cfg.alert_sound_name || "Custom" : "Chime"),
-      h("button.btn", { onClick: async () => {
+    // Alert Sound: the built-in sounds, or Custom… (pick a file)
+    const pick = h("select.select", { onChange: async (e) => {
+      const v = e.target.value;
+      if (v === "pick") {
         const r = await win.pickSound();
-        if (!r) return;
-        if (r.error) { soundBox.append(h("span", { style: { color: "var(--red)" } }, r.error)); return; }
-        save("alert_sound", r.file); save("alert_sound_name", r.name); paintSound(); playAlert(cfg);
-      } }, "Choose…"),
-      cfg.alert_sound ? h("button.btn", { onClick: () => { save("alert_sound", ""); save("alert_sound_name", ""); paintSound(); playAlert(cfg); } }, "Chime") : null,
-      h("button.btn", { onClick: () => playAlert(cfg) }, "Test")].filter(Boolean));
-    paintSound();
-    el.append(row("Alert Sound", soundBox));
+        if (r && !r.error) { save("alert_sound", r.file); save("alert_sound_name", r.name); save("alert_sound_kind", "custom"); }
+        paintPick(r?.error);
+      } else { save("alert_sound_kind", v); paintPick(); }
+      playAlert(cfg);
+    } });
+    const err = h("span", { style: { color: "var(--red)", fontSize: "12px" } });
+    const paintPick = (error) => {
+      const kind = soundKind(cfg);
+      clear(pick).append(...Object.entries(SOUNDS).map(([k, [label]]) => h("option", { value: k }, label)),
+        ...(cfg.alert_sound ? [h("option", { value: "custom" }, `Custom: ${cfg.alert_sound_name || "your sound"}`)] : []),
+        h("option", { value: "pick" }, cfg.alert_sound ? "Choose Another File…" : "Custom…"));
+      pick.value = kind === "custom" && !cfg.alert_sound ? "chime" : kind;
+      err.textContent = error || "";
+    };
+    paintPick();
+    el.append(row("Alert Sound", err, pick, h("button.btn", { onClick: () => playAlert(cfg) }, "Test")));
 
     el.append(h("div.legal", {}, "Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. ",
       "AION and AION 2 are trademarks of NCSOFT Corporation; game names, text and images belong to NCSOFT."));

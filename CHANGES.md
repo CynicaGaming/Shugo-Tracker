@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.5.8
+- Changed: Alert Sound is a dropdown: Chime, Ping, Bell, Beeps, Alarm, War Drum, or Custom… to pick your own file (it then stays in the list); each plays when you pick it
+
 ## 2.5.7
 - New: Enemy Alert (Settings → Nearby): a sound when an enemy shows up on Nearby, at most once per 10s … 10m, at the volume you set
 - New: use your own sound for it (Choose… picks an mp3, wav, ogg or m4a; it's kept in the data folder beside the app), or the built-in chime; Test plays it

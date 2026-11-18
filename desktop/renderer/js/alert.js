@@ -14,26 +14,42 @@ async function customBuffer(file) {
   return custom.buf;
 }
 
-function chime(volume) {
+/** The built-in sounds, made on the spot: [label, notes: [frequency Hz, start s, length s, wave, slide-to Hz]]. */
+export const SOUNDS = {
+  chime: ["Chime", [[880, 0, 0.5, "sine"], [1318.5, 0.12, 0.5, "sine"]]],
+  ping: ["Ping", [[1760, 0, 0.35, "sine"]]],
+  bell: ["Bell", [[1046.5, 0, 0.9, "sine"], [2093, 0, 0.6, "sine"], [783.99, 0.18, 0.9, "sine"]]],
+  beeps: ["Beeps", [[1200, 0, 0.09, "square"], [1200, 0.14, 0.09, "square"], [1200, 0.28, 0.09, "square"]]],
+  alarm: ["Alarm", [[600, 0, 0.22, "sawtooth", 1100], [600, 0.26, 0.22, "sawtooth", 1100]]],
+  drum: ["War Drum", [[110, 0, 0.35, "sine", 55], [110, 0.22, 0.35, "sine", 55]]],
+};
+export const soundKind = (cfg) => cfg.alert_sound_kind || (cfg.alert_sound ? "custom" : "chime");
+
+function synth(kind, volume) {
   const a = audio(), t = a.currentTime;
-  for (const [f, at] of [[880, 0], [1318.5, 0.12]]) {             // A5 then E6: two soft bell notes
+  const loud = { square: 0.12, sawtooth: 0.14 };
+  for (const [f, at, len, wave, to] of (SOUNDS[kind] || SOUNDS.chime)[1]) {
     const o = a.createOscillator(), g = a.createGain();
-    o.type = "sine"; o.frequency.value = f;
+    o.type = wave; o.frequency.setValueAtTime(f, t + at);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + at + len);
+    const peak = (loud[wave] || 0.35) * volume;
     g.gain.setValueAtTime(0.0001, t + at);
-    g.gain.exponentialRampToValueAtTime(0.35 * volume, t + at + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.5);
+    g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), t + at + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + at + len);
     o.connect(g).connect(a.destination);
-    o.start(t + at); o.stop(t + at + 0.55);
+    o.start(t + at); o.stop(t + at + len + 0.05);
   }
 }
+const chime = (volume) => synth("chime", volume);
 
 /** Play the alert now (Settings → Test, or an enemy). */
 export async function playAlert(cfg) {
   const volume = Math.max(0, Math.min(1, cfg.alert_volume ?? 0.8));
   try {
     if (audio().state === "suspended") await audio().resume();
-    const buf = cfg.alert_sound ? await customBuffer(cfg.alert_sound) : null;
-    if (!buf) { chime(volume); return; }
+    const kind = soundKind(cfg);
+    const buf = kind === "custom" && cfg.alert_sound ? await customBuffer(cfg.alert_sound) : null;
+    if (!buf) { synth(kind === "custom" ? "chime" : kind, volume); return; }
     const src = audio().createBufferSource(), g = audio().createGain();
     src.buffer = buf; g.gain.value = volume;
     src.connect(g).connect(audio().destination);
