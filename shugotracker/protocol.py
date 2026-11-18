@@ -351,6 +351,7 @@ class StreamDecoder:
                 self._bundle(body[f.payload_start:])
             else:
                 self._packet(body, f.payload_start)
+        self._scan_self(buf[:consumed])                   # (after the packets: a copy they found is a duplicate)
         rest = buf[consumed:]
         # Never let a broken stream grow without bound.
         self._buf = rest if len(rest) <= 4 * MAX_PACKET else b""
@@ -517,6 +518,16 @@ class StreamDecoder:
 
     # ---- identities: 33 36 (self) / 44 36, 45 36 (others) ----
     # <op> <id varint> <mask1 u32> <mask2 u8> [mask2 & 1] <len u8><utf8 name> [server u16, class u32, u8, level u32]
+    def _scan_self(self, buf: bytes) -> None:
+        """Your own record, looked for across the whole stream as well as in each packet: entering a new area it
+        can straddle two packets as the decoder frames them (seen entering the Abyss), and without it every hit
+        and kill under your new id goes unrecognised. Copies are deduplicated by _parse_identity."""
+        for code in self.op.self_record:
+            i = buf.find(code)
+            while i >= 0:
+                self._parse_identity(buf, i + len(code), True)
+                i = buf.find(code, i + 1)
+
     def _scan_identities(self, data: bytes) -> None:
         n = len(data)
         i = 0
