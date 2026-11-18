@@ -675,6 +675,7 @@ function paintFooter() {
 // This window is a pop-out (index.html?pop=nearby): it only ever shows the HUD.
 const POP = new URLSearchParams(location.search).get("pop");
 const hudOn = () => POP === "nearby";
+if (POP) document.title = "Shugo Tracker · Nearby";      // (its taskbar button)
 let hudFrame = 0;
 function hudSoon() { cancelAnimationFrame(hudFrame); hudFrame = requestAnimationFrame(() => { if (hudOn()) render(); }); }
 
