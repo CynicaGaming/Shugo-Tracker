@@ -99,9 +99,9 @@ export class SettingsView {
     el.append(row("Auto-Clear", ...steps(AUTOCLEAR, cfg.nearby_autoclear_s ?? 0, (v) => save("nearby_autoclear_s", v))));
     el.append(row("Recent Players", ...steps(RECENT, cfg.recent_max ?? 250, (v) => { cfg.recent_max = v; call("recent.max", { n: v }); })));
 
-    // Enemy alert: a sound when an enemy shows up, at most once per "Alert Every"
+    // Enemy alert: a sound when an enemy shows up, at most once per "Alert Cooldown"
     el.append(row("Enemy Alert", toggle(!!cfg.alert_enemy, (v) => save("alert_enemy", v))));
-    el.append(row("Alert Every", ...steps(ALERT_EVERY, cfg.alert_cooldown_s ?? 30, (v) => save("alert_cooldown_s", v))));
+    el.append(row("Alert Cooldown", ...steps(ALERT_EVERY, cfg.alert_cooldown_s ?? 30, (v) => save("alert_cooldown_s", v))));
     const vol = Math.round((cfg.alert_volume ?? 0.8) * 100);
     const volOut = h("span", { style: { minWidth: "44px", textAlign: "right" } }, `${vol}%`);
     el.append(row("Alert Volume", h("input", { type: "range", min: 0, max: 100, value: vol, style: { width: "150px" },

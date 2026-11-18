@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.5.9
+- Changed: Alert Every is now called Alert Cooldown
+
 ## 2.5.8
 - Changed: Alert Sound is a dropdown: Chime, Ping, Bell, Beeps, Alarm, War Drum, or Custom… to pick your own file (it then stays in the list); each plays when you pick it
 
