@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.3
+- Changed: the column menu (right-click the headers) only lists the columns that tab has: Last Seen and Area only on Recent
+
 ## 2.6.2
 - New: an Area column on Recent: the map each player was last seen in. The game only sends a number (Map 1010), so right-click a player → Name This Area to call it what it is; your names stick
 - Area is blank where the game loads you in without a map number (Shugo, some instances and returns)

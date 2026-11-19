@@ -617,7 +617,9 @@ function setSort(k) {
 
 function columnsMenu(x, y) {
   const cols = S.cfg.columns || DEFAULT_COLUMNS;
-  const items = DEFAULT_COLUMNS.map((k) => ({ label: COL_MENU[k] + (k === "seen" || k === "area" ? "  (Recent)" : ""), check: cols.includes(k),
+  // only the columns this tab has: Last Seen and Area belong to Recent
+  const here = DEFAULT_COLUMNS.filter((k) => S.mode === "recent" || (k !== "seen" && k !== "area"));
+  const items = here.map((k) => ({ label: COL_MENU[k], check: cols.includes(k),
     onClick: () => { save("columns", cols.includes(k) ? cols.filter((c) => c !== k) : DEFAULT_COLUMNS.filter((c) => c === k || cols.includes(c))); list.render(); } }));
   items.push("-", { label: "Reset Columns", onClick: () => { save("columns", [...DEFAULT_COLUMNS]); save("col_widths", {}); list.render(); } });
   showMenu(items, x, y);
