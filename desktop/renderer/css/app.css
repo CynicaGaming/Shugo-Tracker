@@ -459,3 +459,12 @@ body.tipwin .tip { position: static !important; box-shadow: none; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .select:hover, .select:focus { border-color: rgba(232, 196, 106, 0.5); }
 .select option { background: #151b28; color: var(--text); }
+/* Lock Position: the title bar no longer drags the window */
+.app.locked .titlebar { -webkit-app-region: no-drag; }
+/* PVP Log: "clear it?" */
+.pvpask { display: flex; align-items: center; gap: 8px; margin: 8px 12px 0; padding: 8px 10px; border-radius: 7px; flex: none;
+  background: color-mix(in srgb, var(--red) 10%, #0e131c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 40%, transparent); font-size: 12.5px; }
+.pvpask .grow { flex: 1; }
+.pvpask .faint { color: var(--dim); }
+.btn.danger { color: #fff; background: #a3342c; border-color: #c4453c; }
+.btn.danger:hover { background: #b93b32; }

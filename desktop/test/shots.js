@@ -104,8 +104,36 @@ const fs = require("fs");
   else {
     await pvp.waitForTimeout(1500);
     await pvp.screenshot({ path: path.join(out, "popout-pvp.png") });
+    // its gear: Lock Position and Click Through reach the window
+    await pvp.click(".titlebar .iconbtn >> nth=0");
+    await pvp.click(".prow:has-text('Lock Position') .toggle");
+    await pvp.click(".prow:has-text('Click Through') .toggle");
+    await pvp.waitForTimeout(300);
+    await pvp.screenshot({ path: path.join(out, "popout-pvp-gear.png") });
+    const locked = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter((w) => w.getTitle().includes("PVP")).map((w) => w.isMovable()));
+    if (!locked.length || locked.some(Boolean)) log.push(`pop out pvp: lock didn't hold (${JSON.stringify(locked)})`);
+    await pvp.click(".prow:has-text('Click Through') .toggle");
+    await pvp.click(".titlebar .iconbtn >> nth=0");
     await pvp.click(".hudfight").catch(() => log.push("pop out pvp: no fights"));
     await page.waitForSelector(".pvp .phead", { timeout: 5000 }).catch(() => log.push("pop out pvp: the opponent didn't open in the main window"));
+  }
+  // Pop Out Search: the usual list in its own window
+  await page.click(".tab.back").catch(() => {});
+  await page.click(".tabs .tab:has-text('Search')", { button: "right" });
+  await page.click(".menu .item:has-text('Pop Out Search')");
+  let sp;
+  for (let i = 0; i < 60 && !sp; i++) {
+    sp = app.windows().find((w) => w.url().includes("pop=search"));
+    if (!sp) await page.waitForTimeout(100);
+  }
+  if (!sp) log.push("pop out search: no window");
+  else {
+    await sp.waitForTimeout(1200);
+    await sp.fill(".searchbox input", "Luna");
+    await sp.keyboard.press("Enter");
+    await sp.waitForTimeout(3500);
+    await sp.screenshot({ path: path.join(out, "popout-search.png") });
+    if (!(await sp.$(".row"))) log.push("pop out search: no results");
   }
   fs.writeFileSync(path.join(out, "log.txt"), log.join("\n") || "OK");
   await app.close();

@@ -35,6 +35,7 @@ root.append(titlebar, view, footer);
 
 let titleSig = "";
 function paintTitlebar() {
+  if (POP) { paintHudTitle(); return; }                 // a pop-out has its own slim title bar
   // Redrawn on many events (Nearby, cards, updates): only when something it shows has changed.
   const me0 = myChar(), up0 = S.update;
   const sig = JSON.stringify([S.screen, S.mode, S.favorites.length, S.nearby.enabled, S.nearby.rows.length,
@@ -56,7 +57,8 @@ function paintTitlebar() {
     tabs.append(h("button.tab.back", { onClick: closeScreen }, icon("back"), back));
   } else {
     const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode),
-      onContextmenu: POPPABLE[mode] ? (e) => { e.preventDefault(); showMenu([{ label: `Pop Out ${POPPABLE[mode]}`, onClick: () => win.popOut(mode) }], e.clientX, e.clientY); } : null },
+      onContextmenu: POPPABLE[mode] ? (e) => { e.preventDefault(); mode === "pvp" ? pvpMenu(e.clientX, e.clientY)
+        : showMenu([{ label: `Pop Out ${POPPABLE[mode]}`, onClick: () => win.popOut(mode) }], e.clientX, e.clientY); } : null },
       label, count ? h("span.count", {}, count) : null);
     tabs.append(t("search", "Search"), t("favorites", "Favorites", S.favorites.length || ""));
     if (S.nearby.enabled) tabs.append(t("nearby", "Nearby", S.nearby.rows.length || ""), t("recent", "Recent", S.nearby.recent.length || ""));
@@ -175,6 +177,7 @@ async function pickMine(c, slot) {
 }
 function openProfile(c) {
   if (!c) return;
+  if (POP) { win.showMain({ profile: c }); return; }    // pop-outs open profiles in the main window
   closeMenus();
   profile?.destroy();
   if (S.screen !== "foe") { foe?.destroy(); foe = null; }
@@ -677,17 +680,24 @@ function paintFooter() {
 /* ═════ HUD style: a slim live Nearby list to keep over the game ═════ */
 // This window is a pop-out (index.html?pop=nearby): it only ever shows the HUD.
 const POP = new URLSearchParams(location.search).get("pop");
-const POPPABLE = { nearby: "Nearby", pvp: "PVP" };     // tabs that can pop out (right-click the tab)
+// tabs that can pop out (right-click the tab); Nearby and PVP as slim HUDs, the rest as their usual list
+const POPPABLE = { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent", pvp: "PVP" };
+const LIST_POP = ["search", "favorites", "recent"].includes(POP);
 const hudOn = () => POP === "nearby";
 if (POP) document.title = `Shugo Tracker · ${POPPABLE[POP] || ""}`;    // (its taskbar button)
 let pvpHud = null, pvpToday = null;
+function pvpMenu(x, y) {
+  showMenu([{ label: "Pop Out PVP", onClick: () => win.popOut("pvp") }, "-",
+    { label: "Clear PVP Log…", onClick: () => { if (S.mode !== "pvp" || S.screen !== "list") { S.mode = "pvp"; S.screen = "list"; render(); } pvpList?.askClear(); } }], x, y);
+}
+app.pvpMenu = pvpMenu;
 let hudFrame = 0;
 function hudSoon() { cancelAnimationFrame(hudFrame); hudFrame = requestAnimationFrame(() => { if (hudOn()) render(); }); }
 
 /** From the pop-out, something bigger (a profile, Settings) opens in the main window. */
 on("show", (d) => {
   if (POP) return;
-  if (d?.profile) { S.mode = "nearby"; openProfile(S.chars.get(d.profile.key) || d.profile); }
+  if (d?.profile) openProfile(S.chars.get(d.profile.key) || d.profile);
   else if (d?.foe) { S.mode = "pvp"; openFoe(d.foe); }
   else if (d?.settings) openSettings();
 });
@@ -704,7 +714,9 @@ function paintHudTitle() {
       ? h("span.hudtitle", {}, "PVP", t ? h("span.today", {}, h("b.k", {}, `${t.kill}`), h("small", {}, "K"), h("b.d", {}, `${t.death}`), h("small", {}, "D"),
         h("b.a", {}, `${t.assist}`), h("small", {}, "A"),
         h("b", {}, t.death ? (t.kill / t.death).toFixed(2) : `${t.kill}`), h("small", {}, "K/D")) : null)
-      : h("span.hudtitle", {}, "Nearby", n ? h("span.count", {}, n) : null),
+      : h("span.hudtitle", {}, POPPABLE[POP] || "", (POP === "nearby" ? n : POP === "recent" ? S.nearby.recent.length
+        : POP === "favorites" ? S.favorites.length : 0) ? h("span.count", {}, POP === "nearby" ? n : POP === "recent"
+        ? S.nearby.recent.length : S.favorites.length) : null),
     h("span.grow"),
     h("button.iconbtn", { class: popPanel ? "on" : "", html: ICONS.gear, onClick: () => { popPanel = !popPanel; render(); } }),
     h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
@@ -726,7 +738,34 @@ function popSettings() {
     h("div.prow", {}, h("span", {}, "Opacity"), h("input", { type: "range", min: 30, max: 100, value: op,
       onInput: (e) => { out.textContent = `${e.target.value}%`; win.setOpacity(e.target.value / 100); },
       onChange: (e) => savePop({ opacity: e.target.value / 100 }) }), out),
-    h("div.prow", {}, h("span", {}, "Always on Top"), h("span.grow"), onTop));
+    h("div.prow", {}, h("span", {}, "Always on Top"), h("span.grow"), onTop),
+    h("div.prow", {}, h("span", {}, "Click Through"), h("span.grow"), toggle(!!c.click_through, (v) => {
+      savePop({ click_through: v }); setIgnore(v);       // (the mouse is on this panel: the next move lets it back in)
+    })),
+    h("div.prow", {}, h("span", {}, "Lock Position"), h("span.grow"), toggle(!!c.locked, (v) => {
+      savePop({ locked: v }); win.lock(v); root.classList.toggle("locked", v);
+    })));
+}
+const toggle = (on, fn) => {
+  const t = h("div.toggle", { class: on ? "on" : "", onClick: () => { const v = !t.classList.contains("on"); t.classList.toggle("on", v); fn(v); } });
+  return t;
+};
+
+/* Click Through: the game gets your clicks, except on the title bar (and this panel); hold Alt to use all of it. */
+let ignoring = null, altDown = false;
+function setIgnore(v) { if (v !== ignoring) { ignoring = v; win.ignoreMouse(v); } }
+const clickThrough = () => POP && popCfg().click_through;
+if (POP) {
+  document.addEventListener("mousemove", (e) => {
+    if (!clickThrough()) return;
+    setIgnore(!(altDown || e.target.closest?.(".titlebar, .poppanel, .menu")));
+  });
+  document.addEventListener("mouseleave", () => { if (clickThrough() && !altDown) setIgnore(true); });
+  setInterval(async () => {                             // Alt while the game has focus: ask Windows
+    if (!clickThrough()) { altDown = false; return; }
+    const v = await call("alt").catch(() => null);
+    if (v != null && v !== altDown) { altDown = v; if (v) setIgnore(false); }
+  }, 150);
 }
 
 // Nearby pop-out columns: Name always, the rest your choice (right-click the header); click a header to sort.
@@ -799,7 +838,8 @@ function hudBody() {
 /* ═════ render ═════ */
 function render() {
   closeMenus();
-  root.classList.toggle("hudstyle", hudOn() || POP === "pvp");
+  root.classList.toggle("hudstyle", !!POP);
+  root.classList.toggle("locked", !!(POP && popCfg().locked));
   if (POP === "pvp") {
     if (!pvpHud) { pvpHud = new PvpHud(app); pvpHud.onTotals = (t) => { pvpToday = t; paintHudTitle(); }; }
     paintHudTitle();
@@ -815,6 +855,7 @@ function render() {
   }
   paintTitlebar();
   clear(view);
+  if (LIST_POP && popPanel) view.append(popSettings());
   if (S.screen === "profile" && profile) view.append(profile.el);
   else if (S.screen === "settings" && settings) view.append(settings.el);
   else if (S.screen === "finder" && finder) view.append(finder.el);
@@ -837,6 +878,8 @@ app.render = render;
 /* ═════ start ═════ */
 (async () => {
   const init = await call("init");
+  if (LIST_POP) S.mode = POP;                           // a popped-out list is always that tab
+  if (POP && init.config[`pop_${POP}`]?.click_through) ignoring = true;   // (the window started that way)
   Object.assign(S, { cfg: init.config, version: init.version, demo: init.demo, regions: init.regions,
     favorites: init.favorites, my: init.my, nearby: init.nearby || S.nearby, game: init.game !== false });
   if (!POP) nearbyChanged(S.nearby, S.cfg);

@@ -110,8 +110,19 @@ export class PvpList {
     this.paint();
   }
 
+  /** Start fresh: asks first (the fights are kept aside in the data folder, not lost). */
+  askClear() { this.asking = true; this.paint(); }
+
   paint() {
     const el = clear(this.el), d = this.data, { S } = this.app;
+    el.oncontextmenu = (e) => { e.preventDefault(); this.app.pvpMenu(e.clientX, e.clientY); };
+    if (this.asking) {
+      el.append(h("div.pvpask", {},
+        h("span.grow", {}, `Clear the PVP Log${this.app.myChar()?.name ? ` for ${this.app.myChar().name}` : ""}? `,
+          h("span.faint", {}, "The fights are saved aside in the data folder.")),
+        h("button.btn", { onClick: () => { this.asking = false; this.paint(); } }, "Cancel"),
+        h("button.btn.danger", { onClick: async () => { this.asking = false; await call("pvp.clear"); this.load(); } }, "Clear")));
+    }
     el.append(dateBar(this.app, () => this.load()));
     if (!d) return;
     el.append(strip(d.totals));

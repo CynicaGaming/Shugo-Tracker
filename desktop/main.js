@@ -105,6 +105,9 @@ const MAIN = { size: "window_size", pos: "window_pos", def: [600, 760], min: [38
 const POPS = {
   nearby: { size: "hud_size", pos: "hud_pos", def: [270, 360], min: [210, 120], open: "popout_nearby", title: "Nearby" },
   pvp: { size: "pvp_pop_size", pos: "pvp_pop_pos", def: [300, 300], min: [220, 120], open: "popout_pvp", title: "PVP" },
+  search: { size: "pop_search_size", pos: "pop_search_pos", def: [460, 520], min: [340, 240], open: "popout_search", title: "Search" },
+  favorites: { size: "pop_favorites_size", pos: "pop_favorites_pos", def: [460, 520], min: [340, 240], open: "popout_favorites", title: "Favorites" },
+  recent: { size: "pop_recent_size", pos: "pop_recent_pos", def: [460, 520], min: [340, 240], open: "popout_recent", title: "Recent" },
 };
 
 /** A window's size and place, saved through the core (data\\config.json). */
@@ -170,6 +173,8 @@ function popOut(kind) {
   }, 60));
   const op = Math.max(0.3, Math.min(1, Number(own.opacity) || 1));
   if (op < 1) w.setOpacity(op);
+  if (own.locked) { w.setMovable(false); w.setResizable(false); }          // Lock Position
+  if (own.click_through) w.setIgnoreMouseEvents(true, { forward: true });  // Click Through (the page lets the title bar back in)
   if (iconGrey && lastRunning === false) w.setIcon(iconGrey);
   w.loadFile(path.join(__dirname, "renderer", "index.html"), { query: { pop: kind } });
   w.once("ready-to-show", () => {
@@ -205,7 +210,7 @@ function createWindow() {
   win.once("ready-to-show", () => {
     onScreen(); win.show(); makeTipWin();
     if (cfg.popout_nearby || cfg.style === "hud") popOut("nearby");   // (2.5.0's HUD style is now the pop-out)
-    if (cfg.popout_pvp) popOut("pvp");
+    for (const k of Object.keys(POPS)) if (k !== "nearby" && cfg[POPS[k].open]) popOut(k);
   });
   for (const ev of ["minimize", "restore", "hide", "show", "maximize", "unmaximize", "unresponsive", "responsive"]) {
     win.on(ev, () => winLog(`window ${ev}`));
@@ -343,6 +348,8 @@ ipcMain.handle("win", async (e, action, arg) => {
     case "pickSound": return pickSound();
     case "readSound": return readSound(arg);
     case "showMain": reveal(); win?.webContents.send("core", { event: "show", data: arg }); break;
+    case "lock": if (kind) { from.setMovable(!arg); from.setResizable(!arg); } break;
+    case "ignoreMouse": if (kind) { if (arg) from.setIgnoreMouseEvents(true, { forward: true }); else from.setIgnoreMouseEvents(false); } break;
     case "alwaysOnTop":
       if (kind) { from.onTop = !!arg; from.setAlwaysOnTop(from.onTop, "screen-saver"); break; }
       pinned = !!arg; pin(pinned, true); winLog(`always on top: ${pinned}`); break;

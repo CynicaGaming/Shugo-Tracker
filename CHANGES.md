@@ -2,6 +2,14 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.0
+- New: Click Through for each pop-out (its gear): your clicks go to the game, except on its title bar; hold Alt to use the whole pop-out
+- New: Lock Position for each pop-out (its gear): it can't be moved or resized until you unlock it
+- New: pop out any tab: right-click Search, Favorites or Recent → Pop Out (clicking a player opens them in the main window)
+- New: Clear PVP Log (right-click the PVP tab) to start fresh; the cleared fights are kept aside in the data folder, just in case
+- Nearby is out of beta
+- Behind the scenes: real arena, open-world, duel, Abyss and PvE fights now run as tests before every release
+
 ## 2.5.9
 - Changed: Alert Every is now called Alert Cooldown
 

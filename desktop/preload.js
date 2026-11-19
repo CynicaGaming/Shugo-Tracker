@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld("shugo", {
     relaunchAsAdmin: () => ipcRenderer.invoke("win", "relaunchAsAdmin"),
     popOut: (kind) => ipcRenderer.invoke("win", "popOut", kind),
     pickSound: () => ipcRenderer.invoke("win", "pickSound"),
+    lock: (on) => ipcRenderer.invoke("win", "lock", on),
+    ignoreMouse: (on) => ipcRenderer.invoke("win", "ignoreMouse", on),
     readSound: (file) => ipcRenderer.invoke("win", "readSound", file),
     showMain: (what) => ipcRenderer.invoke("win", "showMain", what),
     update: (action) => ipcRenderer.invoke("win", "update", action),

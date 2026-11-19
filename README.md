@@ -62,7 +62,7 @@ level in gold like the game. Skill info is provided by <a href="https://metabot.
   <img src="docs/images/daevanion.png" alt="A Daevanion board" width="48%">
 </p>
 
-## Nearby <sup><code>BETA</code></sup>
+## Nearby
 
 <table>
 <tr>
@@ -75,8 +75,11 @@ each with their power and gear score, in towns, in the open world, in Shugo and 
 **Recent** keeps everyone you've crossed paths with — as many as you like — with when you last saw them
 and a ⚔ for anyone who fought you.
 
-**PVP** logs who you killed, who killed you and your assists, with kills, deaths and K/D for the last day,
-week, month or all time. Click anyone to see every fight you've had with them.
+**PVP** logs who you killed, who killed you, your assists and your duels, with kills, deaths and K/D for any
+dates you pick. Click anyone to see every fight you've had with them.
+
+**Pop out** any tab (right-click it) into its own slim window over the game: Nearby and PVP as compact HUDs,
+each with its own opacity, click-through and lock. An **Enemy Alert** can play a sound when an enemy shows up.
 
 <sub>Opt-in. Reads the game's network traffic on your PC through Windows itself — nothing extra to install. It never sends or changes anything.</sub>
 

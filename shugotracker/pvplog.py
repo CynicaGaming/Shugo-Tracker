@@ -104,3 +104,29 @@ class PvpLog:
             latest = sorted(mine, key=lambda r: -r["t"])[:limit]
             today = {k: sum(1 for r in mine if r["t"] >= today_since and r["kind"] == k) for k in KINDS}
         return {"fights": [{**r, "id": foe_id(r["foe"])} for r in latest], "today": today}
+
+    def clear(self, me: str | None = None) -> int:
+        """Start fresh: your character's fights (everyone's when `me` is None) leave the log. They're kept in
+        pvp_log_cleared_<date time>.jsonl beside it, in case. Returns how many went."""
+        with self._lock:
+            mine = lambda r: not me or not r.get("me") or r["me"] == me    # noqa: E731
+            gone = [r for r in self.records if mine(r)]
+            if not gone:
+                return 0
+            keep = [r for r in self.records if not mine(r)]
+            if self.path:
+                stamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+                aside = os.path.join(os.path.dirname(self.path), f"pvp_log_cleared_{stamp}.jsonl")
+                try:
+                    with open(aside, "w", encoding="utf-8") as f:
+                        f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in gone)
+                    tmp = self.path + ".tmp"
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in keep)
+                    os.replace(tmp, self.path)
+                except OSError as e:
+                    self.log(f"pvp log: couldn't clear: {e}")
+                    return 0
+            self.records = keep
+            self.version += 1
+            return len(gone)

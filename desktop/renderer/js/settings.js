@@ -91,7 +91,7 @@ export class SettingsView {
       onChange: (e) => save("window_opacity", e.target.value / 100) }), opOut));
     el.append(row("Always on Top", toggle(cfg.always_on_top !== false, (v) => { save("always_on_top", v); win.setAlwaysOnTop(v); this.app.render(); })));
 
-    el.append(h("div.bar", {}, "Nearby", h("span.extra", {}, "BETA")));
+    el.append(h("div.bar", {}, "Nearby"));
     el.append(row("Show Nearby", toggle(!!S.nearby.enabled, async (v) => {
       S.nearby = await call("nearby.enable", { on: v });
       if (v && S.nearby.state === "no_admin") win.relaunchAsAdmin();

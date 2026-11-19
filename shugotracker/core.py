@@ -394,6 +394,12 @@ class Core:
     def rpc_pvp_feed(self, today_since: float = 0, limit: int = 50) -> dict:
         return self.pvp.feed(self._pvp_me(), int(limit), today_since or 0)
 
+    def rpc_pvp_clear(self) -> int:
+        n = self.pvp.clear(self._pvp_me())
+        self.log(f"pvp log: cleared {n} fight(s)")
+        self.emit("pvp", {"cleared": n})
+        return n
+
     def rpc_pvp_detail(self, id: str, since: float = 0, until: float = 0) -> dict:   # noqa: A002
         d = self.pvp.detail(id, self._pvp_me(), since or 0, until or 0)
         f = d["foe"]

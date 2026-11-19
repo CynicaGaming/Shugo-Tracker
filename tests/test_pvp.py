@@ -94,6 +94,10 @@ class LogTests(unittest.TestCase):
         f = again.feed("Mine", limit=2, today_since=1500)
         self.assertEqual([r["kind"] for r in f["fights"]], ["assist", "death"])
         self.assertEqual(f["today"], {"kill": 0, "assist": 1, "death": 1})
+        self.assertEqual(again.clear("Mine"), 3)                  # start fresh: Mine's fights go, Alt's stay
+        self.assertEqual([r["me"] for r in PvpLog(path).records], ["Alt"])
+        aside = [n for n in os.listdir(os.path.dirname(path)) if n.startswith("pvp_log_cleared_")]
+        self.assertEqual(len(aside), 1)                           # (kept aside, in case)
 
 
 if __name__ == "__main__":
