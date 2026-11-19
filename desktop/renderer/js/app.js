@@ -350,12 +350,17 @@ function visible() {
   const grouped = S.mode === "nearby" || S.mode === "recent";
   const sideOf = grouped ? Object.fromEntries((S.mode === "recent" ? S.nearby.recent : S.nearby.rows).map((r) => [r.char.name, r.side])) : null;
   const when = S.mode === "recent" ? Object.fromEntries(S.nearby.recent.map((r) => [r.char.key, r.seen])) : null;
+  if (key === "area" && S.mode === "recent") {           // by area name (unknown last), sides still grouped
+    const of = Object.fromEntries(S.nearby.recent.map((r) => [r.char.key, areaName(r.area)]));
+    const byArea = [...out].sort((a, b) => (!of[a.key] - !of[b.key]) || (of[a.key] || "").localeCompare(of[b.key] || "") * (rev ? -1 : 1));
+    return sortChars(byArea, "none", false, sideOf);
+  }
   return sortChars(out, key, rev, sideOf, when);
 }
 
 function columns() {
   const cols = (S.cfg.columns || DEFAULT_COLUMNS).filter((k) => COL_LABELS[k]);
-  return S.mode === "recent" ? cols : cols.filter((k) => k !== "seen");
+  return S.mode === "recent" ? cols : cols.filter((k) => k !== "seen" && k !== "area");
 }
 
 const list = (() => {
@@ -477,7 +482,7 @@ const list = (() => {
   function rowFor(c, y, ctx) {
     const side = ctx.side.get(c.name), r = ctx.recent?.get(c.key), here = ctx.here?.has(c.key);
     const sig = [c.name, c.class_name, c.level, c.legion, c.server_name, c.region, c.race, c.portrait, c.status,
-      c.gear_score, c.combat_power, ctx.fav.has(c.key), side, ctx.race[side], r && ago(r.seen), r?.fought, here].join("|");
+      c.gear_score, c.combat_power, ctx.fav.has(c.key), side, ctx.race[side], r && ago(r.seen), r?.fought, here, r && areaName(r.area)].join("|");
     let m = made.get(c.key);
     if (!m || m.sig !== sig) { m = { el: rowEl(c, side, ctx, r, here), sig }; made.set(c.key, m); }
     m.el.style.top = `${y}px`;
@@ -505,6 +510,8 @@ const list = (() => {
       case "server": return h("div.c.dim", { style }, h("span", {}, `${c.server_name} · ${REGION_NAMES[c.region] || c.region}`));
       case "gs": return num(c.gear_score);
       case "cp": return num(c.combat_power, "cp");
+      case "area":
+        return h("div.c.dim", { style }, h("span", {}, areaName(r?.area)));
       case "seen":
         return h("div.c", { style: { ...style, color: here ? "var(--green)" : "var(--dim)" } },
           r?.fought ? h("span.fought", {}, "⚔") : null, h("span", {}, here ? "Here Now" : r ? ago(r.seen) : ""));
@@ -610,7 +617,7 @@ function setSort(k) {
 
 function columnsMenu(x, y) {
   const cols = S.cfg.columns || DEFAULT_COLUMNS;
-  const items = DEFAULT_COLUMNS.map((k) => ({ label: COL_MENU[k] + (k === "seen" ? "  (Recent)" : ""), check: cols.includes(k),
+  const items = DEFAULT_COLUMNS.map((k) => ({ label: COL_MENU[k] + (k === "seen" || k === "area" ? "  (Recent)" : ""), check: cols.includes(k),
     onClick: () => { save("columns", cols.includes(k) ? cols.filter((c) => c !== k) : DEFAULT_COLUMNS.filter((c) => c === k || cols.includes(c))); list.render(); } }));
   items.push("-", { label: "Reset Columns", onClick: () => { save("columns", [...DEFAULT_COLUMNS]); save("col_widths", {}); list.render(); } });
   showMenu(items, x, y);
@@ -627,6 +634,7 @@ app.toggleFavorite = toggleFavorite;
 function rowMenu(c, x, y) {
   const fav = S.favorites.some((f) => f.key === c.key);
   const known = !!c.char_id;
+  const area = S.mode === "recent" ? S.nearby.recent.find((r) => r.char.key === c.key)?.area : null;
   const items = [
     { label: "View Profile", disabled: !known, onClick: () => openProfile(c) },
     { label: fav ? "Remove from Favorites" : "Add to Favorites", disabled: !known, onClick: () => toggleFavorite(c) },
@@ -637,8 +645,32 @@ function rowMenu(c, x, y) {
       onClick: () => setMy("my.set", { key: c.key, slot: i }) })) },
   ];
   if (S.mode === "nearby" && S.nearby.rows.length) items.push("-", { label: "Clear Nearby", onClick: () => call("nearby.clear", { which: "nearby" }) });
+  if (area != null) items.push("-", { label: `Name This Area (${areaName(area)})…`, onClick: () => nameArea(area) });
   if (S.mode === "recent" && S.nearby.recent.length) items.push("-", { label: "Clear Recent", onClick: () => call("nearby.clear", { which: "recent" }) });
   showMenu(items, x, y);
+}
+
+/* ───── areas: the game only sends a map number; you name them as you go (kept in your settings) ───── */
+function areaName(id) {
+  if (id == null) return "";
+  return (S.cfg.area_names || {})[id] || `Map ${id}`;
+}
+function nameArea(id) {
+  const input = h("input.areainput", { value: (S.cfg.area_names || {})[id] || "", placeholder: `Map ${id}`, spellcheck: "false" });
+  const done = (ok) => {
+    if (ok) {
+      const names = { ...(S.cfg.area_names || {}) }, v = input.value.trim();
+      if (v) names[id] = v; else delete names[id];
+      save("area_names", names);
+    }
+    box.remove(); list.render();
+  };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") done(true); if (e.key === "Escape") done(false); });
+  const box = h("div.askbox", {}, h("div.askcard", {}, h("b", {}, `Name Map ${id}`), input,
+    h("div.askbtns", {}, h("button.btn", { onClick: () => done(false) }, "Cancel"), h("button.btn.gold", { onClick: () => done(true) }, "Save"))));
+  box.addEventListener("mousedown", (e) => { if (e.target === box) done(false); });
+  document.body.append(box);
+  setTimeout(() => input.focus(), 0);
 }
 
 list.box.addEventListener("contextmenu", (e) => {
@@ -893,6 +925,9 @@ app.render = render;
   S.update = { ...(await win.update("state")) };
   if (!POP) win.setAlwaysOnTop(S.cfg.always_on_top !== false);   // (a pop-out has its own, set by the window)
   paintClock();
+  if (Array.isArray(S.cfg.columns) && !S.cfg.columns.includes("area") && !S.cfg.area_column_added && !POP) {
+    save("columns", [...S.cfg.columns, "area"]); save("area_column_added", true);   // (new in 2.6.2: shown once)
+  }
   if (!POP && !S.my.slots.some(Boolean) && !S.cfg.setup_done && !S.demo) openFinder(0);   // first start: find yourself
   else render();
   const q = new URLSearchParams(location.search).get("q");

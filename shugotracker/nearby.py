@@ -88,6 +88,9 @@ class NearbyService:
         self._hits: dict[int, list[tuple[float, int, int]]] = {}     # target -> [(time, attacker, skill)]
         self._died_at: dict[int, float] = {}
         self.on_pvp: Callable[..., None] = lambda kind, foe, with_, **kw: None
+        # the area each player was in (the game's map id; None in places that load without one, like Shugo)
+        self._area: dict[str, int | None] = {}
+        self._cur_area: int | None = None
         self._map_loads_seen = False
         self._loaded_since_self = False               # a map load came in since your last own record
         self._self_eid: int | None = None             # your id in the last record of your own
@@ -218,13 +221,16 @@ class NearbyService:
         if isinstance(ev, MapLoaded):
             self._map_loads_seen = True
             self._loaded_since_self = True
+            self._cur_area = ev.map_id
             self._hits.clear()
             if ev.map_id != self.tracker.map_id:
                 self._parked.clear()                # a new area: those ids mean other things now
-        elif isinstance(ev, SelfSeen) and self._new_area(ev) and self.tracker.players:
-            self.log(f"nearby: new area (your id changed to {ev.entity_id}): {len(self.tracker.players)} players to Recent")
-            self._to_recent(list(self.tracker.players.values()))
-            self.tracker.clear()
+        elif isinstance(ev, SelfSeen) and self._new_area(ev):
+            self._cur_area = None                       # (no map load came with it: the game doesn't say where)
+            if self.tracker.players:
+                self.log(f"nearby: new area (your id changed to {ev.entity_id}): {len(self.tracker.players)} players to Recent")
+                self._to_recent(list(self.tracker.players.values()))
+                self.tracker.clear()
         elif isinstance(ev, RosterSeen):
             names = tuple(sorted(n for n, _s in ev.players))
             if names != self._last_roster:
@@ -259,6 +265,7 @@ class NearbyService:
             self.stats["players_seen"] += len(self.tracker.players) - before
         for n in set(self.tracker.players) - before_names:
             self._recent_players.pop(n, None)           # back in range (they stay on Recent as history)
+            self._area[n] = self._cur_area
         self._last_players.update(self.tracker.players)
 
     # ───── PvP Log ─────
@@ -409,9 +416,14 @@ class NearbyService:
         old.last_seen = time.time()
         self.tracker.players[name] = old
         self.tracker.by_id[eid] = name
+        self._area[name] = self._cur_area
         self._last_players[name] = old
         self.tracker.version += 1
         self._v += 1
+
+    def area_of(self, name: str) -> int | None:
+        """The map id where this player was last around you (None: unknown)."""
+        return self._area.get(name)
 
     def recent(self) -> list[tuple[str, Character, float, bool]]:
         """[(side, character, left_at, fought_you)] newest first: everyone you've been near (up to the Recent

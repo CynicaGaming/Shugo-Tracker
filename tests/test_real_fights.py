@@ -12,7 +12,7 @@ from tools.distill_recording import read
 HERE = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
-def replay(name: str) -> list[tuple]:
+def replay(name: str, svc_out: list | None = None) -> list[tuple]:
     got, clock = [], [0.0]
     with mock.patch("time.time", lambda: clock[0]):
         svc = nb.NearbyService(object(), find=lambda *a, **k: [], cfg={"nearby_region": "nae", "nearby_me": ["Cynica", 1104]})
@@ -22,6 +22,8 @@ def replay(name: str) -> list[tuple]:
         for ts, gap, key, data in read(os.path.join(HERE, name)):
             clock[0] = ts
             svc.on_bytes(tuple(key.decode().split("|")), data, bool(gap))
+    if svc_out is not None:
+        svc_out.append(svc)
     return got
 
 
@@ -32,6 +34,13 @@ class RealFights(unittest.TestCase):
             ("death", "Tisander"), ("death", "Tisander"), ("death", "Tisander"),
             ("kill", "Compa"), ("kill", "Compa"), ("kill", "Compa"),
             ("death", "Tisander"), ("kill", "Tisander"), ("kill", "Tisander"), ("death", "Tisander"), ("kill", "Tisander")])
+
+    def test_recent_remembers_the_area(self):
+        # the second arena loaded as map 60; the first one (Compa) came without a map load, so it's unknown
+        out = []
+        replay("arena_2026-11-17.bin", out)
+        self.assertEqual(out[0].area_of("Tisander"), 60)
+        self.assertIsNone(out[0].area_of("Compa"))
 
     def test_open_world(self):
         # Nov 17 evening: the kill record names the killer outright

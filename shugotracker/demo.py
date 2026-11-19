@@ -184,7 +184,8 @@ def _name(name: str) -> bytes:
 def feed_nearby(service) -> None:
     import struct
     from .protocol import encode_varint
-    frames = [b"\x33\x36" + encode_varint(100) + b"\x00" * 4 + _name("Luna") + struct.pack("<HIBI", 1101, 30, 0, 45)
+    frames = [b"\x21\x36" + struct.pack("<II", 1, 1010) + b"\x00" * 4,      # a map load (Recent's Area)
+              b"\x33\x36" + encode_varint(100) + b"\x00" * 4 + _name("Luna") + struct.pack("<HIBI", 1101, 30, 0, 45)
               + b"\x00" * 24]
     people = DEMO_NEARBY
     for i, (nm, server, cls) in enumerate(people):
@@ -205,7 +206,8 @@ def feed_teleport(service) -> None:
     from .protocol import encode_varint
     for dec in service._decoders.values():
         dec._self_at.clear()
-    frames = [b"\x33\x36" + encode_varint(100) + b"\x00" * 4 + _name("Luna") + struct.pack("<HIBI", 1101, 30, 0, 45)
+    frames = [b"\x21\x36" + struct.pack("<II", 2, 600082) + b"\x00" * 4,      # into another map
+              b"\x33\x36" + encode_varint(100) + b"\x00" * 4 + _name("Luna") + struct.pack("<HIBI", 1101, 30, 0, 45)
               + b"\x00" * 24]
     for i, (nm, server, cls) in enumerate([("Aria", 1101, 10), ("Kraeg", 2101, 6)]):
         eid = 900 + i

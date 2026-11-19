@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.2
+- New: an Area column on Recent: the map each player was last seen in. The game only sends a number (Map 1010), so right-click a player → Name This Area to call it what it is; your names stick
+- Area is blank where the game loads you in without a map number (Shugo, some instances and returns)
+
 ## 2.6.1
 - Fixed: with Click Through on, a pop-out's title bar couldn't be clicked either (so there was no way back). The app now watches the cursor itself: over the title bar the pop-out takes the mouse, anywhere else the game does; Alt still makes the whole pop-out clickable
 - New: right-click a popped-out tab in the main window to show its pop-out, turn off its Click Through, or close it

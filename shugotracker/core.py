@@ -329,7 +329,8 @@ class Core:
             self.chars[c.key] = c
         return {"enabled": bool(self.cfg.get("nearby_enabled")), "state": nb.state, "detail": nb.detail,
                 "rows": [{"side": s, "char": char_json(c)} for s, c, _p in rows],
-                "recent": [{"side": s, "char": char_json(c), "seen": t, "fought": f} for s, c, t, f in recent]}
+                "recent": [{"side": s, "char": char_json(c), "seen": t, "fought": f, "area": nb.area_of(c.name)}
+                           for s, c, t, f in recent]}
 
     @staticmethod
     def _game_running() -> bool:
