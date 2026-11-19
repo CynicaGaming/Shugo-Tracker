@@ -112,8 +112,14 @@ const fs = require("fs");
     await pvp.screenshot({ path: path.join(out, "popout-pvp-gear.png") });
     const locked = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter((w) => w.getTitle().includes("PVP")).map((w) => w.isMovable()));
     if (!locked.length || locked.some(Boolean)) log.push(`pop out pvp: lock didn't hold (${JSON.stringify(locked)})`);
-    await pvp.click(".prow:has-text('Click Through') .toggle");
-    await pvp.click(".titlebar .iconbtn >> nth=0");
+    await pvp.click(".titlebar .iconbtn >> nth=0");             // gear closed: click-through is on
+    // the main window can always take it back: right-click the PVP tab → Turn Off Click Through
+    await page.click(".tab.back").catch(() => {});
+    await page.click(".tabs .tab:has-text('PVP')", { button: "right" });
+    await page.click(".menu .item:has-text('Turn Off Click Through')").catch(() => log.push("pop out pvp: no Turn Off Click Through"));
+    await pvp.waitForTimeout(500);
+    if (await pvp.evaluate(() => window.__app.S.cfg.pop_pvp?.click_through)) log.push("pop out pvp: click-through stayed on");
+    await page.keyboard.press("Escape").catch(() => {});
     await pvp.click(".hudfight").catch(() => log.push("pop out pvp: no fights"));
     await page.waitForSelector(".pvp .phead", { timeout: 5000 }).catch(() => log.push("pop out pvp: the opponent didn't open in the main window"));
   }

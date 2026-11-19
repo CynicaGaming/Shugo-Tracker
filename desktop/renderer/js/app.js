@@ -57,8 +57,7 @@ function paintTitlebar() {
     tabs.append(h("button.tab.back", { onClick: closeScreen }, icon("back"), back));
   } else {
     const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode),
-      onContextmenu: POPPABLE[mode] ? (e) => { e.preventDefault(); mode === "pvp" ? pvpMenu(e.clientX, e.clientY)
-        : showMenu([{ label: `Pop Out ${POPPABLE[mode]}`, onClick: () => win.popOut(mode) }], e.clientX, e.clientY); } : null },
+      onContextmenu: POPPABLE[mode] ? (e) => { e.preventDefault(); tabMenu(mode, e.clientX, e.clientY); } : null },
       label, count ? h("span.count", {}, count) : null);
     tabs.append(t("search", "Search"), t("favorites", "Favorites", S.favorites.length || ""));
     if (S.nearby.enabled) tabs.append(t("nearby", "Nearby", S.nearby.rows.length || ""), t("recent", "Recent", S.nearby.recent.length || ""));
@@ -686,10 +685,21 @@ const LIST_POP = ["search", "favorites", "recent"].includes(POP);
 const hudOn = () => POP === "nearby";
 if (POP) document.title = `Shugo Tracker · ${POPPABLE[POP] || ""}`;    // (its taskbar button)
 let pvpHud = null, pvpToday = null;
-function pvpMenu(x, y) {
-  showMenu([{ label: "Pop Out PVP", onClick: () => win.popOut("pvp") }, "-",
-    { label: "Clear PVP Log…", onClick: () => { if (S.mode !== "pvp" || S.screen !== "list") { S.mode = "pvp"; S.screen = "list"; render(); } pvpList?.askClear(); } }], x, y);
+/** A tab's right-click menu: pop it out, or (popped out already) bring it back under control; PVP can clear its log. */
+async function tabMenu(mode, x, y) {
+  const open = (await win.popState()).find((p) => p.kind === mode);
+  const items = open
+    ? [{ label: `Show ${POPPABLE[mode]} Pop-Out`, onClick: () => win.popOut(mode) },
+      ...(open.clickThrough ? [{ label: "Turn Off Click Through", onClick: () => win.popClickThroughOff(mode) }] : []),
+      { label: "Close Pop-Out", onClick: () => win.popClose(mode) }]
+    : [{ label: `Pop Out ${POPPABLE[mode]}`, onClick: () => win.popOut(mode) }];
+  if (mode === "pvp") items.push("-", { label: "Clear PVP Log…", onClick: () => {
+    if (S.mode !== "pvp" || S.screen !== "list") { S.mode = "pvp"; S.screen = "list"; render(); }
+    pvpList?.askClear();
+  } });
+  showMenu(items, x, y);
 }
+const pvpMenu = (x, y) => tabMenu("pvp", x, y);
 app.pvpMenu = pvpMenu;
 let hudFrame = 0;
 function hudSoon() { cancelAnimationFrame(hudFrame); hudFrame = requestAnimationFrame(() => { if (hudOn()) render(); }); }
@@ -718,7 +728,7 @@ function paintHudTitle() {
         : POP === "favorites" ? S.favorites.length : 0) ? h("span.count", {}, POP === "nearby" ? n : POP === "recent"
         ? S.nearby.recent.length : S.favorites.length) : null),
     h("span.grow"),
-    h("button.iconbtn", { class: popPanel ? "on" : "", html: ICONS.gear, onClick: () => { popPanel = !popPanel; render(); } }),
+    h("button.iconbtn", { class: popPanel ? "on" : "", html: ICONS.gear, onClick: () => { popPanel = !popPanel; win.clickThrough({ panel: popPanel }); render(); } }),
     h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
     h("button.iconbtn.close", { html: ICONS.close, onClick: () => win.close() }));
 }
@@ -751,21 +761,18 @@ const toggle = (on, fn) => {
   return t;
 };
 
-/* Click Through: the game gets your clicks, except on the title bar (and this panel); hold Alt to use all of it. */
-let ignoring = null, altDown = false;
-function setIgnore(v) { if (v !== ignoring) { ignoring = v; win.ignoreMouse(v); } }
+/* Click Through: the game gets your clicks, except on the title bar; hold Alt (or open the gear) to use all of it.
+   The main process watches the cursor (a window that ignores the mouse can't): this tells it the switches. */
+let altDown = false;
+function setIgnore(on) { win.clickThrough({ on }); }
 const clickThrough = () => POP && popCfg().click_through;
 if (POP) {
-  document.addEventListener("mousemove", (e) => {
-    if (!clickThrough()) return;
-    setIgnore(!(altDown || e.target.closest?.(".titlebar, .poppanel, .menu")));
-  });
-  document.addEventListener("mouseleave", () => { if (clickThrough() && !altDown) setIgnore(true); });
   setInterval(async () => {                             // Alt while the game has focus: ask Windows
-    if (!clickThrough()) { altDown = false; return; }
+    if (!clickThrough()) { if (altDown) { altDown = false; win.clickThrough({ alt: false }); } return; }
     const v = await call("alt").catch(() => null);
-    if (v != null && v !== altDown) { altDown = v; if (v) setIgnore(false); }
+    if (v != null && v !== altDown) { altDown = v; win.clickThrough({ alt: v }); }
   }, 150);
+  on("popcfg", (d) => { savePop(d); render(); });       // (changed from the main window's tab menu)
 }
 
 // Nearby pop-out columns: Name always, the rest your choice (right-click the header); click a header to sort.
@@ -879,7 +886,6 @@ app.render = render;
 (async () => {
   const init = await call("init");
   if (LIST_POP) S.mode = POP;                           // a popped-out list is always that tab
-  if (POP && init.config[`pop_${POP}`]?.click_through) ignoring = true;   // (the window started that way)
   Object.assign(S, { cfg: init.config, version: init.version, demo: init.demo, regions: init.regions,
     favorites: init.favorites, my: init.my, nearby: init.nearby || S.nearby, game: init.game !== false });
   if (!POP) nearbyChanged(S.nearby, S.cfg);

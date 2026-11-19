@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.1
+- Fixed: with Click Through on, a pop-out's title bar couldn't be clicked either (so there was no way back). The app now watches the cursor itself: over the title bar the pop-out takes the mouse, anywhere else the game does; Alt still makes the whole pop-out clickable
+- New: right-click a popped-out tab in the main window to show its pop-out, turn off its Click Through, or close it
+
 ## 2.6.0
 - New: Click Through for each pop-out (its gear): your clicks go to the game, except on its title bar; hold Alt to use the whole pop-out
 - New: Lock Position for each pop-out (its gear): it can't be moved or resized until you unlock it

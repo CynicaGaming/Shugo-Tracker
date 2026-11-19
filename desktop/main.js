@@ -149,6 +149,23 @@ const pops = {};                                        // kind -> BrowserWindow
 const allWindows = () => [win, ...Object.values(pops)].filter((w) => w && !w.isDestroyed());
 const popKind = (wc) => Object.keys(pops).find((k) => pops[k] && !pops[k].isDestroyed() && pops[k].webContents === wc);
 
+/** Click Through: a borderless window passing clicks through has nothing left to click, so the main process watches
+ *  the cursor itself: over a pop-out's title bar (or with Alt held, or its gear panel open) the pop-out takes the
+ *  mouse; anywhere else the game does. */
+const TITLE_H = 32;
+setInterval(() => {
+  const pt = screen.getCursorScreenPoint();
+  for (const w of Object.values(pops)) {
+    if (!w || w.isDestroyed() || !w.ct) continue;
+    let ignore = false;
+    if (w.ct.on && !w.ct.alt && !w.ct.panel) {
+      const b = w.getBounds();
+      ignore = !(pt.x >= b.x && pt.x < b.x + b.width && pt.y >= b.y && pt.y < b.y + TITLE_H);
+    }
+    if (ignore !== w.ignoring) { w.ignoring = ignore; w.setIgnoreMouseEvents(ignore); }
+  }
+}, 60);
+
 function popOut(kind) {
   const P = POPS[kind];
   if (!P) return;
@@ -174,7 +191,7 @@ function popOut(kind) {
   const op = Math.max(0.3, Math.min(1, Number(own.opacity) || 1));
   if (op < 1) w.setOpacity(op);
   if (own.locked) { w.setMovable(false); w.setResizable(false); }          // Lock Position
-  if (own.click_through) w.setIgnoreMouseEvents(true, { forward: true });  // Click Through (the page lets the title bar back in)
+  w.ct = { on: !!own.click_through, alt: false, panel: false };            // Click Through (see clickThroughTick)
   if (iconGrey && lastRunning === false) w.setIcon(iconGrey);
   w.loadFile(path.join(__dirname, "renderer", "index.html"), { query: { pop: kind } });
   w.once("ready-to-show", () => {
@@ -349,7 +366,13 @@ ipcMain.handle("win", async (e, action, arg) => {
     case "readSound": return readSound(arg);
     case "showMain": reveal(); win?.webContents.send("core", { event: "show", data: arg }); break;
     case "lock": if (kind) { from.setMovable(!arg); from.setResizable(!arg); } break;
-    case "ignoreMouse": if (kind) { if (arg) from.setIgnoreMouseEvents(true, { forward: true }); else from.setIgnoreMouseEvents(false); } break;
+    case "clickThrough": if (kind) Object.assign(from.ct, arg || {}); break;
+    case "popState": return Object.keys(pops).filter((k) => pops[k] && !pops[k].isDestroyed())
+      .map((k) => ({ kind: k, clickThrough: !!pops[k].ct?.on }));
+    case "popClose": pops[arg]?.close(); break;
+    case "popClickThroughOff":
+      if (pops[arg]) { pops[arg].ct.on = false; pops[arg].webContents.send("core", { event: "popcfg", data: { click_through: false } }); }
+      break;
     case "alwaysOnTop":
       if (kind) { from.onTop = !!arg; from.setAlwaysOnTop(from.onTop, "screen-saver"); break; }
       pinned = !!arg; pin(pinned, true); winLog(`always on top: ${pinned}`); break;
