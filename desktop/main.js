@@ -56,6 +56,9 @@ const winLog = (() => {
     if (f != null) try { fs.writeSync(f, `${lineTime()} ${m}\n`); } catch { /* ignore */ }
   };
 })();
+// A slip in the window's own code is written to the log (and kept going) instead of a "JavaScript error occurred
+// in the main process" box; the tests read the log and fail on it.
+process.on("uncaughtException", (e) => winLog(`main error: ${e?.stack || e}`));
 const updater = new Updater({ exe: EXE, dir: ROOT, version: app.getVersion(), dev: DEV,
   onChange: (s) => win?.webContents.send("update", s) });
 
@@ -154,6 +157,7 @@ const popKind = (wc) => Object.keys(pops).find((k) => pops[k] && !pops[k].isDest
  *  mouse; anywhere else the game does. */
 const TITLE_H = 32;
 setInterval(() => {
+  if (!app.isReady() || !Object.keys(pops).length) return;   // (screen can't be used before the app is ready)
   const pt = screen.getCursorScreenPoint();
   for (const w of Object.values(pops)) {
     if (!w || w.isDestroyed() || !w.ct) continue;

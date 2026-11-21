@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.4
+- Fixed: "A JavaScript error occurred in the main process" (the 'screen' module…) that could pop up while the app was starting
+
 ## 2.6.3
 - Changed: the column menu (right-click the headers) only lists the columns that tab has: Last Seen and Area only on Recent
 
