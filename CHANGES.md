@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.6
+- Changed: the Server filter sits under the regions as a pill, like the other filters: click it to pick a region and faction, type to narrow the list, and click a server; "Any Server" clears it
+
 ## 2.6.5
 - New: a Server filter (Filters → Server): pick one server, e.g. Kaisinel · NA East, and Search asks NCSOFT for that server only (so totals are right); Favorites, Nearby and Recent show just that server too
 
