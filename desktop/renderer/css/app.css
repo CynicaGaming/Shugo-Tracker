@@ -477,4 +477,3 @@ body.tipwin .tip { position: static !important; box-shadow: none; }
   color: var(--text); font: inherit; outline: 0; }
 .areainput:focus { border-color: rgba(232, 196, 106, 0.6); }
 .askbtns { display: flex; justify-content: flex-end; gap: 6px; }
-.select optgroup { background: #151b28; color: var(--gold); font-style: normal; }

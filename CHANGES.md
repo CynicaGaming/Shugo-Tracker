@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.6
+- Removed: the Server filter (back to how 2.6.4 was)
+
 ## 2.6.5
 - New: a Server filter (Filters → Server): pick one server, e.g. Kaisinel · NA East, and Search asks NCSOFT for that server only (so totals are right); Favorites, Nearby and Recent show just that server too
 

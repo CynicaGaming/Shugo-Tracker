@@ -175,12 +175,7 @@ class Core:
         """The UI's filters ({classes, factions, level_min, level_max}) -> what NCSOFT's search applies itself."""
         from .aion2api import search_filters
         f = f or {}
-        out = search_filters(f.get("classes") or (), f.get("factions") or (), f.get("level_min"), f.get("level_max"))
-        server = int(f.get("server") or 0)
-        if server in sv.KNOWN_SERVERS:                   # one server: NCSOFT narrows to it (and its faction)
-            out["serverId"] = server
-            out.pop("race", None)
-        return out
+        return search_filters(f.get("classes") or (), f.get("factions") or (), f.get("level_min"), f.get("level_max"))
 
     def rpc_search(self, keyword: str, filters: dict | None = None, gen: int | None = None) -> int:
         """A new search over every region; pages arrive as "search" events tagged with `gen` (the UI numbers its
@@ -190,12 +185,8 @@ class Core:
             self._gen = gen if gen is not None else self._gen + 1
             gen = self._gen
         self.api.new_generation()
-        only = sv.REGION_PREFIX.get(sv.region_of(filters["serverId"])) if filters.get("serverId") else None
         for r in SUB_REGIONS:
-            if only and r != only:                       # a server is in one region: the others have no one
-                self.emit("search", {"gen": gen, "region": r, "page": 1, "total": 0, "error": None, "chars": []})
-            else:
-                self._page(gen, keyword, r, 1, filters or {})
+            self._page(gen, keyword, r, 1, filters or {})
         return gen
 
     def rpc_search_more(self, gen: int, keyword: str, region: str, page: int, filters: dict | None = None) -> bool:
