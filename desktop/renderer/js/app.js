@@ -200,7 +200,8 @@ const searchInput = h("input", { placeholder: "Search a character name", spellch
   onKeydown: (e) => { if (e.key === "Enter") runSearch(searchInput.value.trim(), true); } });
 
 function serverFilters() {
-  return { classes: S.cfg.classes || [], factions: S.cfg.factions || [], level_min: S.cfg.level_min ?? null, level_max: S.cfg.level_max ?? null };
+  return { classes: S.cfg.classes || [], factions: S.cfg.factions || [], level_min: S.cfg.level_min ?? null, level_max: S.cfg.level_max ?? null,
+    server: S.cfg.server || null };
 }
 
 function clearSearch() {
@@ -290,7 +291,7 @@ function filtersBar() {
 
   // Faction toggles, the Filters panel (class and level), and Reset when anything is set.
   const levelSet = S.cfg.level_min != null || S.cfg.level_max != null;
-  const extra = classes.size + (levelSet ? 1 : 0);
+  const extra = classes.size + (levelSet ? 1 : 0) + (S.cfg.server ? 1 : 0);
   const open = !!S.cfg.filters_open;
   const row = h("div.frow2");
   for (const [v, n] of [["1", "Elyos"], ["2", "Asmodian"]]) {
@@ -300,8 +301,8 @@ function filtersBar() {
   row.append(h("span.grow"));
   if (regions.size || factions.size || extra) row.append(h("button.link", { onClick: () => {
     for (const k of ["regions", "factions", "classes"]) S.cfg[k] = [];
-    S.cfg.level_min = S.cfg.level_max = null;
-    for (const k of ["regions", "factions", "classes", "level_min", "level_max"]) call("config.set", { key: k, value: S.cfg[k] });
+    S.cfg.level_min = S.cfg.level_max = S.cfg.server = null;
+    for (const k of ["regions", "factions", "classes", "level_min", "level_max", "server"]) call("config.set", { key: k, value: S.cfg[k] });
     filtersChanged(); } }, "Reset"));
   row.append(h("button.pill.more", { class: open ? "open" : extra ? "on" : "", onClick: () => { save("filters_open", !open); render(); } },
     icon("sliders"), "Filters", extra ? h("b.count", {}, String(extra)) : null));
@@ -318,10 +319,35 @@ function filtersBar() {
         const n = parseInt(e.target.value, 10); save(key, Number.isFinite(n) ? Math.max(1, Math.min(45, n)) : null); filtersChanged(false);
       }, 600); } });
     panel.append(h("div.flabel", {}, "Class"), cls,
-      h("div.flabel", {}, "Level"), h("div.flevel", {}, lv("level_min"), h("span", {}, "to"), lv("level_max")));
+      h("div.flabel", {}, "Level"), h("div.flevel", {}, lv("level_min"), h("span", {}, "to"), lv("level_max")),
+      h("div.flabel", {}, "Server"), serverPick());
     box.append(panel);
   }
   return box;
+}
+
+/** The Server filter: one server (servers belong to a region and a faction), or any. */
+let serverNames = null;
+function serverPick() {
+  const sel = h("select.select", { style: { maxWidth: "260px" }, onChange: (e) => { save("server", +e.target.value || null); filtersChanged(); } });
+  const fill = () => {
+    clear(sel).append(h("option", { value: "" }, "Any Server"));
+    const digit = { 1: "nae", 2: "naw", 3: "eu", 4: "la", 5: "as" };
+    for (const [d, region] of Object.entries(digit)) {
+      for (const race of [1, 2]) {
+        const ids = Object.keys(serverNames || {}).map(Number)
+          .filter((id) => Math.floor(id / 1000) === race && Math.floor(id / 100) % 10 === +d)
+          .sort((a, b) => serverNames[a].localeCompare(serverNames[b]));
+        if (!ids.length) continue;
+        sel.append(h("optgroup", { label: `${REGION_NAMES[region]} · ${race === 1 ? "Elyos" : "Asmodian"}` },
+          ids.map((id) => h("option", { value: id }, `${serverNames[id]} · ${REGION_NAMES[region]}`))));
+      }
+    }
+    sel.value = S.cfg.server ? String(S.cfg.server) : "";
+  };
+  if (serverNames) fill();
+  else { fill(); call("servers").then((s) => { serverNames = s; fill(); }); }
+  return sel;
 }
 
 function filtersChanged(repaint = true) {
@@ -346,6 +372,7 @@ function visible() {
   if (classes.size) out = out.filter((c) => !c.class_name || classes.has(c.class_name));
   if (S.cfg.level_min != null) out = out.filter((c) => !c.level || c.level >= S.cfg.level_min);
   if (S.cfg.level_max != null) out = out.filter((c) => !c.level || c.level <= S.cfg.level_max);
+  if (S.cfg.server) out = out.filter((c) => !c.server_id || c.server_id === S.cfg.server);
   const [key, rev] = (S.cfg.sorts || {})[S.mode] || ["default", false];
   const grouped = S.mode === "nearby" || S.mode === "recent";
   const sideOf = grouped ? Object.fromEntries((S.mode === "recent" ? S.nearby.recent : S.nearby.rows).map((r) => [r.char.name, r.side])) : null;

@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.5
+- New: a Server filter (Filters → Server): pick one server, e.g. Kaisinel · NA East, and Search asks NCSOFT for that server only (so totals are right); Favorites, Nearby and Recent show just that server too
+
 ## 2.6.4
 - Fixed: "A JavaScript error occurred in the main process" (the 'screen' module…) that could pop up while the app was starting
 
