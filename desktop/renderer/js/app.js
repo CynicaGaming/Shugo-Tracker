@@ -288,11 +288,10 @@ function filtersBar() {
   const seg = h("div.seg");
   for (const r of S.regions) seg.append(h("button", { class: regions.has(r) ? "on" : "", onClick: () => toggle("regions", r) }, REGION_NAMES[r] || r));
   box.append(seg);
-  box.append(serverRow());
 
   // Faction toggles, the Filters panel (class and level), and Reset when anything is set.
   const levelSet = S.cfg.level_min != null || S.cfg.level_max != null;
-  const extra = classes.size + (levelSet ? 1 : 0);
+  const extra = classes.size + (levelSet ? 1 : 0) + (S.cfg.server ? 1 : 0);
   const open = !!S.cfg.filters_open;
   const row = h("div.frow2");
   for (const [v, n] of [["1", "Elyos"], ["2", "Asmodian"]]) {
@@ -300,7 +299,7 @@ function filtersBar() {
       h("i.dia"), n));
   }
   row.append(h("span.grow"));
-  if (regions.size || factions.size || extra || S.cfg.server) row.append(h("button.link", { onClick: () => {
+  if (regions.size || factions.size || extra) row.append(h("button.link", { onClick: () => {
     for (const k of ["regions", "factions", "classes"]) S.cfg[k] = [];
     S.cfg.level_min = S.cfg.level_max = S.cfg.server = null;
     for (const k of ["regions", "factions", "classes", "level_min", "level_max", "server"]) call("config.set", { key: k, value: S.cfg[k] });
@@ -320,51 +319,35 @@ function filtersBar() {
         const n = parseInt(e.target.value, 10); save(key, Number.isFinite(n) ? Math.max(1, Math.min(45, n)) : null); filtersChanged(false);
       }, 600); } });
     panel.append(h("div.flabel", {}, "Class"), cls,
-      h("div.flabel", {}, "Level"), h("div.flevel", {}, lv("level_min"), h("span", {}, "to"), lv("level_max")));
+      h("div.flabel", {}, "Level"), h("div.flevel", {}, lv("level_min"), h("span", {}, "to"), lv("level_max")),
+      h("div.flabel", {}, "Server"), serverPick());
     box.append(panel);
   }
   return box;
 }
 
-/* The Server filter, under the regions: one pill ("Any Server" / "Kaisinel · NA East") that opens a picker in the
-   same style: region and faction, a quick filter, and every server as a pill. */
-let serverNames = null, serverOpen = false, serverPick = { region: null, race: null, q: "" };
-const REGION_DIGIT = { nae: 1, naw: 2, eu: 3, la: 4, as: 5 };
-const serverRegion = (id) => Object.keys(REGION_DIGIT).find((r) => REGION_DIGIT[r] === Math.floor(id / 100) % 10);
-
-function serverRow() {
-  const id = S.cfg.server, wrap = h("div.srvwrap");
-  if (!serverNames) call("servers").then((s) => { serverNames = s; if (serverOpen || id) render(); });
-  const name = id && serverNames ? `${serverNames[id]} · ${REGION_NAMES[serverRegion(id)]}` : id ? "…" : "Any Server";
-  wrap.append(h("div.frow2", {},
-    h("button.pill.more", { class: serverOpen ? "open" : id ? "on" : "", onClick: () => { serverOpen = !serverOpen; render(); } },
-      icon("server"), name),
-    id ? h("button.link", { onClick: () => { save("server", null); filtersChanged(); } }, "Any Server") : null));
-  if (!serverOpen || !serverNames) return wrap;
-  const p = serverPick;
-  p.region ||= (id && serverRegion(id)) || [...fset("regions")][0] || (myChar()?.region) || "nae";
-  p.race ||= (id && Math.floor(id / 1000)) || (fset("factions").size === 1 ? +[...fset("factions")][0] : 0) || myChar()?.race || 1;
-  const repaint = () => { const top = view.scrollTop; render(); view.scrollTop = top; };
-  const regionSeg = h("div.seg", {}, Object.keys(REGION_DIGIT).map((r) =>
-    h("button", { class: p.region === r ? "on" : "", onClick: () => { p.region = r; repaint(); } }, REGION_NAMES[r])));
-  const raceSeg = h("div.seg.srvrace", {}, [[1, "Elyos"], [2, "Asmodian"]].map(([v, label]) =>
-    h("button", { class: p.race === v ? "on" : "", style: { "--fc": factionColor(v) }, onClick: () => { p.race = v; repaint(); } }, label)));
-  const q = h("input.srvq", { value: p.q, placeholder: "Find a server", spellcheck: "false",
-    onInput: (e) => { p.q = e.target.value; paintPills(); } });
-  const pills = h("div.srvpills");
-  const paintPills = () => {
-    const want = p.q.trim().toLowerCase();
-    const ids = Object.keys(serverNames).map(Number)
-      .filter((s) => Math.floor(s / 1000) === p.race && Math.floor(s / 100) % 10 === REGION_DIGIT[p.region])
-      .filter((s) => !want || serverNames[s].toLowerCase().includes(want))
-      .sort((a, b) => serverNames[a].localeCompare(serverNames[b]));
-    clear(pills).append(...ids.map((s) => h("button.pill", { class: s === id ? "on" : "", style: { "--fc": factionColor(p.race) },
-      onClick: () => { serverOpen = false; p.q = ""; save("server", s); filtersChanged(); } }, serverNames[s])));
-    if (!ids.length) pills.append(h("span.faint", {}, "No server by that name"));
+/** The Server filter: one server (servers belong to a region and a faction), or any. */
+let serverNames = null;
+function serverPick() {
+  const sel = h("select.select", { style: { maxWidth: "260px" }, onChange: (e) => { save("server", +e.target.value || null); filtersChanged(); } });
+  const fill = () => {
+    clear(sel).append(h("option", { value: "" }, "Any Server"));
+    const digit = { 1: "nae", 2: "naw", 3: "eu", 4: "la", 5: "as" };
+    for (const [d, region] of Object.entries(digit)) {
+      for (const race of [1, 2]) {
+        const ids = Object.keys(serverNames || {}).map(Number)
+          .filter((id) => Math.floor(id / 1000) === race && Math.floor(id / 100) % 10 === +d)
+          .sort((a, b) => serverNames[a].localeCompare(serverNames[b]));
+        if (!ids.length) continue;
+        sel.append(h("optgroup", { label: `${REGION_NAMES[region]} · ${race === 1 ? "Elyos" : "Asmodian"}` },
+          ids.map((id) => h("option", { value: id }, `${serverNames[id]} · ${REGION_NAMES[region]}`))));
+      }
+    }
+    sel.value = S.cfg.server ? String(S.cfg.server) : "";
   };
-  paintPills();
-  wrap.append(h("div.fpanel.srvpanel", {}, regionSeg, h("div.srvbar", {}, raceSeg, q), pills));
-  return wrap;
+  if (serverNames) fill();
+  else { fill(); call("servers").then((s) => { serverNames = s; fill(); }); }
+  return sel;
 }
 
 function filtersChanged(repaint = true) {

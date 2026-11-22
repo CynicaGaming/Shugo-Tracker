@@ -478,14 +478,3 @@ body.tipwin .tip { position: static !important; box-shadow: none; }
 .areainput:focus { border-color: rgba(232, 196, 106, 0.6); }
 .askbtns { display: flex; justify-content: flex-end; gap: 6px; }
 .select optgroup { background: #151b28; color: var(--gold); font-style: normal; }
-/* the Server picker (under the regions) */
-.srvwrap { display: flex; flex-direction: column; gap: 7px; }
-.srvpanel { display: flex; flex-direction: column; gap: 8px; }
-.srvbar { display: flex; gap: 8px; align-items: center; }
-.srvrace { flex: none; width: 190px; }
-.srvq { flex: 1; min-width: 80px; height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px;
-  background: var(--panel); color: var(--text); font: inherit; font-size: 12.5px; outline: 0; }
-.srvq:focus { border-color: rgba(232, 196, 106, 0.6); }
-.srvpills { display: flex; flex-wrap: wrap; gap: 5px; max-height: 168px; overflow-y: auto; }
-.srvpills .faint { color: var(--faint); font-size: 12px; padding: 4px; }
-.srvpanel > .seg { width: 100%; }
