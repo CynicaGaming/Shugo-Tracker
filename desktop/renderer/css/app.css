@@ -477,3 +477,7 @@ body.tipwin .tip { position: static !important; box-shadow: none; }
   color: var(--text); font: inherit; outline: 0; }
 .areainput:focus { border-color: rgba(232, 196, 106, 0.6); }
 .askbtns { display: flex; justify-content: flex-end; gap: 6px; }
+/* Alert Sound: play / stop */
+.btn.playbtn { width: 34px; padding: 0; display: inline-grid; place-items: center; }
+.btn.playbtn svg { width: 14px; height: 14px; }
+.btn.playbtn.on { color: var(--gold); border-color: rgba(232, 196, 106, 0.5); }

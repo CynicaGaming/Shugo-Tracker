@@ -5,6 +5,24 @@ import { win } from "./bridge.js";
 let ctx = null, custom = { file: null, buf: null }, last = 0, seen = new Set(), primed = false;
 const audio = () => (ctx ||= new AudioContext());
 
+// What's sounding now, so Settings can show Play or Stop (and stop it).
+let active = [];
+const watchers = new Set();
+export const isPlaying = () => active.length > 0;
+export function onPlaying(fn) { watchers.add(fn); return () => watchers.delete(fn); }
+const changed = () => watchers.forEach((fn) => fn(isPlaying()));
+function track(node) {
+  active.push(node);
+  node.onended = () => { active = active.filter((n) => n !== node); if (!active.length) changed(); };
+  if (active.length === 1) changed();
+}
+export function stopAlert() {
+  const was = active;
+  active = [];
+  for (const n of was) { n.onended = null; try { n.stop(); } catch { /* already done */ } }
+  if (was.length) changed();
+}
+
 async function customBuffer(file) {
   if (custom.file === file && custom.buf) return custom.buf;
   const bytes = await win.readSound(file);
@@ -38,6 +56,7 @@ function synth(kind, volume) {
     g.gain.exponentialRampToValueAtTime(0.0001, t + at + len);
     o.connect(g).connect(a.destination);
     o.start(t + at); o.stop(t + at + len + 0.05);
+    track(o);
   }
 }
 const chime = (volume) => synth("chime", volume);
@@ -54,6 +73,7 @@ export async function playAlert(cfg) {
     src.buffer = buf; g.gain.value = volume;
     src.connect(g).connect(audio().destination);
     src.start();
+    track(src);
   } catch { chime(volume); }                                       // a file it can't play: the chime instead
 }
 

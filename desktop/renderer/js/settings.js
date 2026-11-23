@@ -1,7 +1,7 @@
 // Settings, in the game's style: header bars per group, one setting per row.
 import { win } from "./bridge.js";
-import { SOUNDS, playAlert, soundKind } from "./alert.js";
-import { LOGO, clear, h, icon } from "./dom.js";
+import { SOUNDS, isPlaying, onPlaying, playAlert, soundKind, stopAlert } from "./alert.js";
+import { ICONS, LOGO, clear, h, icon } from "./dom.js";
 
 const RECENT = [[50, "50"], [100, "100"], [250, "250"], [500, "500"], [1000, "1,000"], [0, "Unlimited"]];
 const UPDATE_EVERY = [[0, "Never"], [1800, "30m"], [3600, "1h"], [21600, "6h"], [43200, "12h"], [86400, "24h"]];
@@ -128,7 +128,13 @@ export class SettingsView {
       err.textContent = error || "";
     };
     paintPick();
-    el.append(row("Alert Sound", err, pick, h("button.btn", { onClick: () => playAlert(cfg) }, "Test")));
+    // play / stop: shows which it'll do
+    const play = h("button.btn.playbtn", { onClick: () => (isPlaying() ? stopAlert() : playAlert(cfg)) });
+    const paintPlay = (on) => { play.innerHTML = on ? ICONS.stop : ICONS.play; play.classList.toggle("on", on); };
+    paintPlay(isPlaying());
+    this.offPlay?.();
+    this.offPlay = onPlaying(paintPlay);
+    el.append(row("Alert Sound", err, pick, play));
 
     el.append(h("div.legal", {}, "Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. ",
       "AION and AION 2 are trademarks of NCSOFT Corporation; game names, text and images belong to NCSOFT."));
