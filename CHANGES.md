@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.7
+- Changed: the Enemy Alert settings have their own Notifications section in Settings
+
 ## 2.6.6
 - Removed: the Server filter (back to how 2.6.4 was)
 
