@@ -67,7 +67,7 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: 34
           arch: x86_64
           target: google_apis
           disable-animations: true
@@ -77,7 +77,7 @@ jobs:
             adb shell am start -n gg.cynica.shugotracker/.MainActivity -e q Cynica
             sleep 40
             adb exec-out screencap -p > shots/search.png
-            adb shell input tap 300 600
+            adb shell input tap 200 300
             sleep 25
             adb exec-out screencap -p > shots/profile.png
             adb shell input keyevent KEYCODE_BACK
