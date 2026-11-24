@@ -68,3 +68,7 @@ val syncWeb by tasks.registering(Sync::class) {
     into(layout.buildDirectory.dir("web/www"))
 }
 tasks.named("preBuild") { dependsOn(syncPython, syncWeb) }
+tasks.configureEach {
+    if (name.matches(Regex("merge\\w*PythonSources|extract\\w*PythonBuildPackages"))) dependsOn(syncPython)
+    if (name.matches(Regex("(merge|generate|package)\\w*Assets\\w*|lintVital\\w*|compress\\w*Assets"))) dependsOn(syncWeb)
+}
