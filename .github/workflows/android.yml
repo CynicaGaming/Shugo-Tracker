@@ -28,7 +28,6 @@ jobs:
         with: { distribution: temurin, java-version: "17" }
       - uses: actions/setup-python@v5          # (Chaquopy compiles the Python with the same version)
         with: { python-version: "3.12" }
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: "8.7" }
 
