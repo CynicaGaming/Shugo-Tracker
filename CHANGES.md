@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.7.3
+- Fixed: after a map change (leaving an arena, teleporting), players you'd already seen came back under a stray "Allies" group instead of with their side
+
 ## 2.7.2
 - Changed: downloads carry their version in the name (Shugo-Tracker-2.7.2-Windows.exe, Shugo-Tracker-2.7.2-Android.apk), and on Windows each update renames the exe to its new version
 - If you ticked "Run this program as an administrator" on the exe, or pinned it to the taskbar, redo it after an update (Windows ties both to the file name)

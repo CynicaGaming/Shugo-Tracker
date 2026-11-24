@@ -470,7 +470,7 @@ const list = (() => {
       if (kind === "group") {
         const race = ctx.race[p];
         nodes.push(h("div.group", { class: p, style: { top: `${iy + 2}px`, ...(race ? { color: factionColor(race) } : {}) } },
-          race === 1 ? "Elyos" : race === 2 ? "Asmodian" : p === "enemy" ? "Enemies" : "Allies"));
+          race === 1 ? "Elyos" : race === 2 ? "Asmodian" : p === "enemy" ? "Enemies" : p === "ally" ? "Allies" : "Unknown"));
       } else if (kind === "skel") nodes.push(skeletonRow(iy));
       else {
         nodes.push(rowFor(p, iy, ctx)); shown.add(p.key);

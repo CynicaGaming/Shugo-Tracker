@@ -442,7 +442,15 @@ class NearbyService:
     def _request(self, name: str, prio: int, servers: list[int], guessed: bool) -> None:
         """Tracker callback (lock held): every player is identified in the background; cards on screen
         jump the queue (see want())."""
-        if name == self.tracker.me.name or name in self._chars or name in self._background:
+        if name == self.tracker.me.name:
+            return
+        c = self._chars.get(name)
+        if c is not None:
+            # met before (an earlier area, before a map change): their card is known, so is their side
+            self.tracker.apply_lookup(name, Lookup(status="ok", server=c.server_id, level=c.level,
+                                                   class_name=c.class_name, faction=c.race or None), [])
+            return
+        if name in self._background:
             return
         self._background.add(name)
         self._lookups.put((2 + prio, next(self._seq), name, None))

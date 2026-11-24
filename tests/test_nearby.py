@@ -62,6 +62,16 @@ class NearbyServiceTests(unittest.TestCase):
         self.assertEqual(sides, {"Foe": "enemy", "Friend": "ally"})
         self.assertEqual(svc.snapshot()[0][1].name, "Foe")                            # enemies first
 
+    def test_met_again_in_a_new_area_keeps_their_side(self):
+        # Nov 24: back in town after an arena, a legion mate already identified came back with a new id and no
+        # faction in their record: their known card decides the side (they were listed under a stray "Allies")
+        svc, find = self.make({"nae": {"Mine": [1101], "Friend": [1101]}})
+        self.feed(svc, self_record(100, "Mine", 1101), other_record(300, "Friend"))
+        self.assertTrue(wait_for(lambda: all(c.char_id for _s, c, _p in svc.snapshot())))
+        svc.tracker.clear()                                   # a new area
+        self.feed(svc, other_record(900, "Friend"))
+        self.assertEqual([(side, c.name) for side, c, _p in svc.snapshot()], [("ally", "Friend")])
+
     def test_one_search_per_player_and_server_comes_from_ncsoft(self):
         # the game record says 1101 for Foe (wrong); NCSOFT knows exactly one Foe, on 2101
         svc, find = self.make({"nae": {"Mine": [1101], "Foe": [2101]}})
