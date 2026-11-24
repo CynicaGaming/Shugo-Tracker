@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.9
+- New: hovering a main stat (Might, Dexterity…) says what it does, like the deity stats
+
 ## 2.6.8
 - Changed: Alert Sound's Test button is a play button; while the sound plays it turns into a stop button (handy for long custom sounds)
 

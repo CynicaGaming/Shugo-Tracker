@@ -13,7 +13,15 @@ const SLOT_NAMES = { MainHand: "Main Hand", SubHand: "Off Hand", Earring1: "Earr
   Pants: "Legs" };
 const slotName = (s) => SLOT_NAMES[s] || (s.startsWith("Arcana") ? "Arcana" : s);
 // Main stats, in the game's names; the deity stats with the game's own descriptions (shown on hover).
-const PRIMARY = [["STR", "Might"], ["DEX", "Dexterity"], ["AGI", "Precision"], ["WIS", "Willpower"], ["INT", "Intelligence"], ["CON", "Constitution"]];   // the game's clockwise order
+// the game's clockwise order, with what each does (shown on hover)
+const PRIMARY = [
+  ["STR", "Might", "Increase Attack."],
+  ["DEX", "Dexterity", "Increase Evasion, Block, and Critical Hit Resist."],
+  ["AGI", "Precision", "Increase Accuracy and Critical Hit."],
+  ["WIS", "Willpower", "Increase Status Effect Resist."],
+  ["INT", "Intelligence", "Increase Status Effect Chance."],
+  ["CON", "Constitution", "Increase HP."],
+];
 const DEITY = [
   ["Destruction", "Zikel", "Increase Attack and Perfect Resist."],
   ["Death", "Triniel", "Increase Critical Hit and Regeneration Penetration."],
@@ -311,9 +319,9 @@ export class ProfileView {
       return el;
     };
     const prim = h("div.mstats");
-    for (const [type, name] of PRIMARY) {
+    for (const [type, name, desc] of PRIMARY) {
       const st = by[type], v = st?.value || 0;
-      prim.append(tip(h("div.mstat", { class: v ? "" : "zero" }, h("span.n", {}, name), h("b", {}, fmtInt(v))), name, null, st));
+      prim.append(tip(h("div.mstat", { class: v ? "" : "zero" }, h("span.n", {}, name), h("b", {}, fmtInt(v))), name, desc, st));
     }
     const gods = h("div.dstats");                       // bars out of 100 (50 is halfway)
     for (const [type, god, desc] of DEITY) {
