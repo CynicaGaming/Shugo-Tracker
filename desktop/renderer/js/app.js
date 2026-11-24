@@ -1,6 +1,6 @@
 // The window: title bar, Search / Favorites / Nearby / Recent lists, the PVP Log, menus, footer. Profile and Settings open
 // in place of the list (profile.js, settings.js).
-import { call, on, win } from "./bridge.js";
+import { MOBILE, call, on, win } from "./bridge.js";
 import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, ago, clear,
   COL_GAP, COL_MIN, factionColor, fmtInt, h, icon, layoutColumns, sortChars } from "./dom.js";
 import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
@@ -57,25 +57,31 @@ function paintTitlebar() {
     tabs.append(h("button.tab.back", { onClick: closeScreen }, icon("back"), back));
   } else {
     const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode),
-      onContextmenu: POPPABLE[mode] ? (e) => { e.preventDefault(); tabMenu(mode, e.clientX, e.clientY); } : null },
+      onContextmenu: POPPABLE[mode] && !MOBILE ? (e) => { e.preventDefault(); tabMenu(mode, e.clientX, e.clientY); } : null },
       label, count ? h("span.count", {}, count) : null);
     tabs.append(t("search", "Search"), t("favorites", "Favorites", S.favorites.length || ""));
-    if (S.nearby.enabled) tabs.append(t("nearby", "Nearby", S.nearby.rows.length || ""), t("recent", "Recent", S.nearby.recent.length || ""));
+    if (MOBILE) { /* the phone app has no game to read: no Nearby, Recent or PVP */ }
+    else if (S.nearby.enabled) tabs.append(t("nearby", "Nearby", S.nearby.rows.length || ""), t("recent", "Recent", S.nearby.recent.length || ""));
     else tabs.append(t("nearby", "Nearby"));
-    tabs.append(t("pvp", "PVP"));
+    if (!MOBILE) tabs.append(t("pvp", "PVP"));
   }
   titlebar.append(tabs, h("span.grow"));
+  if (MOBILE) { titlebar.append(meButton()); return; }
   const pinned = S.cfg.always_on_top !== false;
   titlebar.append(h("button.iconbtn", { class: pinned ? "on" : "", html: ICONS.pin, title: "",
     onClick: () => { save("always_on_top", !pinned); win.setAlwaysOnTop(!pinned); paintTitlebar(); } }));
+  titlebar.append(meButton(),
+    h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
+    h("button.iconbtn.close", { html: ICONS.close, onClick: () => win.close() }));
+}
+
+function meButton() {
   const me = myChar();
   const meBtn = h("button.mebtn", { onClick: (e) => { e.stopPropagation(); meMenu(meBtn); },
     onMousedown: (e) => e.stopPropagation() },
     me?.portrait ? h("img", { src: me.portrait }) : h("span.ph", { html: ICONS.person, style: { color: "var(--dim)", padding: "3px" } }),
     me ? h("span.nm", {}, `${me.name} · ${me.server_name}`) : null);
-  titlebar.append(meBtn,
-    h("button.iconbtn", { html: ICONS.min, onClick: () => win.minimize() }),
-    h("button.iconbtn.close", { html: ICONS.close, onClick: () => win.close() }));
+  return meBtn;
 }
 
 function myChar() {
@@ -910,15 +916,44 @@ function render() {
     if (S.mode !== "nearby" || S.nearby.enabled) view.append(filtersBar(), list.head);
     view.append(list.box);
     list.render();
-    if (S.mode === "search") setTimeout(() => searchInput.focus(), 0);
+    if (S.mode === "search" && !MOBILE) setTimeout(() => searchInput.focus(), 0);   // (a phone would pop its keyboard)
   }
   paintFooter();
 }
 app.render = render;
 
+// A phone has no hover: a tap is the hover (tooltips show on a tap, and go on the next tap, or a second tap on
+// the same thing).
+if (MOBILE) {
+  let hovered = [], last = null;
+  // (the browser's own hover events from a touch come and go unpredictably: only ours count)
+  for (const t of ["mouseenter", "mouseleave", "mouseover", "mouseout"]) {
+    document.addEventListener(t, (e) => { if (e.isTrusted) e.stopPropagation(); }, true);
+  }
+  const fire = (n, type, e) => n.dispatchEvent(new MouseEvent(type, { clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY }));
+  document.addEventListener("click", (e) => {
+    const chain = [];
+    for (let n = e.target; n && n !== document; n = n.parentNode) chain.push(n);
+    const again = e.target === last;
+    hovered.filter((n) => again || !chain.includes(n)).forEach((n) => fire(n, "mouseleave", e));
+    if (again) { hovered = []; last = null; return; }
+    chain.filter((n) => !hovered.includes(n)).reverse().forEach((n) => fire(n, "mouseenter", e));
+    hovered = chain; last = e.target;
+  }, true);
+}
+
+// Android's back button: back a screen (or out of a menu); false on the main list, so the app closes.
+window.__shugoBack = () => {
+  if (document.querySelector(".menu")) { closeMenus(); return true; }
+  if (S.screen !== "list") { closeScreen(); return true; }
+  if (S.mode !== "search") { setMode("search"); return true; }
+  return false;
+};
+
 /* ═════ start ═════ */
 (async () => {
   const init = await call("init");
+  if (MOBILE && !["search", "favorites"].includes(S.mode)) S.mode = "search";
   if (LIST_POP) S.mode = POP;                           // a popped-out list is always that tab
   Object.assign(S, { cfg: init.config, version: init.version, demo: init.demo, regions: init.regions,
     favorites: init.favorites, my: init.my, nearby: init.nearby || S.nearby, game: init.game !== false });
@@ -930,9 +965,9 @@ app.render = render;
   if (Array.isArray(S.cfg.columns) && !S.cfg.columns.includes("area") && !S.cfg.area_column_added && !POP) {
     save("columns", [...S.cfg.columns, "area"]); save("area_column_added", true);   // (new in 2.6.2: shown once)
   }
-  if (!POP && !S.my.slots.some(Boolean) && !S.cfg.setup_done && !S.demo) openFinder(0);   // first start: find yourself
-  else render();
   const q = new URLSearchParams(location.search).get("q");
+  if (!POP && !q && !S.my.slots.some(Boolean) && !S.cfg.setup_done && !S.demo) openFinder(0);   // first start: find yourself
+  else render();
   if (q) { searchInput.value = q; runSearch(q); }
   window.__app = app;                       // (screenshots / debugging)
 })();

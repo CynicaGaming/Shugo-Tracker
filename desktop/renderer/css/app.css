@@ -481,3 +481,11 @@ body.tipwin .tip { position: static !important; box-shadow: none; }
 .btn.playbtn { width: 34px; padding: 0; display: inline-grid; place-items: center; }
 .btn.playbtn svg { width: 14px; height: 14px; }
 .btn.playbtn.on { color: var(--gold); border-color: rgba(232, 196, 106, 0.5); }
+
+/* ═════ the Android app (html.mobile): touch-sized, no window chrome ═════ */
+html.mobile .titlebar { -webkit-app-region: none; padding-top: env(safe-area-inset-top); }
+html.mobile .thead .rz { display: none; }
+html.mobile .mebtn .nm { display: none; }
+html.mobile .tip { max-width: calc(100vw - 8px); }
+html.mobile * { -webkit-tap-highlight-color: transparent; }
+html.mobile .menu .item { padding-top: 10px; padding-bottom: 10px; }

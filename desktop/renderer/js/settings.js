@@ -1,5 +1,5 @@
 // Settings, in the game's style: header bars per group, one setting per row.
-import { win } from "./bridge.js";
+import { MOBILE, win } from "./bridge.js";
 import { SOUNDS, isPlaying, onPlaying, playAlert, soundKind, stopAlert } from "./alert.js";
 import { ICONS, LOGO, clear, h, icon } from "./dom.js";
 
@@ -29,8 +29,8 @@ export class SettingsView {
     const pct = Math.round((u.progress || 0) * 100);
     const status = {
       checking: "Checking for updates…", uptodate: "You're on the latest version.",
-      available: `Version ${next} is available.`, downloading: `Installing version ${next}… ${pct}%`,
-      ready: `Version ${next} is ready. Restart Shugo Tracker to finish.`,
+      available: `Version ${next} is available.`, downloading: `${MOBILE ? "Downloading" : "Installing"} version ${next}… ${pct}%`,
+      ready: MOBILE ? `Version ${next} is ready to install.` : `Version ${next} is ready. Restart Shugo Tracker to finish.`,
       error: `Couldn't update${u.error ? `: ${u.error}` : ""}.`, dev: "Development build: updates are off.",
     }[u.state] || "Not checked yet.";
     const head = h("div.uhead", {}, h("span.ulogo", { html: LOGO }),
@@ -40,7 +40,7 @@ export class SettingsView {
     const notes = notesFor && u.notes?.length
       ? h("div.unotes", {}, h("div.unt", {}, `What's new in ${notesFor}`), h("ul", {}, u.notes.map((n) => h("li", {}, n))))
       : null;
-    const label = { available: "Download", downloading: "Installing…", ready: "Restart",
+    const label = { available: "Download", downloading: MOBILE ? "Downloading…" : "Installing…", ready: MOBILE ? "Install" : "Restart",
       checking: "Checking…" }[u.state] || "Check Now";
     const act = h("button.btn", { class: ["available", "ready"].includes(u.state) ? "gold" : "",
       disabled: ["downloading", "checking", "dev"].includes(u.state), onClick: () => this.updateAction() },
@@ -83,6 +83,15 @@ export class SettingsView {
     this.paintUpdate();
     win.update("freshen").then((u) => { if (u) { S.update = { ...S.update, ...u }; this.paintUpdate(); } });
 
+    if (!MOBILE) this.buildDesktop(el, { row, toggle, steps });
+    el.append(h("div.legal", {}, "Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. ",
+      "AION and AION 2 are trademarks of NCSOFT Corporation; game names, text and images belong to NCSOFT."));
+  }
+
+  /** Window, Nearby and Notifications: the desktop app's (the phone app has no game window to sit over). */
+  buildDesktop(el, { row, toggle, steps }) {
+    const { S, save, call } = this.app;
+    const cfg = S.cfg;
     el.append(h("div.bar", {}, "Window"));
     const op = Math.round((cfg.window_opacity ?? 1) * 100);
     const opOut = h("span", { style: { minWidth: "44px", textAlign: "right" } }, `${op}%`);
@@ -136,7 +145,5 @@ export class SettingsView {
     this.offPlay = onPlaying(paintPlay);
     el.append(row("Alert Sound", err, pick, play));
 
-    el.append(h("div.legal", {}, "Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. ",
-      "AION and AION 2 are trademarks of NCSOFT Corporation; game names, text and images belong to NCSOFT."));
   }
 }

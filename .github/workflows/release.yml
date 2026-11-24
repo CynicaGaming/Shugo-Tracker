@@ -21,6 +21,8 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -116,3 +118,10 @@ jobs:
             out/ShugoTracker.exe
             out/ShugoTracker.exe.sha256
             out/ShugoTracker-windows.zip
+
+  # The Android app, at the same version, attached to the same release (ShugoTracker.apk)
+  android:
+    needs: release
+    uses: ./.github/workflows/android.yml
+    with:
+      version: ${{ needs.release.outputs.version }}

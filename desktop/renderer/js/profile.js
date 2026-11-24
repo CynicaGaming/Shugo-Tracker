@@ -1,6 +1,6 @@
 // A character's profile, laid out like the game's windows. The whole profile (info, gear, every item's details)
 // is loaded before it's shown, so tabs and tooltips never wait.
-import { call, on } from "./bridge.js";
+import { MOBILE, call, on } from "./bridge.js";
 import { CLASS_COLORS, GRADE_COLORS, ICONS, REGION_NAMES, clear, fmtDelta, fmtInt, gradeColor, h, num, statDeltas } from "./dom.js";
 import { closeMenus } from "./menu.js";
 
@@ -55,9 +55,15 @@ async function showTipOutside(el, x, y, screenY) {
 function showTip(el, x, y, side = "right") {
   hideLocalTip();
   el.classList.add("tip");
+  el.style.position = "fixed";                         // (item cards are made static, for the tooltip window)
   document.body.append(el);
   tipEl = el;
   const r = el.getBoundingClientRect();
+  if (MOBILE) {                                        // a phone: across the middle, clear of your finger
+    el.style.left = `${Math.max(4, (innerWidth - r.width) / 2)}px`;
+    el.style.top = `${Math.max(4, Math.min(y < innerHeight / 2 ? y + 40 : y - r.height - 40, innerHeight - r.height - 4))}px`;
+    return;
+  }
   let left = side === "right" ? x + 16 : x - r.width - 16;
   if (left + r.width > innerWidth - 4) left = x - r.width - 16;
   if (left < 4) left = Math.min(innerWidth - r.width - 4, x + 16);
@@ -276,6 +282,7 @@ export class ProfileView {
 
   startAlt() {
     this.stopAlt();
+    if (MOBILE) return;                                 // (no Alt key on a phone)
     const onKey = (e) => { if (e.key === "Alt") { e.preventDefault(); this.setAlt(e.type === "keydown"); } };
     addEventListener("keydown", onKey); addEventListener("keyup", onKey);
     const poll = setInterval(async () => {                 // Alt while the game has focus: ask Windows
