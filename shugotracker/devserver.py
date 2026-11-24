@@ -24,6 +24,7 @@ RENDERER = os.path.join(HERE, "desktop", "renderer")
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--demo", action="store_true")
+    ap.add_argument("--showcase", metavar="REAL=ALIAS", help="demo data plus one real character (README shots)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--root", default=None, help="app folder (data, cache, logs); a temporary one by default")
     a = ap.parse_args(argv)
@@ -34,8 +35,8 @@ def main(argv=None) -> int:
         with lock:
             for q in clients:
                 q.put(obj)
-    core = Core(a.root or tempfile.mkdtemp(prefix="shugo-dev-"), emit, demo=a.demo,
-                log=lambda m: print("core:", m, flush=True))
+    core = Core(a.root or tempfile.mkdtemp(prefix="shugo-dev-"), emit, demo=a.demo or bool(a.showcase),
+                showcase=a.showcase, log=lambda m: print("core:", m, flush=True))
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):

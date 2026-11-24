@@ -4,11 +4,14 @@
 
 <p align="center">
   <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest/download/ShugoTracker.exe"><img src="docs/images/download.png" alt="Download for Windows" height="48"></a>
+  &nbsp;
+  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest/download/ShugoTracker.apk"><img src="docs/images/download-android.png" alt="Download for Android" height="48"></a>
   <br><sub><a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest">Latest release notes</a></sub>
 </p>
 
 <p align="center"><b>Look anyone up in a second. See exactly what they're wearing. Know who's around you.</b><br>
-One small, always-on-top window that sits over the game — no browser, no tabbing out.</p>
+One small, always-on-top window that sits over the game — no browser, no tabbing out.<br>
+And the same lookups in your pocket with the Android app.</p>
 
 <p align="center">
   <img src="docs/images/hero.png" alt="Search results and a character's gear with an item tooltip" width="92%">
@@ -87,6 +90,19 @@ each with its own opacity, click-through and lock. An **Enemy Alert** can play a
 </tr>
 </table>
 
+## Android
+
+<p align="center">
+  <img src="docs/images/android.png" alt="The Android app: search, an item tooltip and a character's stats" width="92%">
+</p>
+
+The same search and profiles on your phone: **every region, every tab, the same game-style tooltips** —
+tap an item, stat or skill to see it. Favorites and your own characters work just like on the desktop.
+
+It updates itself the same way too: **Download**, then **Install**, from Settings → Updates.
+
+<sub>Nearby and PVP need the game running beside them, so they stay on the Windows app.</sub>
+
 ## Features
 
 <table>
@@ -118,6 +134,7 @@ Results stream in as they arrive; people you've met before load instantly.
 
 **🧳 Portable**<br>
 One exe, nothing to install. It keeps everything in the folder beside it; copy the folder anywhere and everything comes with it.
+On Android, one APK.
 
 </td>
 <td valign="top">
@@ -145,9 +162,16 @@ No account, no sign-in, no tracking. Character data comes from NCSOFT's public A
 
 ## Getting Started
 
+**Windows**
+
 1. **[Download ShugoTracker.exe](https://github.com/CynicaGaming/Shugo-Tracker/releases/latest/download/ShugoTracker.exe)** and put it in a folder of its own.
 2. Run it. Windows may show a SmartScreen warning the first time — choose **More info → Run anyway**.
 3. Play the game in **borderless windowed** mode so the tracker can sit on top.
+
+**Android** (8.0 or newer)
+
+1. On your phone, **[download ShugoTracker.apk](https://github.com/CynicaGaming/Shugo-Tracker/releases/latest/download/ShugoTracker.apk)**.
+2. Open it. The first time, Android asks you to allow installs from your browser — allow it, then tap **Install**.
 
 ## Frequently Asked Questions
 
@@ -161,6 +185,13 @@ Shugo Tracker isn't responsible for any action taken against your account.
 </details>
 
 <details>
+<summary><b>Why isn't the Android app on Google Play?</b></summary>
+<br>
+It's installed straight from the releases here instead, like the Windows app. Android calls that an "unknown app" and asks
+once before installing it; after that, updates come from inside the app (Settings → Updates).
+</details>
+
+<details>
 <summary><b>Why does Windows warn me when I run it?</b></summary>
 <br>
 The exe isn't code-signed yet, so SmartScreen doesn't recognise it. The code is all here in this repository,
@@ -170,7 +201,8 @@ and every release is built automatically from it.
 <details>
 <summary><b>Where are my settings and favorites?</b></summary>
 <br>
-In the <code>data</code>, <code>cache</code> and <code>logs</code> folders next to the exe (the <code>app</code> folder
+On Android, inside the app (uninstalling it removes them). On Windows:
+in the <code>data</code>, <code>cache</code> and <code>logs</code> folders next to the exe (the <code>app</code> folder
 is the program itself, unpacked the first time each version starts). Updates only replace the exe, so nothing is lost;
 move or copy the whole folder to take everything with you.
 </details>

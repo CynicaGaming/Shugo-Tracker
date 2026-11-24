@@ -6,6 +6,7 @@ sys.path.insert(0, "tools")
 from icons import make_icon_image  # noqa: E402
 
 S = sys.argv[1] if len(sys.argv) > 1 else "shots/"   # a folder with the CI screenshots (ci-screenshots branch)
+P = sys.argv[2] if len(sys.argv) > 2 else "phone/"   # the phone screenshots (tools/phone_shots.js)
 OUT = "docs/images/"
 BOLD = "/usr/share/fonts/opentype/inter/Inter-Bold.otf"
 REG = "/usr/share/fonts/opentype/inter/Inter-Regular.otf"
@@ -58,7 +59,7 @@ d = ImageDraw.Draw(c)
 d.text((290, 98), "Shugo Tracker", font=ImageFont.truetype(BOLD, 76), fill=(236, 237, 241))
 d.text((294, 196), "Every AION 2 player's gear, power and build, a glance away.", font=ImageFont.truetype(REG, 30),
        fill=(170, 174, 186))
-d.text((294, 246), "A fast, free overlay for Windows", font=ImageFont.truetype(REG, 24), fill=GOLD)
+d.text((294, 246), "A fast, free overlay for Windows, and an app for Android", font=ImageFont.truetype(REG, 24), fill=GOLD)
 c.convert("RGB").save(OUT + "banner.png", optimize=True)
 
 # hero: the list, and a profile with an item tooltip, side by side
@@ -80,18 +81,53 @@ framed("show-profile-gear-tip.png", "gear.png")
 framed("show-profile-skills-tip.png", "skills.png")
 framed("show-profile-daevanion.png", "daevanion.png")
 
-# download button (self-hosted, so it never depends on a badge service)
-f = ImageFont.truetype(BOLD, 30)
-label = "Download for Windows"
-tw = int(f.getlength(label))
-bw, bh, scale = tw + 140, 76, 1
-btn = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
-d = ImageDraw.Draw(btn)
-d.rounded_rectangle((0, 0, bw - 1, bh - 1), radius=18, fill=GOLD)
-ink = (26, 19, 6)
-x0, y0, s = 40, 24, 13   # Windows logo: four squares
-for dx in (0, s + 3):
-    for dy in (0, s + 3):
-        d.rectangle((x0 + dx, y0 + dy, x0 + dx + s, y0 + dy + s), fill=ink)
-d.text((x0 + 2 * s + 3 + 22, bh // 2), label, font=f, fill=ink, anchor="lm")
-btn.save(OUT + "download.png", optimize=True)
+# download buttons (self-hosted, so they never depend on a badge service)
+def button(label, glyph, out, fill=GOLD, ink=(26, 19, 6), edge=None):
+    f = ImageFont.truetype(BOLD, 30)
+    tw = int(f.getlength(label))
+    bw, bh = tw + 140, 76
+    btn = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
+    d = ImageDraw.Draw(btn)
+    d.rounded_rectangle((0, 0, bw - 1, bh - 1), radius=18, fill=fill, outline=edge, width=3 if edge else 0)
+    glyph(d, 40, 24, ink)
+    d.text((40 + 29 + 22, bh // 2), label, font=f, fill=ink, anchor="lm")
+    btn.save(OUT + out, optimize=True)
+
+
+def windows(d, x0, y0, ink, s=13):          # four squares
+    for dx in (0, s + 3):
+        for dy in (0, s + 3):
+            d.rectangle((x0 + dx, y0 + dy, x0 + dx + s, y0 + dy + s), fill=ink)
+
+
+def phone(d, x0, y0, ink):                  # a phone
+    d.rounded_rectangle((x0 + 4, y0 - 3, x0 + 24, y0 + 32), radius=4, outline=ink, width=3)
+    d.line((x0 + 11, y0 + 26, x0 + 17, y0 + 26), fill=ink, width=3)
+
+
+button("Download for Windows", windows, "download.png")
+button("Download for Android", phone, "download-android.png", fill=(22, 24, 30), ink=GOLD, edge=GOLD)
+
+# the Android app: three phones side by side
+def handset(name, h=1180):
+    shot = Image.open(P + name).convert("RGB")
+    shot = shot.resize((round(shot.size[0] * h / shot.size[1]), h), Image.LANCZOS)
+    b = 16                                   # the bezel
+    body = Image.new("RGBA", (shot.size[0] + b * 2, h + b * 2), (0, 0, 0, 0))
+    ImageDraw.Draw(body).rounded_rectangle((0, 0, body.size[0] - 1, body.size[1] - 1), 58, fill=(24, 26, 32),
+                                           outline=(58, 62, 72), width=3)
+    body.alpha_composite(rounded(shot, 44), (b, b))
+    return body
+
+
+phones = [handset(n) for n in ("search.png", "gear-tip.png", "stats.png")]
+gap = 70
+W = sum(p.size[0] for p in phones) + gap * 4
+H = phones[0].size[1] + 160
+c = bg(W, H).convert("RGBA")
+x = gap
+for i, ph in enumerate(phones):
+    drop(c, ph, (x, 80 + (0 if i == 1 else 40)), r=58, blur=30)
+    x += ph.size[0] + gap
+c = c.resize((W // 2, H // 2), Image.LANCZOS)
+c.convert("RGB").save(OUT + "android.png", optimize=True)
