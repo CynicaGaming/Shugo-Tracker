@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.6.10
+- New: in item tooltips, the extra roll a Philosopher's Stone added is painted purple, like the game (NCSOFT marks that roll, so it works whatever the number of rolls)
+
 ## 2.6.9
 - New: hovering a main stat (Might, Dexterity…) says what it does, like the deity stats
 

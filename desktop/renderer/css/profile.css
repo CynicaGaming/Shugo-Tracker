@@ -196,3 +196,7 @@
 .itip .heading { color: var(--gold); font-weight: 600; }
 .tcard .tfx.owned { padding-top: 6px; border-top: 1px solid var(--line); color: var(--dim); }
 .tcard .tfx.owned .v { color: var(--text-2); font-weight: 500; }
+/* item tooltip: the roll a Philosopher's Stone added (the game paints it purple) */
+.itip .r.philo { margin: 1px -12px; padding: 1px 12px; color: #fff;
+  background: linear-gradient(90deg, rgba(126, 72, 214, 0.75), rgba(126, 72, 214, 0.28) 55%, transparent); }
+.itip .r.philo .v { color: #fff; }

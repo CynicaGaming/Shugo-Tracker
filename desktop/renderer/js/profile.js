@@ -501,7 +501,8 @@ function itemTip(it, det, { heading, deltas, hint } = {}) {
     body.append(h("div", { style: { height: "3px", background: "var(--panel-3)", borderRadius: "2px", margin: "2px 0 4px" } },
       h("div", { style: { height: "100%", width: `${Math.min(100, num(det.soul_bind) || 0)}%`, background: "#5aa9ff", borderRadius: "2px" } })));
   }
-  for (const [name, value] of det.sub_stats || []) body.append(row(name, value));
+  // the extra roll a Philosopher's Stone added: purple, like the game
+  for (const [name, value, added] of det.sub_stats || []) body.append(row(name, value, added ? "philo" : ""));
   if (!det.set_name) for (const [name, lv] of det.linked_skills || []) body.append(row(name, `Lvl. +${lv}`));
   if (det.mana_slots || det.mana_stones?.length) {
     hr();

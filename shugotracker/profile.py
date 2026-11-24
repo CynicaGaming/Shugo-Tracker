@@ -191,7 +191,8 @@ class ItemDetail:
     exceed_stats: list[tuple[str, str]] = field(default_factory=list)       # from exceeding: shown in orange
     soul_bind: str = ""                                                     # Soul Binding Rate, e.g. "98.8"
     costumes: list[str] = field(default_factory=list)                       # appearance options
-    sub_stats: list[tuple[str, str]] = field(default_factory=list)          # soul imprint: (name, value)
+    # soul imprint: (name, value, added) — added: the extra roll a Philosopher's Stone put on (the game shows it purple)
+    sub_stats: list[tuple] = field(default_factory=list)
     mana_slots: int = 0
     mana_stones: list[tuple[str, str, str, str]] = field(default_factory=list)   # (name, value, grade, icon)
     theo_slots: int = 0
@@ -235,7 +236,8 @@ def parse_item_detail(d: dict) -> ItemDetail:
             det.main_min[name] = str(st["minValue"])
     det.soul_bind = str(d.get("soulBindRate") or "")
     det.costumes = [str(x) for x in d.get("costumes") or [] if x]
-    det.sub_stats = [(st.get("name") or "", str(st.get("value") or "")) for st in d.get("subStats") or []]
+    det.sub_stats = [(st.get("name") or "", str(st.get("value") or ""), bool(st.get("added")))
+                     for st in d.get("subStats") or []]
     det.mana_stones = [(m.get("name") or "", str(m.get("value") or ""), m.get("grade") or "", m.get("icon") or "")
                        for m in sorted(d.get("magicStoneStat") or [], key=lambda m: m.get("slotPos") or 0)]
     theo = d.get("godStoneStat") or []

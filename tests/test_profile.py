@@ -295,10 +295,13 @@ class ItemDetailTests(unittest.TestCase):
             "mainStats": [{"name": "Attack", "minValue": "354", "value": "442", "extra": "146"},
                           {"name": "Block", "value": "200", "extra": "0"},
                           {"name": "Attack", "value": "24", "exceed": True}], "soulBindRate": "98.8",
-            "subStats": [{"name": "Might", "value": "30"}],
+            "subStats": [{"name": "Might", "value": "30", "added": False},
+                         {"name": "Combat Speed", "value": "11.2%", "added": True}],
             "magicStoneStat": [{"name": "MP", "value": "+15", "grade": "Common", "slotPos": 2},
                                {"name": "HP", "value": "+60", "grade": "Rare", "slotPos": 0}]})
         self.assertEqual(sword.main_stats, [("Attack", "442", "146"), ("Block", "200", "")])
+        # the last roll came from a Philosopher's Stone ("added"): the tooltip paints it purple
+        self.assertEqual(sword.sub_stats, [("Might", "30", False), ("Combat Speed", "11.2%", True)])
         self.assertEqual([m[0] for m in sword.mana_stones], ["HP", "MP"])          # in slot order
         self.assertEqual((sword.main_min, sword.exceed_stats, sword.soul_bind), ({"Attack": "354"}, [("Attack", "24")], "98.8"))
         self.assertEqual((sword.mana_slots, sword.theo_slots, sword.theostones), (4, 1, []))
