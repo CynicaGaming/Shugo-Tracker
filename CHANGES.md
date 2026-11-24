@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.7.0
+- New: Shugo Tracker for Android. Install ShugoTracker.apk from this release on your phone: search, profiles, gear tooltips (tap an item) and favorites, with updates from Settings like the desktop app. Nearby and PVP stay on the desktop app
+- Fixed: an item tooltip shown inside the window (when there's no room beside it) appeared at the bottom of the window
+
 ## 2.6.10
 - New: in item tooltips, the extra roll a Philosopher's Stone added is painted purple, like the game (NCSOFT marks that roll, so it works whatever the number of rolls)
 

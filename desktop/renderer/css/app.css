@@ -489,3 +489,6 @@ html.mobile .mebtn .nm { display: none; }
 html.mobile .tip { max-width: calc(100vw - 8px); }
 html.mobile * { -webkit-tap-highlight-color: transparent; }
 html.mobile .menu .item { padding-top: 10px; padding-bottom: 10px; }
+html.mobile .seg { overflow-x: auto; scrollbar-width: none; }
+html.mobile .seg::-webkit-scrollbar { display: none; }
+html.mobile .seg button { flex: 1 0 auto; }
