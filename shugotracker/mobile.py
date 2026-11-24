@@ -73,7 +73,14 @@ def send(line: str) -> None:
 
 # ── updates: the desktop app's updater (desktop/updater.js), for the APK ──────────────────────────────────────
 REPO = "CynicaGaming/Shugo-Tracker"
-APK_ASSET = "ShugoTracker.apk"
+APK_ASSET = re.compile(r"^Shugo-Tracker-\d+\.\d+\.\d+-Android\.apk$")   # (up to 2.7.1: ShugoTracker.apk)
+LEGACY_APK = "ShugoTracker.apk"
+
+
+def _apk(rel: dict) -> dict | None:
+    assets = rel.get("assets") or []
+    return next((a for a in assets if APK_ASSET.match(a.get("name") or "")), None) or \
+        next((a for a in assets if a.get("name") == LEGACY_APK), None)
 
 
 def _parse(v):
@@ -107,7 +114,7 @@ class Updater:
     def __init__(self, root: str, write, js):
         self.write, self.js = write, js
         self.dir = os.path.join(root, "updates")
-        self.apk = os.path.join(self.dir, APK_ASSET)
+        self.apk = os.path.join(self.dir, "update.apk")
         self.dev = __version__.startswith("0.0.0")
         self.state = {"state": "idle", "current": __version__, "latest": None, "progress": 0, "error": None,
                       "notes": [], "checkedAt": None}
@@ -180,7 +187,7 @@ class Updater:
             latest = str(rel.get("tag_name") or "").lstrip("v")
             ready = self.state["state"] == "ready" and latest == self.state["latest"]
             # (a release's APK is attached a few minutes after the release itself: until then, nothing to get)
-            has_apk = any(a.get("name") == APK_ASSET for a in rel.get("assets") or [])
+            has_apk = _apk(rel) is not None
             self.set(latest=latest, notes=bullets(rel.get("body")), checkedAt=int(time.time() * 1000),
                      state="ready" if ready else "available" if newer(latest, __version__) and has_apk else "uptodate")
         except Exception as e:  # noqa: BLE001
@@ -191,7 +198,8 @@ class Updater:
             return
         import requests
         assets = {a.get("name"): a for a in self.release.get("assets") or []}
-        apk, sha = assets.get(APK_ASSET), assets.get(APK_ASSET + ".sha256")
+        apk = _apk(self.release)
+        sha = assets.get(apk["name"] + ".sha256") if apk else None
         if not apk:
             self.set(state="error", error="no APK in the release")
             return

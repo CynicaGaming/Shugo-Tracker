@@ -1,8 +1,8 @@
 name: Android
 
-# Builds the Android app (android/): the desktop app's screens and Python core, minus Nearby, as ShugoTracker.apk.
+# Builds the Android app (android/): the desktop app's screens and Python core, minus Nearby, as Shugo-Tracker-<version>-Android.apk.
 #   - on every push to main: build it, then start it in an emulator and take screenshots (artifact "android-shots")
-#   - from "Publish release": build it at that version and attach ShugoTracker.apk to the release
+#   - from "Publish release": build it at that version and attach the APK to the release
 
 on:
   push:
@@ -41,7 +41,11 @@ jobs:
       - name: Collect
         run: |
           mkdir out
-          cp android/app/build/outputs/apk/release/app-release.apk out/ShugoTracker.apk
+          name="Shugo-Tracker-$SHUGO_VERSION-Android.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "out/$name"
+          (cd out && sha256sum "$name" > "$name.sha256")
+          # the name the app's updater looked for up to 2.7.1 (so those installs can still update)
+          cp "out/$name" out/ShugoTracker.apk
           (cd out && sha256sum ShugoTracker.apk > ShugoTracker.apk.sha256)
           ls -la out
 
@@ -52,7 +56,7 @@ jobs:
         if: inputs.version != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "v$SHUGO_VERSION" out/ShugoTracker.apk out/ShugoTracker.apk.sha256 --clobber -R "$GITHUB_REPOSITORY"
+        run: gh release upload "v$SHUGO_VERSION" out/*.apk out/*.apk.sha256 --clobber -R "$GITHUB_REPOSITORY"
 
   emulator:
     if: inputs.version == ''
@@ -72,7 +76,7 @@ jobs:
           target: google_apis
           disable-animations: true
           script: |
-            adb install -r out/ShugoTracker.apk
+            adb install -r out/Shugo-Tracker-*-Android.apk
             mkdir -p shots
             adb shell am start -n gg.cynica.shugotracker/.MainActivity -e q Cynica
             sleep 40

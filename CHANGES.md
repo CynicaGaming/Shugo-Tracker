@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.7.2
+- Changed: downloads carry their version in the name (Shugo-Tracker-2.7.2-Windows.exe, Shugo-Tracker-2.7.2-Android.apk), and on Windows each update renames the exe to its new version
+- If you ticked "Run this program as an administrator" on the exe, or pinned it to the taskbar, redo it after an update (Windows ties both to the file name)
+
 ## 2.7.1
 - Android: tap an item and it shows ▲/▼ against what you wear in that slot; switch to your own item at the top of the tooltip (no more "Hold ALT")
 

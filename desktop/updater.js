@@ -1,6 +1,6 @@
-// Self-update from GitHub Releases, the same way as before: download ShugoTracker.exe and its .sha256 next to
-// the running exe, verify, then on "Restart to update" swap them (Windows lets a running exe be renamed) and
-// start the new one. Checks at start-up and every 30 minutes; nothing downloads until you click.
+// Self-update from GitHub Releases: download the release's Shugo-Tracker-<version>-Windows.exe and its .sha256
+// next to the running exe, verify, then on "Restart to update" put it in place under its own (versioned) name,
+// set the old one aside (Windows lets a running exe be renamed) and start the new one. Checks at start-up and every 30 minutes; nothing downloads until you click.
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
@@ -8,7 +8,8 @@ const { spawn } = require("child_process");
 const { app } = require("electron");
 
 const REPO = "CynicaGaming/Shugo-Tracker";
-const EXE_ASSET = "ShugoTracker.exe";
+const EXE_ASSET = /^Shugo-Tracker-\d+\.\d+\.\d+-Windows\.exe$/;   // (up to 2.7.1: ShugoTracker.exe)
+const LEGACY_ASSET = "ShugoTracker.exe";
 
 const parse = (v) => { const m = /^v?(\d+)\.(\d+)(?:\.(\d+))?$/.exec(String(v).trim()); return m ? [+m[1], +m[2], +(m[3] || 0)] : null; };
 /** The release's "what's new" bullets: its "- " lines, plain text (links and bold markers dropped). */
@@ -21,8 +22,11 @@ class Updater {
   constructor({ exe, dir, version, dev, onChange }) {
     Object.assign(this, { exe, dir, version, dev, onChange });
     this.state = { state: "idle", current: version, latest: null, progress: 0, error: null, notes: [], checkedAt: null };
-    this.staged = path.join(dir, `${EXE_ASSET}.new`);
-    try { fs.rmSync(`${exe}.old`, { force: true }); } catch { /* still locked: next time */ }
+    this.staged = path.join(dir, "Shugo-Tracker-update.exe.new");
+    this.target = exe;                                       // the name the new version gets
+    try {                                                    // the versions set aside by earlier updates
+      for (const n of fs.readdirSync(dir)) if (n.endsWith(".exe.old")) fs.rmSync(path.join(dir, n), { force: true });
+    } catch { /* still locked: next time */ }
   }
 
   set(patch) { this.state = { ...this.state, ...patch }; this.onChange?.(this.state); }
@@ -74,7 +78,8 @@ class Updater {
   async download() {
     if (!this.release || this.state.state !== "available") return;
     const asset = (n) => (this.release.assets || []).find((a) => a.name === n);
-    const exe = asset(EXE_ASSET), sha = asset(`${EXE_ASSET}.sha256`);
+    const exe = (this.release.assets || []).find((a) => EXE_ASSET.test(a.name)) || asset(LEGACY_ASSET);
+    const sha = exe && asset(`${exe.name}.sha256`);
     if (!exe) { this.set({ state: "error", error: "no exe in the release" }); return; }
     this.set({ state: "downloading", progress: 0 });
     try {
@@ -91,6 +96,7 @@ class Updater {
       }
       await new Promise((res) => out.end(res));
       if (want && hash.digest("hex") !== want) { fs.rmSync(this.staged, { force: true }); throw new Error("checksum mismatch"); }
+      this.target = exe.name === LEGACY_ASSET ? this.exe : path.join(this.dir, exe.name);
       this.set({ state: "ready", progress: 1 });
     } catch (e) { this.set({ state: "error", error: String(e.message || e) }); }
   }
@@ -98,7 +104,7 @@ class Updater {
   /** Swap in the new exe and start it; this copy then quits. */
   restart() {
     if (this.state.state !== "ready" || !this.swap()) return false;
-    spawn(this.exe, ["--after-update"], { detached: true, stdio: "ignore", cwd: this.dir }).unref();
+    spawn(this.target, ["--after-update"], { detached: true, stdio: "ignore", cwd: this.dir }).unref();
     app.releaseSingleInstanceLock();
     app.quit();
     return true;
@@ -108,7 +114,7 @@ class Updater {
     try {
       fs.rmSync(`${this.exe}.old`, { force: true });
       fs.renameSync(this.exe, `${this.exe}.old`);            // allowed while running
-      try { fs.renameSync(this.staged, this.exe); } catch (e) { fs.renameSync(`${this.exe}.old`, this.exe); throw e; }
+      try { fs.renameSync(this.staged, this.target); } catch (e) { fs.renameSync(`${this.exe}.old`, this.exe); throw e; }
       return true;
     } catch (e) { this.set({ state: "error", error: String(e.message || e) }); return false; }
   }

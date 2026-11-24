@@ -87,12 +87,16 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force out | Out-Null
-          Copy-Item desktop\dist\ShugoTracker.exe out\
-          $hash = (Get-FileHash out\ShugoTracker.exe -Algorithm SHA256).Hash.ToLower()
+          $name = "Shugo-Tracker-${{ steps.v.outputs.version }}-Windows"
+          Copy-Item desktop\dist\ShugoTracker.exe "out\$name.exe"
+          $hash = (Get-FileHash "out\$name.exe" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name.exe" | Set-Content -NoNewline "out\$name.exe.sha256"
+          # the name the app's updater looked for up to 2.7.1 (so those copies can still update)
+          Copy-Item "out\$name.exe" out\ShugoTracker.exe
           "$hash  ShugoTracker.exe" | Set-Content -NoNewline out\ShugoTracker.exe.sha256
           New-Item -ItemType Directory -Force pkg | Out-Null
-          Copy-Item out\ShugoTracker.exe, README.md, LICENSE pkg\
-          Compress-Archive -Path pkg\* -DestinationPath out\ShugoTracker-windows.zip -Force
+          Copy-Item "out\$name.exe", README.md, LICENSE pkg\
+          Compress-Archive -Path pkg\* -DestinationPath "out\$name.zip" -Force
 
       - name: Release notes (this version's section of CHANGES.md)
         shell: pwsh
@@ -115,13 +119,39 @@ jobs:
           target_commitish: ${{ github.sha }}
           body_path: out/notes.md
           files: |
+            out/Shugo-Tracker-*-Windows.exe
+            out/Shugo-Tracker-*-Windows.exe.sha256
+            out/Shugo-Tracker-*-Windows.zip
             out/ShugoTracker.exe
             out/ShugoTracker.exe.sha256
-            out/ShugoTracker-windows.zip
 
-  # The Android app, at the same version, attached to the same release (ShugoTracker.apk)
+  # The Android app, at the same version, attached to the same release
   android:
     needs: release
     uses: ./.github/workflows/android.yml
     with:
       version: ${{ needs.release.outputs.version }}
+
+  # The README's download buttons point straight at this release's files (their names carry the version, so
+  # GitHub's "latest/download" links can't reach them)
+  readme:
+    needs: [release, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - name: Point the download links at this release
+        env:
+          V: ${{ needs.release.outputs.version }}
+        run: |
+          base="https://github.com/${GITHUB_REPOSITORY}/releases"
+          sed -E -i \
+            -e "s#${base}/(latest/download|download/v[^/]+)/(ShugoTracker\.exe|Shugo-Tracker-[0-9.]+-Windows\.exe)#${base}/download/v${V}/Shugo-Tracker-${V}-Windows.exe#g" \
+            -e "s#${base}/(latest/download|download/v[^/]+)/(ShugoTracker\.apk|Shugo-Tracker-[0-9.]+-Android\.apk)#${base}/download/v${V}/Shugo-Tracker-${V}-Android.apk#g" \
+            README.md
+          git diff --stat
+          if git diff --quiet; then exit 0; fi
+          git config user.name "github-actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "README: download links for v${V}"
+          git push -q origin HEAD:main
