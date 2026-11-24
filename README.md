@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/download/v2.7.3/Shugo-Tracker-2.7.3-Windows.exe"><img src="docs/images/download.png" alt="Download for Windows" height="48"></a>
+  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/download/v2.7.4/Shugo-Tracker-2.7.4-Windows.exe"><img src="docs/images/download.png" alt="Download for Windows" height="48"></a>
   &nbsp;
-  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/download/v2.7.3/Shugo-Tracker-2.7.3-Android.apk"><img src="docs/images/download-android.png" alt="Download for Android" height="48"></a>
+  <a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/download/v2.7.4/Shugo-Tracker-2.7.4-Android.apk"><img src="docs/images/download-android.png" alt="Download for Android" height="48"></a>
   <br><sub><a href="https://github.com/CynicaGaming/Shugo-Tracker/releases/latest">Latest release notes</a></sub>
 </p>
 
@@ -164,13 +164,13 @@ No account, no sign-in, no tracking. Character data comes from NCSOFT's public A
 
 **Windows**
 
-1. **[Download Shugo Tracker for Windows](https://github.com/CynicaGaming/Shugo-Tracker/releases/download/v2.7.3/Shugo-Tracker-2.7.3-Windows.exe)** and put it in a folder of its own.
+1. **[Download Shugo Tracker for Windows](https://github.com/CynicaGaming/Shugo-Tracker/releases/download/v2.7.4/Shugo-Tracker-2.7.4-Windows.exe)** and put it in a folder of its own.
 2. Run it. Windows may show a SmartScreen warning the first time — choose **More info → Run anyway**.
 3. Play the game in **borderless windowed** mode so the tracker can sit on top.
 
 **Android** (8.0 or newer)
 
-1. On your phone, **[download Shugo Tracker for Android](https://github.com/CynicaGaming/Shugo-Tracker/releases/download/v2.7.3/Shugo-Tracker-2.7.3-Android.apk)**.
+1. On your phone, **[download Shugo Tracker for Android](https://github.com/CynicaGaming/Shugo-Tracker/releases/download/v2.7.4/Shugo-Tracker-2.7.4-Android.apk)**.
 2. Open it. The first time, Android asks you to allow installs from your browser — allow it, then tap **Install**.
 
 ## Frequently Asked Questions
