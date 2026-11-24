@@ -91,9 +91,6 @@ jobs:
           Copy-Item desktop\dist\ShugoTracker.exe "out\$name.exe"
           $hash = (Get-FileHash "out\$name.exe" -Algorithm SHA256).Hash.ToLower()
           "$hash  $name.exe" | Set-Content -NoNewline "out\$name.exe.sha256"
-          # the name the app's updater looked for up to 2.7.1 (so those copies can still update)
-          Copy-Item "out\$name.exe" out\ShugoTracker.exe
-          "$hash  ShugoTracker.exe" | Set-Content -NoNewline out\ShugoTracker.exe.sha256
           New-Item -ItemType Directory -Force pkg | Out-Null
           Copy-Item "out\$name.exe", README.md, LICENSE pkg\
           Compress-Archive -Path pkg\* -DestinationPath "out\$name.zip" -Force
@@ -122,8 +119,6 @@ jobs:
             out/Shugo-Tracker-*-Windows.exe
             out/Shugo-Tracker-*-Windows.exe.sha256
             out/Shugo-Tracker-*-Windows.zip
-            out/ShugoTracker.exe
-            out/ShugoTracker.exe.sha256
 
   # The Android app, at the same version, attached to the same release
   android:

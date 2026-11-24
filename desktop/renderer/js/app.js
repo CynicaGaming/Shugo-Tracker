@@ -342,6 +342,13 @@ function source() {
   return S.mode === "favorites" ? S.favorites : S.results;
 }
 
+/** Each player's group on Nearby / Recent: the enemy or ally side when we know which faction it is (shown as
+ *  Elyos / Asmodian), otherwise Unknown (a catch-all, for anyone the side detection missed). */
+function groupsOf(rows) {
+  const race = { enemy: list.sideRace("enemy"), ally: list.sideRace("ally") };
+  return Object.fromEntries(rows.map((r) => [r.char.name, race[r.side] ? r.side : "unknown"]));
+}
+
 function visible() {
   let out = source().map((c) => S.chars.get(c.key) || c);
   const regions = fset("regions"), factions = fset("factions"), classes = fset("classes");
@@ -354,7 +361,7 @@ function visible() {
   if (S.cfg.level_max != null) out = out.filter((c) => !c.level || c.level <= S.cfg.level_max);
   const [key, rev] = (S.cfg.sorts || {})[S.mode] || ["default", false];
   const grouped = S.mode === "nearby" || S.mode === "recent";
-  const sideOf = grouped ? Object.fromEntries((S.mode === "recent" ? S.nearby.recent : S.nearby.rows).map((r) => [r.char.name, r.side])) : null;
+  const sideOf = grouped ? groupsOf(S.mode === "recent" ? S.nearby.recent : S.nearby.rows) : null;
   const when = S.mode === "recent" ? Object.fromEntries(S.nearby.recent.map((r) => [r.char.key, r.seen])) : null;
   if (key === "area" && S.mode === "recent") {           // by area name (unknown last), sides still grouped
     const of = Object.fromEntries(S.nearby.recent.map((r) => [r.char.key, areaName(r.area)]));
@@ -448,7 +455,7 @@ const list = (() => {
     // everything rows need, worked out once per draw
     const ctx = {
       fav: new Set(S.favorites.map((f) => f.key)),
-      side: grouped ? new Map((S.mode === "recent" ? S.nearby.recent : S.nearby.rows).map((r) => [r.char.name, r.side])) : new Map(),
+      side: grouped ? new Map(Object.entries(groupsOf(S.mode === "recent" ? S.nearby.recent : S.nearby.rows))) : new Map(),
       recent: S.mode === "recent" ? new Map(S.nearby.recent.map((r) => [r.char.key, r])) : null,
       here: S.mode === "recent" ? new Set(S.nearby.rows.map((r) => r.char.key)) : null,
       race: grouped ? { enemy: sideRace("enemy"), ally: sideRace("ally") } : {},
@@ -470,7 +477,7 @@ const list = (() => {
       if (kind === "group") {
         const race = ctx.race[p];
         nodes.push(h("div.group", { class: p, style: { top: `${iy + 2}px`, ...(race ? { color: factionColor(race) } : {}) } },
-          race === 1 ? "Elyos" : race === 2 ? "Asmodian" : p === "enemy" ? "Enemies" : p === "ally" ? "Allies" : "Unknown"));
+          race === 1 ? "Elyos" : race === 2 ? "Asmodian" : "Unknown"));
       } else if (kind === "skel") nodes.push(skeletonRow(iy));
       else {
         nodes.push(rowFor(p, iy, ctx)); shown.add(p.key);
@@ -530,7 +537,7 @@ const list = (() => {
     const el = h("div.row", {
       onClick: (e) => { if (!e.target.closest(".star") && !e.target.closest(".grip")) openProfile(c); },
       onContextmenu: (e) => { e.preventDefault(); rowMenu(c, e.clientX, e.clientY); } });
-    if (side) { const race = ctx.race[side]; el.append(h("span.side", { style: { background: race ? factionColor(race) : side === "enemy" ? "#ff6b6b" : "#6ab8ff" } })); }
+    if (side) { const race = ctx.race[side]; el.append(h("span.side", { style: { background: race ? factionColor(race) : "var(--faint)" } })); }
     for (const k of Object.keys(layout.spans)) el.append(cell(k, c, r, here));
     el.append(h("div.c.star", { class: fav ? "on" : "", style: { left: `${layout.star - 10}px`, width: "20px" },
       html: fav ? ICONS.starFill : ICONS.star, onClick: () => toggleFavorite(c) }));
@@ -850,7 +857,7 @@ function hudBody() {
   const grid = { gridTemplateColumns: cols.map((k) => HUD_COLS[k][1]).join(" ") };
   const [key, rev] = popCfg().sort || ["default", false];
   // enemies first (the stripe shows the side); within each, your sort or else highest CP first
-  const sideOf = Object.fromEntries(nb.rows.map((r) => [r.char.name, r.side]));
+  const sideOf = groupsOf(nb.rows);
   const chars = nb.rows.map((r) => S.chars.get(r.char.key) || r.char);
   const sorted = sortChars(chars, key === "default" ? "cp" : key, key === "default" ? false : rev, sideOf);
   box.append(h("div.hudhead", { style: grid, onContextmenu: hudHeadMenu }, cols.map((k) => {
@@ -875,7 +882,7 @@ function hudBody() {
       cp: () => h("span.num.cp", {}, ph(c.combat_power, short)),
     };
     box.append(h("div.hudrow", { style: grid, onClick: () => win.showMain({ profile: c }) },
-      h("span.side", { style: { background: race ? factionColor(race) : side === "enemy" ? "#ff6b6b" : "#6ab8ff" } }),
+      h("span.side", { style: { background: race ? factionColor(race) : "var(--faint)" } }),
       cols.map((k) => cell[k]())));
   }
   if (want.length) call("cards.want", { keys: want });

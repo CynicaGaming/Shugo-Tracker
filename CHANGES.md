@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.7.4
+- Changed: Nearby, Recent and the Nearby pop-out group players only as Elyos and Asmodian; anyone whose side isn't known goes under Unknown (no more Enemies / Allies groups)
+- Releases only carry the versioned files now (Shugo-Tracker-<version>-Windows.exe / -Android.apk)
+
 ## 2.7.3
 - Fixed: after a map change (leaving an arena, teleporting), players you'd already seen came back under a stray "Allies" group instead of with their side
 

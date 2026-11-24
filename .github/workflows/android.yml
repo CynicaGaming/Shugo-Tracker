@@ -44,9 +44,6 @@ jobs:
           name="Shugo-Tracker-$SHUGO_VERSION-Android.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "out/$name"
           (cd out && sha256sum "$name" > "$name.sha256")
-          # the name the app's updater looked for up to 2.7.1 (so those installs can still update)
-          cp "out/$name" out/ShugoTracker.apk
-          (cd out && sha256sum ShugoTracker.apk > ShugoTracker.apk.sha256)
           ls -la out
 
       - uses: actions/upload-artifact@v4
