@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.7.1
+- Android: tap an item and it shows ▲/▼ against what you wear in that slot; switch to your own item at the top of the tooltip (no more "Hold ALT")
+
 ## 2.7.0
 - New: Shugo Tracker for Android. Install ShugoTracker.apk from this release on your phone: search, profiles, gear tooltips (tap an item) and favorites, with updates from Settings like the desktop app. Nearby and PVP stay on the desktop app
 - Fixed: an item tooltip shown inside the window (when there's no room beside it) appeared at the bottom of the window

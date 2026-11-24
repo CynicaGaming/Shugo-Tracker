@@ -932,6 +932,7 @@ if (MOBILE) {
   }
   const fire = (n, type, e) => n.dispatchEvent(new MouseEvent(type, { clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY }));
   document.addEventListener("click", (e) => {
+    if (e.target.closest?.(".tip")) return;            // (a tap inside a tooltip is for the tooltip)
     const chain = [];
     for (let n = e.target; n && n !== document; n = n.parentNode) chain.push(n);
     const again = e.target === last;

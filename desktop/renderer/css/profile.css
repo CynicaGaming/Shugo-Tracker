@@ -200,3 +200,11 @@
 .itip .r.philo { margin: 1px -12px; padding: 1px 12px; color: #fff;
   background: linear-gradient(90deg, rgba(126, 72, 214, 0.75), rgba(126, 72, 214, 0.28) 55%, transparent); }
 .itip .r.philo .v { color: #fff; }
+
+/* the phone's item tooltip: their item ↔ yours, switched on top */
+.tip.ptip { width: 300px; pointer-events: auto; }
+.tip.ptip > .tip { width: auto; border: 0; border-radius: 0; box-shadow: none; }
+.tipseg { display: flex; gap: 2px; padding: 3px; background: #0c1119; border-bottom: 1px solid var(--line); }
+.tipseg button { flex: 1 1 0; min-width: 0; height: 30px; border: 0; border-radius: 5px; background: none; color: var(--dim);
+  font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tipseg button.on { color: var(--gold); background: linear-gradient(180deg, #232c3d, #1a2130); }

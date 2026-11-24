@@ -298,6 +298,7 @@ export class ProfileView {
     const { it, x, y, sy } = this.hoverItem;
     const det = this.details.get(dkey(it));
     const me = this.mine && this.mineKey;
+    if (MOBILE) { this.drawPhoneTip(it, det, me, x, y); return; }
     if (this.altState && me) {
       const my = this.mine.gear?.[it.slot];
       const myDet = my ? this.myDetails.get(dkey(my)) : null;
@@ -314,6 +315,28 @@ export class ProfileView {
     } else {
       showTipOutside(itemTip(it, det, { hint: !!me }), x, y, sy);
     }
+  }
+
+  /** On a phone (no Alt, no room side by side): the item, with ▲/▼ against what you wear in that slot, and a
+   *  switch on top to flip to your own item. */
+  drawPhoneTip(it, det, me, x, y) {
+    const mineHere = me && this.mineKey !== this.c.key;
+    if (this.tipFor !== it) { this.tipFor = it; this.tipSide = "item"; }
+    const my = mineHere ? this.mine.gear?.[it.slot] : null;
+    const myDet = my ? this.myDetails.get(dkey(my)) : null;
+    const name = this.app.myChar()?.name || "";
+    let card;
+    if (this.tipSide === "mine") {
+      card = my ? itemTip(my, myDet)
+        : h("div.tip", { style: { position: "static" } }, h("div.itip", {},
+          h("div.body.faint", { style: { padding: "14px 12px" } }, "Nothing equipped in this slot")));
+    } else {
+      card = itemTip(it, det, { deltas: det && myDet ? statDeltas(myDet, det) : null });
+    }
+    const side = (key, label) => h("button", { class: this.tipSide === key ? "on" : "",
+      onClick: (e) => { e.stopPropagation(); this.tipSide = key; this.drawItemTip(); } }, label);
+    const wrap = h("div.ptip", {}, mineHere ? h("div.tipseg", {}, side("item", this.c.name || "This Item"), side("mine", `Equipped · ${name}`)) : null, card);
+    showTip(wrap, x, y);
   }
 
   /* ───── Stats: the Stat Info window's Main Stats ───── */
