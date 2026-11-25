@@ -20,7 +20,6 @@ export class AboutView {
   build() {
     const { S } = this.app;
     const app = S.update?.current || S.version;
-    const platform = MOBILE ? "Android" : "Windows";
     const link = (label, sub, url) => h("button.setting.alink", { onClick: () => openLink(url) },
       h("div.grow", {}, label, sub ? h("div.sub", {}, sub) : null), h("span.ext", { html: ICONS.external }));
     const row = (label, value) => h("div.setting", {}, h("div.grow", {}, label), h("span.val", {}, value));
@@ -30,7 +29,7 @@ export class AboutView {
         h("div.at", {}, "Shugo Tracker"),
         h("div.as", {}, "Every AION 2 player's gear, power and build, a glance away.")),
       h("div.bar", {}, "Version"),
-      row("Shugo Tracker", `${app} · ${platform}`),
+      row("Shugo Tracker", app),
       ...(S.version && S.version !== app ? [row("Core", S.version)] : []),
       row("License", "GPL-3.0"),
       h("div.bar", {}, "Links"),
@@ -39,7 +38,6 @@ export class AboutView {
       link("Report a Problem", "Open an issue on GitHub", `${REPO}/issues`),
       h("div.bar", {}, "Credits"),
       link("NCSOFT", "Character data from the official AION 2 website", "https://aion2.plaync.com"),
-      link("MetaBot.GG", "Skill descriptions", "https://metabot.gg/en/aion-2/skills"),
       h("div.bar", {}, "Disclaimers"),
       h("div.legal.left", {},
         h("p", {}, "Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. AION and AION 2 ",

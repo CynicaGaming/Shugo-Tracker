@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.7.6
+- About: shows just the version, and the credits list only NCSOFT
+
 ## 2.7.5
 - New: About, in the menu under your name: the version, links to GitHub, release notes and issues, credits and the disclaimers
 
