@@ -6,6 +6,7 @@ import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LO
 import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
 import { ProfileView } from "./profile.js";
 import { SettingsView } from "./settings.js";
+import { AboutView } from "./about.js";
 import { FinderView } from "./finder.js";
 import { PvpFoe, PvpHud, PvpList } from "./pvp.js";
 import { nearbyChanged } from "./alert.js";
@@ -13,7 +14,7 @@ import { nearbyChanged } from "./alert.js";
 const ROW = 38;
 const S = {                                    // everything the window shows
   cfg: {}, version: "", demo: false, regions: [],
-  mode: "search", screen: "list",              // screen: list | profile | settings | finder | foe (PVP Log)
+  mode: "search", screen: "list",              // screen: list | profile | settings | about | finder | foe (PVP Log)
   keyword: "", gen: 0, results: [], regionState: {},
   chars: new Map(), favorites: [], my: { slots: [], active: null },
   nearby: { enabled: false, state: "", rows: [], recent: [] },
@@ -53,7 +54,7 @@ function paintTitlebar() {
     : h("span.logo", { class: S.game ? "" : "idle", html: LOGO }));
   const tabs = h("div.tabs");
   if (S.screen !== "list") {
-    const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent", pvp: "PVP" }[S.mode], foe: "PVP", settings: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
+    const back = { profile: { search: "Search", favorites: "Favorites", nearby: "Nearby", recent: "Recent", pvp: "PVP" }[S.mode], foe: "PVP", settings: "Back", about: "Back", finder: S.my.slots.some(Boolean) ? "Back" : "Skip" }[S.screen];
     tabs.append(h("button.tab.back", { onClick: closeScreen }, icon("back"), back));
   } else {
     const t = (mode, label, count) => h("button.tab", { class: S.mode === mode ? "on" : "", onClick: () => setMode(mode),
@@ -104,7 +105,7 @@ function meMenu(anchor) {
   if (used.length) items.push({ label: "Switch Character", submenu: switchItems });
   const free = S.my.slots.findIndex((d) => !d);
   if (free >= 0) items.push({ label: used.length ? "Add Character" : "Find My Character", onClick: () => openFinder(free) });
-  items.push("-", { label: "Settings", onClick: openSettings });
+  items.push("-", { label: "Settings", onClick: openSettings }, { label: "About", onClick: openAbout });
   showMenu(items, r.right, r.bottom + 2, { alignRight: true });
 }
 
@@ -145,14 +146,14 @@ function setMode(mode) {
 function closeScreen() {
   if (S.screen === "finder" && !S.cfg.setup_done) save("setup_done", true);   // skipped: don't ask again
   const backToFoe = S.screen === "profile" && foe;              // opened from a PVP Log opponent: back to them
-  profile?.destroy(); profile = null; settings = null; finder = null;
+  profile?.destroy(); profile = null; settings = null; finder = null; about = null;
   if (backToFoe) { S.screen = "foe"; render(); return; }
   foe?.destroy(); foe = null;
   S.screen = "list";
   render();
 }
 
-let profile = null, settings = null, finder = null, foe = null, pvpList = null;
+let profile = null, settings = null, finder = null, foe = null, pvpList = null, about = null;
 /** PVP Log: one opponent's fights. */
 function openFoe(id) {
   closeMenus();
@@ -188,6 +189,12 @@ function openProfile(c) {
   if (S.screen !== "foe") { foe?.destroy(); foe = null; }
   S.screen = "profile";
   profile = new ProfileView(app, c);
+  render();
+}
+function openAbout() {
+  closeMenus();
+  S.screen = "about";
+  about = new AboutView(app);
   render();
 }
 function openSettings() {
@@ -912,6 +919,7 @@ function render() {
   if (LIST_POP && popPanel) view.append(popSettings());
   if (S.screen === "profile" && profile) view.append(profile.el);
   else if (S.screen === "settings" && settings) view.append(settings.el);
+  else if (S.screen === "about" && about) view.append(about.el);
   else if (S.screen === "finder" && finder) view.append(finder.el);
   else if (S.screen === "foe" && foe) view.append(foe.el);
   else if (S.mode === "pvp") {

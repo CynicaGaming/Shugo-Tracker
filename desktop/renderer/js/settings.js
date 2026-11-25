@@ -84,8 +84,6 @@ export class SettingsView {
     win.update("freshen").then((u) => { if (u) { S.update = { ...S.update, ...u }; this.paintUpdate(); } });
 
     if (!MOBILE) this.buildDesktop(el, { row, toggle, steps });
-    el.append(h("div.legal", {}, "Shugo Tracker is a fan-made tool and isn't affiliated with or endorsed by NCSOFT. ",
-      "AION and AION 2 are trademarks of NCSOFT Corporation; game names, text and images belong to NCSOFT."));
   }
 
   /** Window, Nearby and Notifications: the desktop app's (the phone app has no game window to sit over). */

@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.7.5
+- New: About, in the menu under your name: the version, links to GitHub, release notes and issues, credits and the disclaimers
+
 ## 2.7.4
 - Changed: Nearby, Recent and the Nearby pop-out group players only as Elyos and Asmodian; anyone whose side isn't known goes under Unknown (no more Enemies / Allies groups)
 - Releases only carry the versioned files now (Shugo-Tracker-<version>-Windows.exe / -Android.apk)
