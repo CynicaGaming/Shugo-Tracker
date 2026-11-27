@@ -1,0 +1,11 @@
+OKstartup first start (unpacks): 3.97 s
+startup start 2: 0.68 s
+startup start 3: 0.69 s
+window: 2026-11-27 20:02:51.164 AION 2 running: gold icon
+exe: 115 MB
+  D:\a\_temp\portable\app
+  D:\a\_temp\portable\cache
+  D:\a\_temp\portable\data
+  D:\a\_temp\portable\logs
+  D:\a\_temp\portable\ShugoTracker.exe
+  D:\a\_temp\portable\app\0.0.0-dev-5d5e4d9c
