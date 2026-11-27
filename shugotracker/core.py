@@ -47,7 +47,7 @@ def to_json(o):
 
 class Core:
     def __init__(self, root: str, emit: Callable[[dict], None], demo: bool = False, log=None,
-                 showcase: str | None = None):
+                 showcase: str | None = None, client: dict | None = None):
         """root: the app folder (data, cache, logs live next to the exe). emit: sends one message to the UI."""
         from .config import DEFAULTS, load_config, migrate, migrate_to_app_folder
         from .favorites import Favorites
@@ -104,6 +104,16 @@ class Core:
             pass
         if self.cfg.get("nearby_enabled"):
             self._nearby_on(True)
+        # anonymous usage statistics (see usage.py; Settings → Share Usage Statistics)
+        from .usage import Usage, throttle
+        self.usage = Usage(self.cfg, self.save, self._usage_snapshot, log=self.log,
+                           enabled_build=False if demo else None, **(client or {}))
+        self._count_soon = throttle(self.usage.count, 5)       # (typing a name searches as you type)
+        self.usage.start()
+
+    def _usage_snapshot(self) -> dict:
+        return {"nearby": bool(self.cfg.get("nearby_enabled")), "favorites": len(self.favorites.characters()),
+                "my_chars": sum(1 for d in self.my.slots if d)}
 
     # ───── plumbing ─────
     def emit(self, event: str, data: Any) -> None:
@@ -154,6 +164,7 @@ class Core:
 
     def close(self) -> None:
         self._stop.set()
+        self.usage.stop()
         self.nearby.stop()
         self.api.close()
         self.save()
@@ -167,6 +178,15 @@ class Core:
 
     def rpc_config_set(self, key: str, value=None) -> bool:
         self.set_config(key, value)
+        if key == "usage_stats":
+            self.usage.changed()
+            self.save()
+        return True
+
+    def rpc_usage_count(self, name: str) -> bool:
+        """Things only the window knows about (a pop-out opened, an update installed)."""
+        if name in ("popout", "update"):
+            self.usage.count(name)
         return True
 
     # ───── search ─────
@@ -180,6 +200,7 @@ class Core:
     def rpc_search(self, keyword: str, filters: dict | None = None, gen: int | None = None) -> int:
         """A new search over every region; pages arrive as "search" events tagged with `gen` (the UI numbers its
         searches itself: cached pages can arrive before this call has even answered)."""
+        self._count_soon("search")
         filters = self._filters(filters)
         with self._lock:
             self._gen = gen if gen is not None else self._gen + 1
@@ -222,6 +243,8 @@ class Core:
     # ───── favorites ─────
     def rpc_favorites_toggle(self, key: str) -> dict:
         on = self.favorites.toggle(self._char(key))
+        if on:
+            self.usage.count("favorite")
         return {"on": on, "favorites": self._keep(self.favorites.characters())}
 
     def rpc_favorites_move(self, key: str, index: int) -> list[dict]:
@@ -268,6 +291,8 @@ class Core:
         c = self._char(key)
         if force:
             self.api.forget(c)
+        else:
+            self.usage.count("profile")
 
         def done(ch, prof, err):
             self.emit("profile", {"key": ch.key, "profile": to_json(prof), "error": err,
@@ -305,6 +330,8 @@ class Core:
 
     # ───── Nearby ─────
     def rpc_nearby_enable(self, on: bool) -> dict:
+        if on and not self.cfg.get("nearby_enabled"):
+            self.usage.count("nearby_on")
         self._nearby_on(on)
         return self._nearby_state()
 
@@ -390,6 +417,7 @@ class Core:
         return (self.my.active() or {}).get("name") or None
 
     def rpc_pvp_list(self, since: float = 0, until: float = 0) -> dict:
+        self._count_soon("pvp")
         return self.pvp.summary(self._pvp_me(), since or 0, until or 0)
 
     def rpc_pvp_feed(self, today_since: float = 0, limit: int = 50) -> dict:

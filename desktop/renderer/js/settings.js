@@ -81,6 +81,11 @@ export class SettingsView {
     el.append(row("Check Automatically",
       ...steps(UPDATE_EVERY, cfg.update_check_s ?? 1800, (v) => { save("update_check_s", v); win.update(v); })));
     this.paintUpdate();
+    // anonymous usage statistics (shugotracker/usage.py)
+    el.append(h("div.bar", {}, "Privacy"));
+    el.append(h("div.setting", {}, h("div.grow", {}, "Share Usage Statistics",
+      h("div.sub", {}, "Anonymous: app version, platform and how often features are used. Never names or searches.")),
+      toggle(cfg.usage_stats !== false, (v) => save("usage_stats", v))));
     win.update("freshen").then((u) => { if (u) { S.update = { ...S.update, ...u }; this.paintUpdate(); } });
 
     if (!MOBILE) this.buildDesktop(el, { row, toggle, steps });

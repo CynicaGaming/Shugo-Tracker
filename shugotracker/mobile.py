@@ -47,12 +47,23 @@ def start(root: str, js) -> None:
             daily.write(m)
     _post = js.post
     log(f"──── Shugo Tracker core v{__version__} started (Android)")
-    _core = Core(root, write, log=log)
+    _core = Core(root, write, log=log, client=_android_client())
     _core.cfg["nearby_enabled"] = False                      # (no game on a phone)
     _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="rpc")
     _core._write = write
     _updater = Updater(root, write, js)
     _updater.start(_core.cfg.get("update_check_s", 1800))
+
+
+def _android_client() -> dict:
+    """What the usage statistics say about this phone: Android and its version, and the display language."""
+    try:
+        from java import jclass
+        release = jclass("android.os.Build$VERSION").RELEASE
+        lang = jclass("java.util.Locale").getDefault().toLanguageTag()
+        return {"platform_name": "android", "os_name": f"Android {release}", "lang": str(lang)}
+    except Exception:  # noqa: BLE001  (not on a phone: tests)
+        return {"platform_name": "android", "os_name": "Android"}
 
 
 def send(line: str) -> None:

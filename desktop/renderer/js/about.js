@@ -45,8 +45,10 @@ export class AboutView {
         MOBILE ? null : h("p", {}, "Nearby reads the game's network traffic on your PC. It never sends, changes or injects anything, ",
           "but reading game traffic may still be against AION 2's Terms of Service. Use it at your own risk; Shugo Tracker ",
           "isn't responsible for any action taken against your account."),
-        h("p", {}, "No account, no sign-in, no tracking: Shugo Tracker sends nothing about you anywhere. It only asks NCSOFT's ",
-          "public website for the characters you look up, and GitHub for updates."),
+        h("p", {}, "No account and no sign-in. Shugo Tracker asks NCSOFT's public website for the characters you look up and ",
+          "GitHub for updates. Unless you turn off Share Usage Statistics in Settings, it also sends anonymous usage ",
+          "statistics twice a day: a random id, the app version, the platform and how often features are used. It never ",
+          "sends character names, searches or anything from the game, and no IP addresses are kept."),
         h("p", {}, "Free software under the GNU General Public License v3.0, provided as is, without warranty of any kind.")),
     );
   }

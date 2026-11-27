@@ -20,6 +20,7 @@ DEFAULTS = {
     "my_server": "",                # Nearby: your server, when it can't tell from the game
     "forget_after_s": 900,          # Nearby: drop players not seen for this long
     "opcodes": {},                  # Nearby: overrides if a game patch moves them (see protocol.Opcodes)
+    "usage_stats": True,            # anonymous usage statistics (usage.py); Settings → Share Usage Statistics
 }
 RECENT_CHOICES = (50, 100, 250, 500, 1000, 0)
 AUTOCLEAR_CHOICES = (0, 60, 300, 900, 1800, 3600)

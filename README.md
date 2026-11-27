@@ -146,7 +146,8 @@ A green arrow appears when there's a new version: click to download, click again
 <td valign="top">
 
 **🔒 Private**<br>
-No account, no sign-in, no tracking. Character data comes from NCSOFT's public AION 2 site.
+No account, no sign-in. Character data comes from NCSOFT's public AION 2 site. Anonymous usage statistics
+(version, platform, how often features are used; never names or searches) can be turned off in Settings.
 
 </td>
 </tr>
@@ -189,6 +190,16 @@ Shugo Tracker isn't responsible for any action taken against your account.
 <br>
 It's installed straight from the releases here instead, like the Windows app. Android calls that an "unknown app" and asks
 once before installing it; after that, updates come from inside the app (Settings → Updates).
+</details>
+
+<details>
+<summary><b>What does Share Usage Statistics send?</b></summary>
+<br>
+Twice a day: a random id the app makes up for itself, the app version, Windows or Android and its version, the display
+language, how many times a few features were used (searches, profiles opened, favorites added, Nearby turned on,
+pop-outs, the PVP Log, updates), whether Nearby is on and how many favorites and own characters are saved. It never
+sends character names, what you search for, your server or anything from the game, and the server keeps no IP
+addresses. It's on unless you turn it off in <b>Settings → Privacy</b>; turning it off stops it at once.
 </details>
 
 <details>

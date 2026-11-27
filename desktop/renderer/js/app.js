@@ -130,7 +130,7 @@ async function updateClick() {
   S.update.clicked = true;
   const st = S.update.state;
   if (st === "available" || st === "error") S.update = { ...(await win.update(st === "error" ? "check" : "download")), clicked: true };
-  else if (st === "ready") await win.update("restart");
+  else if (st === "ready") { await call("usage.count", { name: "update" }).catch(() => {}); await win.update("restart"); }
   paintTitlebar();
 }
 app.updateClick = updateClick;
@@ -746,7 +746,7 @@ async function tabMenu(mode, x, y) {
     ? [{ label: `Show ${POPPABLE[mode]} Pop-Out`, onClick: () => win.popOut(mode) },
       ...(open.clickThrough ? [{ label: "Turn Off Click Through", onClick: () => win.popClickThroughOff(mode) }] : []),
       { label: "Close Pop-Out", onClick: () => win.popClose(mode) }]
-    : [{ label: `Pop Out ${POPPABLE[mode]}`, onClick: () => win.popOut(mode) }];
+    : [{ label: `Pop Out ${POPPABLE[mode]}`, onClick: () => { call("usage.count", { name: "popout" }); win.popOut(mode); } }];
   if (mode === "pvp") items.push("-", { label: "Clear PVP Log…", onClick: () => {
     if (S.mode !== "pvp" || S.screen !== "list") { S.mode = "pvp"; S.screen = "list"; render(); }
     pvpList?.askClear();
