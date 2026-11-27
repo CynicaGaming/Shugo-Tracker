@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.8.2
+- Changed: updates are checked every hour (plus at start, when Settings opens, and Check Now); Check for Updates shows when it last checked again
+
 ## 2.8.1
 - Changed: updates are checked every 15 minutes (and at start and when Settings opens); the Check Automatically setting is gone
 - Changed: settings explain themselves on a ? beside their name (hover, or tap on Android) instead of a line underneath

@@ -49,7 +49,7 @@ export class SettingsView {
       u.state === "ready" ? icon("refresh") : null, label);
     const when = u.checkedAt ? fmtWhen(u.checkedAt) : "never";
     clear(box).append(h("div.ucard", {}, head, notes),
-      h("div.setting", {}, h("div.grow", {}, "Check for Updates", help(`Checked automatically every 15 minutes. Last checked ${when}.`)), act));
+      h("div.setting", {}, h("div.grow", {}, "Check for Updates", h("div.sub", {}, `Last checked ${when}`)), act));
   }
 
   async updateAction() {
@@ -84,7 +84,7 @@ export class SettingsView {
     // anonymous usage statistics (shugotracker/usage.py)
     el.append(h("div.bar", {}, "Privacy"));
     el.append(h("div.setting", {}, h("div.grow", {}, "Share Usage Statistics",
-      help("Anonymous: app version, platform and how often features are used. Never names or searches.")),
+      help("Send anonymous diagnostic and usage data to help improve Shugo Tracker. Your data is never shared with third parties.")),
       toggle(cfg.usage_stats !== false, (v) => save("usage_stats", v))));
     win.update("freshen").then((u) => { if (u) { S.update = { ...S.update, ...u }; this.paintUpdate(); } });
 
