@@ -50,3 +50,7 @@ export const win = native?.win || {
   minimize() {}, close() {}, setAlwaysOnTop() {}, popOut() {}, showMain() {}, pickSound: async () => null, lock() {}, clickThrough() {}, popState: async () => [], popClose() {}, popClickThroughOff() {}, readSound: async () => null, setOpacity() {}, relaunchAsAdmin() {}, update: async () => ({ state: "dev" }), onUpdate() {},
   ...(window.AndroidCore ? { update: (action) => call("app.update", { action }), onUpdate: (fn) => on("update", fn) } : {}),
 };
+
+/** Usage statistics (shugotracker/usage.py): count something the window did, or how long it took. */
+export function track(name) { call("usage.count", { name }).catch(() => {}); }
+export function trackTime(name, ms) { call("usage.time", { name, ms: Math.round(ms) }).catch(() => {}); }

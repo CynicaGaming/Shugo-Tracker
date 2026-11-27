@@ -1,6 +1,6 @@
 // The window: title bar, Search / Favorites / Nearby / Recent lists, the PVP Log, menus, footer. Profile and Settings open
 // in place of the list (profile.js, settings.js).
-import { MOBILE, call, on, win } from "./bridge.js";
+import { MOBILE, call, on, track, trackTime, win } from "./bridge.js";
 import { CLASSES, CLASS_COLORS, COL_LABELS, COL_MENU, DEFAULT_COLUMNS, ICONS, LOGO, REGION_NAMES, ago, clear,
   COL_GAP, COL_MIN, factionColor, fmtInt, h, icon, layoutColumns, sortChars } from "./dom.js";
 import { closeMenus, refreshOpenSub, showMenu } from "./menu.js";
@@ -138,6 +138,7 @@ win.onUpdate((s) => { S.update = { ...s, clicked: S.update.clicked }; paintTitle
 
 /* ═════ modes, filters ═════ */
 function setMode(mode) {
+  if (mode !== S.mode) track(`tab_${mode}`);
   if (mode === "nearby" && !S.nearby.enabled) { S.mode = mode; S.screen = "list"; render(); return; }
   S.mode = mode;
   render();
@@ -156,6 +157,7 @@ function closeScreen() {
 let profile = null, settings = null, finder = null, foe = null, pvpList = null, about = null;
 /** PVP Log: one opponent's fights. */
 function openFoe(id) {
+  track("pvp_foe");
   closeMenus();
   foe?.destroy();
   S.screen = "foe";
@@ -168,6 +170,7 @@ async function enableNearby() {
   render();
 }
 function openFinder(slot) {
+  track("finder");
   closeMenus();
   S.screen = "finder";
   finder = new FinderView(app, slot);
@@ -192,12 +195,14 @@ function openProfile(c) {
   render();
 }
 function openAbout() {
+  track("about");
   closeMenus();
   S.screen = "about";
   about = new AboutView(app);
   render();
 }
 function openSettings() {
+  track("settings");
   S.screen = "settings";
   settings = new SettingsView(app);
   render();
@@ -234,6 +239,7 @@ async function runSearch(kw, force = false) {
   if (S.screen !== "list") closeScreen();
   list.scrollTop(0);
   S.gen += 1;                                     // set first: cached pages can arrive before the reply
+  S.searchStart = performance.now();
   render();
   call("search", { keyword: kw, filters: serverFilters(), gen: S.gen });
 }
@@ -245,6 +251,7 @@ on("search", (d) => {
   st.loading = false; st.error = d.error;
   if (d.error) { list.render(); return; }
   st.page = d.page; st.total = d.total;
+  if (S.searchStart && d.page === 1) { trackTime("search_ms", performance.now() - S.searchStart); S.searchStart = 0; }
   const seen = new Set(S.results.map((c) => c.key));
   for (const c of d.chars) { S.chars.set(c.key, c); if (!seen.has(c.key)) S.results.push(c); }
   if (d.page === 1) S.results = rankKeyword(S.results, S.keyword);
@@ -293,6 +300,7 @@ function filtersBar() {
   const toggle = (key, value) => {
     const s = fset(key);
     s.has(value) ? s.delete(value) : s.add(value);
+    track("filter");
     save(key, [...s]);
     filtersChanged();
   };
@@ -628,6 +636,7 @@ function loadMore() {
 }
 
 function setSort(k) {
+  track("sort");
   const sorts = { ...(S.cfg.sorts || {}) };
   const [key, rev] = sorts[S.mode] || ["default", false];
   sorts[S.mode] = key !== k ? [k, false] : rev ? ["default", false] : [k, true];
@@ -640,7 +649,7 @@ function columnsMenu(x, y) {
   // only the columns this tab has: Last Seen and Area belong to Recent
   const here = DEFAULT_COLUMNS.filter((k) => S.mode === "recent" || (k !== "seen" && k !== "area"));
   const items = here.map((k) => ({ label: COL_MENU[k], check: cols.includes(k),
-    onClick: () => { save("columns", cols.includes(k) ? cols.filter((c) => c !== k) : DEFAULT_COLUMNS.filter((c) => c === k || cols.includes(c))); list.render(); } }));
+    onClick: () => { track("columns"); save("columns", cols.includes(k) ? cols.filter((c) => c !== k) : DEFAULT_COLUMNS.filter((c) => c === k || cols.includes(c))); list.render(); } }));
   items.push("-", { label: "Reset Columns", onClick: () => { save("columns", [...DEFAULT_COLUMNS]); save("col_widths", {}); list.render(); } });
   showMenu(items, x, y);
 }
@@ -969,6 +978,7 @@ window.__shugoBack = () => {
 /* ═════ start ═════ */
 (async () => {
   const init = await call("init");
+  if (!POP) call("usage.state", { screen: `${screen.width}x${screen.height}`, scale: devicePixelRatio || 1 }).catch(() => {});
   if (MOBILE && !["search", "favorites"].includes(S.mode)) S.mode = "search";
   if (LIST_POP) S.mode = POP;                           // a popped-out list is always that tab
   Object.assign(S, { cfg: init.config, version: init.version, demo: init.demo, regions: init.regions,

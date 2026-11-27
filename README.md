@@ -196,8 +196,9 @@ once before installing it; after that, updates come from inside the app (Setting
 <summary><b>What does Share Usage Statistics send?</b></summary>
 <br>
 Twice a day: a random id the app makes up for itself, the app version, Windows or Android and its version, the display
-language, how many times a few features were used (searches, profiles opened, favorites added, Nearby turned on,
-pop-outs, the PVP Log, updates), whether Nearby is on and how many favorites and own characters are saved. It never
+language and screen size, how often features are used (searches, profiles and their tabs, tooltips, favorites, Nearby,
+pop-outs, the PVP Log…), how long the app was open, how fast searches and profiles load, error counts, and a few settings
+(always on top, opacity, clock, Enemy Alert, how many favorites and own characters are saved). It never
 sends character names, what you search for, your server or anything from the game, and the server keeps no IP
 addresses. It's on unless you turn it off in <b>Settings → Privacy</b>; turning it off stops it at once.
 </details>

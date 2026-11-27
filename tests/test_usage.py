@@ -24,7 +24,7 @@ class UsageTests(unittest.TestCase):
         self.assertTrue(u.send())
         body = sent[0]
         self.assertEqual(set(body), {"id", "v", "p", "os", "l", "e", "s"})
-        self.assertEqual(body["e"], {"search": 2, "profile": 1})
+        self.assertEqual(body["e"], {"session": 1, "search": 2, "profile": 1})
         self.assertEqual((body["p"], body["os"]), ("windows", "Windows 11"))
         self.assertRegex(body["id"], r"^[0-9a-f-]{36}$")
         self.assertEqual(cfg["usage_id"], body["id"])                      # the same id every time
@@ -50,11 +50,24 @@ class UsageTests(unittest.TestCase):
         u.count("favorite")
         self.assertFalse(u.send())
         u.stop()
-        self.assertEqual(cfg["usage_pending"], {"favorite": 1})
+        self.assertEqual(cfg["usage_pending"], {"session": 1, "favorite": 1})
         u2, _cfg, sent2 = make(cfg)
         u2.send()
-        self.assertEqual(sent2[0]["e"], {"favorite": 1})
+        self.assertEqual(sent2[0]["e"], {"session": 2, "favorite": 1})
         self.assertNotIn("usage_pending", cfg)
+
+    def test_timings_and_minutes_open(self):
+        u, cfg, sent = make()
+        u.time("search_ms", 850); u.time("search_ms", 150); u.time("bogus_ms", 5); u.time("profile_ms", 10 ** 9)
+        u._clock -= 125                                                   # open 2 minutes (and change)
+        u.extra = {"screen": "2560x1440"}
+        u.send()
+        e = sent[0]["e"]
+        self.assertEqual((e["search_ms"], e["search_n"], e["minutes"]), (1000, 2, 2))
+        self.assertNotIn("profile_ms", e)
+        self.assertEqual(sent[0]["s"]["screen"], "2560x1440")
+        u.send()
+        self.assertNotIn("minutes", sent[1]["e"])                         # counted once
 
     def test_dev_builds_never_send(self):
         sent = []

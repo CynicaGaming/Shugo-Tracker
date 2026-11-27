@@ -112,8 +112,18 @@ class Core:
         self.usage.start()
 
     def _usage_snapshot(self) -> dict:
-        return {"nearby": bool(self.cfg.get("nearby_enabled")), "favorites": len(self.favorites.characters()),
-                "my_chars": sum(1 for d in self.my.slots if d)}
+        c = self.cfg
+        return {"nearby": bool(c.get("nearby_enabled")), "favorites": len(self.favorites.characters()),
+                "my_chars": sum(1 for d in self.my.slots if d),
+                "on_top": c.get("always_on_top") is not False,
+                "opacity": round(float(c.get("window_opacity") or 1), 1),
+                "clock": c.get("clock") or "ST",
+                "alert": bool(c.get("alert_enemy")),
+                "popouts": sorted(k for k in ("nearby", "pvp", "search", "favorites", "recent") if c.get(f"popout_{k}")),
+                "recent_max": c.get("recent_max"),
+                "autoclear": c.get("nearby_autoclear_s") or 0,
+                "columns": len(c.get("columns") or []) or None,
+                "profile_tab": c.get("profile_tab") or "Gear"}
 
     # ───── plumbing ─────
     def emit(self, event: str, data: Any) -> None:
@@ -160,6 +170,8 @@ class Core:
                 answer(out)
         except Exception as e:  # noqa: BLE001
             self.log(f"core: {method} failed: {e}\n{traceback.format_exc()}")
+            if hasattr(self, "usage"):
+                self.usage.count("error")
             answer(error=f"{e.__class__.__name__}: {e}")
 
     def close(self) -> None:
@@ -184,9 +196,22 @@ class Core:
         return True
 
     def rpc_usage_count(self, name: str) -> bool:
-        """Things only the window knows about (a pop-out opened, an update installed)."""
-        if name in ("popout", "update"):
+        """Things only the window knows about (tabs, tooltips, pop-outs, an update installed…)."""
+        from .usage import WINDOW_EVENTS
+        if name in WINDOW_EVENTS:
             self.usage.count(name)
+        return True
+
+    def rpc_usage_time(self, name: str, ms: float) -> bool:
+        self.usage.time(name, ms)
+        return True
+
+    def rpc_usage_state(self, screen: str = "", scale: float = 0) -> bool:
+        """The window's screen, once at start (e.g. "2560x1440", 1.25)."""
+        if isinstance(screen, str) and len(screen) <= 12:
+            self.usage.extra["screen"] = screen
+        if isinstance(scale, (int, float)) and 0 < scale <= 8:
+            self.usage.extra["scale"] = round(float(scale), 2)
         return True
 
     # ───── search ─────
@@ -201,6 +226,8 @@ class Core:
         """A new search over every region; pages arrive as "search" events tagged with `gen` (the UI numbers its
         searches itself: cached pages can arrive before this call has even answered)."""
         self._count_soon("search")
+        if any((filters or {}).values()):
+            self._count_soon("search_filtered")
         filters = self._filters(filters)
         with self._lock:
             self._gen = gen if gen is not None else self._gen + 1
@@ -218,6 +245,8 @@ class Core:
         def done(reg, chars, total, err):
             if gen != self._gen:
                 return
+            if err and page == 1:
+                self.usage.count("error_search")
             ranked = rank(chars, keyword)
             self.emit("search", {"gen": gen, "region": reg, "page": page, "total": total, "error": err,
                                  "chars": self._keep(ranked)})
@@ -243,8 +272,7 @@ class Core:
     # ───── favorites ─────
     def rpc_favorites_toggle(self, key: str) -> dict:
         on = self.favorites.toggle(self._char(key))
-        if on:
-            self.usage.count("favorite")
+        self.usage.count("favorite" if on else "unfavorite")
         return {"on": on, "favorites": self._keep(self.favorites.characters())}
 
     def rpc_favorites_move(self, key: str, index: int) -> list[dict]:
@@ -266,6 +294,7 @@ class Core:
         from .profiles import KEEP
         c = self._char(key)
         self.my.set(slot, {k: getattr(c, k) for k in KEEP})
+        self.usage.count("my_char")
         return self._my_changed()
 
     def rpc_my_switch(self, slot: int) -> dict:
@@ -291,10 +320,11 @@ class Core:
         c = self._char(key)
         if force:
             self.api.forget(c)
-        else:
-            self.usage.count("profile")
+        self.usage.count("profile_refresh" if force else "profile")
 
         def done(ch, prof, err):
+            if err:
+                self.usage.count("error_profile")
             self.emit("profile", {"key": ch.key, "profile": to_json(prof), "error": err,
                                   "char": char_json(ch)})
         self.api.fetch_profile(c, done, force=force)

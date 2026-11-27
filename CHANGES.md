@@ -2,6 +2,9 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.8.3
+- Expanded usage statistics
+
 ## 2.8.2
 - Changed: updates are checked every hour (plus at start, when Settings opens, and Check Now); Check for Updates shows when it last checked again
 

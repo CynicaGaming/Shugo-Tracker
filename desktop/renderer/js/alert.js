@@ -1,6 +1,6 @@
 // Enemy alert: a sound when an enemy shows up on Nearby, at most once per cooldown. The built-in chime is made
 // on the spot (no file); your own sound lives in data\sounds and is played at the volume you set.
-import { win } from "./bridge.js";
+import { track as trackUsage, win } from "./bridge.js";
 
 let ctx = null, custom = { file: null, buf: null }, last = 0, seen = new Set(), primed = false;
 const audio = () => (ctx ||= new AudioContext());
@@ -87,5 +87,6 @@ export function nearbyChanged(nearby, cfg) {
   const now = Date.now();
   if (now - last < (cfg.alert_cooldown_s ?? 30) * 1000) return;
   last = now;
+  trackUsage("alert");
   playAlert(cfg);
 }

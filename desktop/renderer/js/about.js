@@ -1,11 +1,12 @@
 // About: the app and its version, where it lives on GitHub, who it relies on, and the fine print.
-import { MOBILE } from "./bridge.js";
+import { MOBILE, track } from "./bridge.js";
 import { ICONS, LOGO, h, icon } from "./dom.js";
 
 const REPO = "https://github.com/CynicaGaming/Shugo-Tracker";
 
 /** Links open in your browser (the desktop app hands new windows to it; the phone app has its own bridge). */
 export function openLink(url) {
+  track("link");
   if (window.AndroidCore?.openUrl) window.AndroidCore.openUrl(url);
   else window.open(url, "_blank", "noopener");
 }
@@ -47,7 +48,7 @@ export class AboutView {
           "isn't responsible for any action taken against your account."),
         h("p", {}, "No account and no sign-in. Shugo Tracker asks NCSOFT's public website for the characters you look up and ",
           "GitHub for updates. Unless you turn off Share Usage Statistics in Settings, it also sends anonymous usage ",
-          "statistics twice a day: a random id, the app version, the platform and how often features are used. It never ",
+          "statistics twice a day: a random id, the app version, the platform, how often features are used, load times, errors and a few settings. It never ",
           "sends character names, searches or anything from the game, and no IP addresses are kept."),
         h("p", {}, "Free software under the GNU General Public License v3.0, provided as is, without warranty of any kind.")),
     );

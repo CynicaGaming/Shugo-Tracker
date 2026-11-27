@@ -1,6 +1,6 @@
 // A character's profile, laid out like the game's windows. The whole profile (info, gear, every item's details)
 // is loaded before it's shown, so tabs and tooltips never wait.
-import { MOBILE, call, on } from "./bridge.js";
+import { MOBILE, call, on, track, trackTime } from "./bridge.js";
 import { CLASS_COLORS, GRADE_COLORS, ICONS, REGION_NAMES, clear, fmtDelta, fmtInt, gradeColor, h, num, statDeltas } from "./dom.js";
 import { closeMenus } from "./menu.js";
 
@@ -85,6 +85,7 @@ export class ProfileView {
     this.myDetails = new Map();
     this.boards = new Map();
     this.tab = TABS.includes(app.S.cfg.profile_tab) ? app.S.cfg.profile_tab : "Gear";
+    this.started = performance.now();
     this.el = h("div.profile");
     this.head = h("div");
     this.tabsEl = h("div.ptabs");
@@ -130,6 +131,7 @@ export class ProfileView {
     if (this.dead || p !== this.profile) return;
     const first = !this.ready;
     this.ready = true;
+    if (first) trackTime("profile_ms", performance.now() - this.started);
     this.built = {};
     this.paintBody();
     if (first) this.loadMyItems();
@@ -189,6 +191,7 @@ export class ProfileView {
   }
 
   show(t) {
+    if (t !== this.tab) track(`ptab_${t.toLowerCase()}`);
     this.tab = t;
     this.app.save("profile_tab", t);
     this.paintTabs();
@@ -275,7 +278,7 @@ export class ProfileView {
   }
 
   itemHover(el, it) {
-    el.addEventListener("mouseenter", (e) => { this.hoverItem = { it, el, x: e.clientX, y: e.clientY, sy: e.screenY }; this.altState = false; this.drawItemTip(); this.startAlt(); });
+    el.addEventListener("mouseenter", (e) => { track("tooltip"); this.hoverItem = { it, el, x: e.clientX, y: e.clientY, sy: e.screenY }; this.altState = false; this.drawItemTip(); this.startAlt(); });
     el.addEventListener("mousemove", (e) => { if (this.hoverItem) { this.hoverItem.x = e.clientX; this.hoverItem.y = e.clientY; this.hoverItem.sy = e.screenY; } });
     el.addEventListener("mouseleave", () => { this.hoverItem = null; this.stopAlt(); hideTip(); });
   }
@@ -292,7 +295,7 @@ export class ProfileView {
     this._alt = () => { removeEventListener("keydown", onKey); removeEventListener("keyup", onKey); clearInterval(poll); };
   }
   stopAlt() { this._alt?.(); this._alt = null; }
-  setAlt(v) { if (v !== this.altState) { this.altState = v; if (this.hoverItem) this.drawItemTip(); } }
+  setAlt(v) { if (v !== this.altState) { this.altState = v; if (v && this.hoverItem) track("compare"); if (this.hoverItem) this.drawItemTip(); } }
 
   drawItemTip() {
     const { it, x, y, sy } = this.hoverItem;
@@ -334,7 +337,7 @@ export class ProfileView {
       card = itemTip(it, det, { deltas: det && myDet ? statDeltas(myDet, det) : null });
     }
     const side = (key, label) => h("button", { class: this.tipSide === key ? "on" : "",
-      onClick: (e) => { e.stopPropagation(); this.tipSide = key; this.drawItemTip(); } }, label);
+      onClick: (e) => { e.stopPropagation(); if (key === "mine" && this.tipSide !== key) track("compare"); this.tipSide = key; this.drawItemTip(); } }, label);
     const wrap = h("div.ptip", {}, mineHere ? h("div.tipseg", {}, side("item", this.c.name || "This Item"), side("mine", `Equipped · ${name}`)) : null, card);
     showTip(wrap, x, y);
   }
