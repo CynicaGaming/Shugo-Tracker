@@ -20,7 +20,7 @@ import uuid
 
 from ._version import __version__
 
-ENDPOINT = "https://shugo-stats.REPLACE.workers.dev/v1/ping"
+ENDPOINT = "https://shugo-stats.android-bryant.workers.dev/v1/ping"
 EVENTS = ("search", "profile", "favorite", "nearby_on", "popout", "pvp", "update")
 FIRST_AFTER_S = 20           # the first message, shortly after start
 EVERY_S = 12 * 3600          # then twice a day while the app is open
