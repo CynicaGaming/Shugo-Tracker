@@ -2,6 +2,10 @@
 
 Each release's notes come from its section here (shown in Settings → Updates). Keep each line short.
 
+## 2.8.1
+- Changed: updates are checked every 15 minutes (and at start and when Settings opens); the Check Automatically setting is gone
+- Changed: settings explain themselves on a ? beside their name (hover, or tap on Android) instead of a line underneath
+
 ## 2.8.0
 - New: anonymous usage statistics, so we can see how many people use Shugo Tracker and which features matter. A random id, the version, the platform and how often features are used; never names, searches or anything from the game. Turn it off in Settings → Privacy
 

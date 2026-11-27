@@ -107,12 +107,11 @@ class AutoClearMigrationTests(unittest.TestCase):
 
 
 class UpdateIntervalTests(unittest.TestCase):
-    def test_old_switch_becomes_the_interval(self):
-        self.assertEqual(migrate({"auto_update": False})["update_check_s"], 0)
-        self.assertEqual(migrate({"auto_update": True})["update_check_s"], 1800)
-        self.assertNotIn("auto_update", migrate({"auto_update": True}))
-        self.assertEqual(migrate({"update_check_s": 21600})["update_check_s"], 21600)
-        self.assertEqual(migrate({"update_check_s": 5})["update_check_s"], 1800)
+    def test_the_old_update_settings_are_dropped(self):
+        # 2.8.1: updates are checked every 15 minutes, with no setting
+        cfg = migrate({"auto_update": False, "update_check_s": 21600})
+        self.assertNotIn("auto_update", cfg)
+        self.assertNotIn("update_check_s", cfg)
 
 
 class ConfigFileTests(unittest.TestCase):

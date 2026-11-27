@@ -4,7 +4,6 @@ import { SOUNDS, isPlaying, onPlaying, playAlert, soundKind, stopAlert } from ".
 import { ICONS, LOGO, clear, h, icon } from "./dom.js";
 
 const RECENT = [[50, "50"], [100, "100"], [250, "250"], [500, "500"], [1000, "1,000"], [0, "Unlimited"]];
-const UPDATE_EVERY = [[0, "Never"], [1800, "30m"], [3600, "1h"], [21600, "6h"], [43200, "12h"], [86400, "24h"]];
 const ALERT_EVERY = [[10, "10s"], [30, "30s"], [60, "1m"], [120, "2m"], [300, "5m"], [600, "10m"]];
 const AUTOCLEAR = [[0, "Never"], [60, "1m"], [300, "5m"], [900, "15m"], [1800, "30m"], [3600, "60m"]];
 
@@ -13,6 +12,9 @@ const fmtWhen = (t) => {
   const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   return today ? `today, ${time}` : `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`;
 };
+
+/** A ? beside a setting's name: its explanation shows on hover (or a tap). */
+const help = (text) => h("span.help", { tabindex: 0, "data-tip": text }, "?");
 
 export class SettingsView {
   constructor(app) {
@@ -47,7 +49,7 @@ export class SettingsView {
       u.state === "ready" ? icon("refresh") : null, label);
     const when = u.checkedAt ? fmtWhen(u.checkedAt) : "never";
     clear(box).append(h("div.ucard", {}, head, notes),
-      h("div.setting", {}, h("div.grow", {}, "Check for Updates", h("div.sub", {}, `Last checked ${when}`)), act));
+      h("div.setting", {}, h("div.grow", {}, "Check for Updates", help(`Checked automatically every 15 minutes. Last checked ${when}.`)), act));
   }
 
   async updateAction() {
@@ -78,13 +80,11 @@ export class SettingsView {
     el.append(h("div.bar", {}, "Updates"));
     this.upBox = h("div");
     el.append(this.upBox);
-    el.append(row("Check Automatically",
-      ...steps(UPDATE_EVERY, cfg.update_check_s ?? 1800, (v) => { save("update_check_s", v); win.update(v); })));
     this.paintUpdate();
     // anonymous usage statistics (shugotracker/usage.py)
     el.append(h("div.bar", {}, "Privacy"));
     el.append(h("div.setting", {}, h("div.grow", {}, "Share Usage Statistics",
-      h("div.sub", {}, "Anonymous: app version, platform and how often features are used. Never names or searches.")),
+      help("Anonymous: app version, platform and how often features are used. Never names or searches.")),
       toggle(cfg.usage_stats !== false, (v) => save("usage_stats", v))));
     win.update("freshen").then((u) => { if (u) { S.update = { ...S.update, ...u }; this.paintUpdate(); } });
 

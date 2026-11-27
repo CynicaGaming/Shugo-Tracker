@@ -415,7 +415,7 @@ app.whenReady().then(() => {
   startCore();
   createWindow();
   const cfg = readConfig();
-  if (!DEMO) updater.start(cfg.update_check_s ?? (cfg.auto_update === false ? 0 : 1800));
+  if (!DEMO) updater.start(15 * 60);          // at start, every 15 minutes, and when Settings opens
 });
 
 app.on("before-quit", () => {

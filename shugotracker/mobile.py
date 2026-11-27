@@ -52,7 +52,7 @@ def start(root: str, js) -> None:
     _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="rpc")
     _core._write = write
     _updater = Updater(root, write, js)
-    _updater.start(_core.cfg.get("update_check_s", 1800))
+    _updater.start(15 * 60)                                  # at start, every 15 minutes, and when Settings opens
 
 
 def _android_client() -> dict:

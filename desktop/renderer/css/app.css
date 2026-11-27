@@ -508,3 +508,13 @@ html.mobile .seg button { flex: 1 0 auto; }
 .about .alink:hover .ext { color: var(--gold); }
 .legal.left { text-align: left; padding: 10px 14px 18px; }
 .legal p { margin: 0 0 8px; }
+
+/* a setting's explanation: on hover of its ? (or focus / a tap) */
+.help { position: relative; display: inline-grid; place-items: center; width: 15px; height: 15px; margin-left: 6px;
+  vertical-align: 1px; border: 1px solid var(--line-2); border-radius: 50%; color: var(--faint); font-size: 10px;
+  font-weight: 700; cursor: help; outline: none; }
+.help:hover, .help:focus { color: var(--gold); border-color: var(--gold); }
+.help:hover::after, .help:focus::after { content: attr(data-tip); position: absolute; z-index: 30; left: -6px; top: 21px;
+  width: max-content; max-width: min(260px, 70vw); padding: 7px 10px; border: 1px solid var(--line-2); border-radius: 6px;
+  background: #121722; box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55); color: var(--text-2); font-size: 12px;
+  font-weight: 400; line-height: 1.45; white-space: normal; text-align: left; }

@@ -9,7 +9,6 @@ import threading
 DEFAULTS = {
     "window_opacity": 1.0,          # the whole window; 100% unless you turn it down
     "always_on_top": True,
-    "update_check_s": 1800,         # look for updates this often (also at start and when Settings opens); 0 = never
     "clock": "ST",                  # footer clock: ST = server time (US Eastern), LT = this PC's time
     "recent_max": 250,              # players kept on Recent; 0 = unlimited
     "nearby_autoclear_s": 0,
@@ -24,14 +23,13 @@ DEFAULTS = {
 }
 RECENT_CHOICES = (50, 100, 250, 500, 1000, 0)
 AUTOCLEAR_CHOICES = (0, 60, 300, 900, 1800, 3600)
-UPDATE_CHOICES = (0, 1800, 3600, 21600, 43200, 86400)
 OPACITY_MIN = 0.3                   # never so faint that you lose the window
 
 # Keys older versions wrote that no longer mean anything (removed on load).
 RETIRED = ("pill_pos", "overlay", "idle_opacity", "opacity", "opacity_focused", "opacity_unfocused",
            "opacity_full_on_hover", "requests_per_second", "detail_workers", "region", "faction", "max_level_only",
            "stat_details", "start_with_windows", "layout", "close_to_tray", "borderless", "update_repo",
-           "pvp_within_s")
+           "pvp_within_s", "update_check_s")
 
 _write_lock = threading.Lock()
 
@@ -62,9 +60,7 @@ def save_config(path: str, cfg: dict) -> None:
 
 def migrate(cfg: dict) -> dict:
     """Bring settings saved by older versions up to date (in place). Returns cfg."""
-    if "auto_update" in cfg:                 # v2.3.4 and earlier: an on/off switch
-        if not cfg.pop("auto_update"):
-            cfg["update_check_s"] = 0
+    cfg.pop("auto_update", None)             # v2.3.4 and earlier (updates are now checked every 15 minutes)
     if cfg.pop("style", None) == "hud":       # v2.5.0's HUD style: now Nearby popped out in its own window
         cfg["popout_nearby"] = True
     if "nearby_autoclear" in cfg:            # v1.28–1.33: an on/off switch beside the interval
@@ -80,8 +76,6 @@ def migrate(cfg: dict) -> dict:
     cfg["window_opacity"] = clamp_opacity(cfg["window_opacity"])
     if cfg.get("recent_max") not in RECENT_CHOICES:
         cfg["recent_max"] = 250
-    if cfg.get("update_check_s") not in UPDATE_CHOICES:
-        cfg["update_check_s"] = 1800
     if cfg.get("nearby_autoclear_s") not in AUTOCLEAR_CHOICES:
         cfg["nearby_autoclear_s"] = 0
     return cfg
